@@ -1,6 +1,10 @@
 const app = document.querySelector("#app");
 const REVIEW_STORAGE_KEY = "calligraphy-review-state-v1";
 
+function assetPath(path) {
+  return new URL(path.replace(/^\/+/, ""), document.baseURI).toString();
+}
+
 const filters = [
   { id: "all", label: "全部", tone: "All" },
   { id: "main", label: "确定主表", tone: "A" },
@@ -346,7 +350,7 @@ function downloadCards() {
   }
 
   return state.manifest.downloads.map((file) => `
-    <a class="download-card ${file.primary ? "primary" : ""}" href="${escapeHtml(file.href)}">
+    <a class="download-card ${file.primary ? "primary" : ""}" href="${escapeHtml(assetPath(file.href))}">
       <span>${escapeHtml(file.format)} · ${escapeHtml(file.size)}</span>
       <strong>${escapeHtml(file.title)}</strong>
       <small>${escapeHtml(file.role)}</small>
@@ -934,7 +938,7 @@ function renderShell(content) {
         <nav class="top-actions">
           <button type="button" class="${state.view === "home" ? "active" : ""}" data-view="home">首页</button>
           <button type="button" class="${state.view === "detail" ? "active" : ""}" data-view="detail">详情</button>
-          <a href="/data/manifest.json">数据清单</a>
+          <a href="${assetPath("data/manifest.json")}">数据清单</a>
         </nav>
       </header>
       ${content}
@@ -1223,7 +1227,7 @@ async function loadSelectedSource(options = {}) {
   state.sourceStatus = "loading";
   if (!options.loadingRendered) updateSourceDom(row);
   try {
-    const response = await fetch(`/data/source-pages/${encodeURIComponent(row.sourceFile)}`);
+    const response = await fetch(assetPath(`data/source-pages/${encodeURIComponent(row.sourceFile)}`));
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (requestId !== state.sourceRequestId) return;
     state.sourceText = await response.text();
@@ -1239,8 +1243,8 @@ async function loadSelectedSource(options = {}) {
 
 async function init() {
   const [manifest, payload] = await Promise.all([
-    fetch("/data/manifest.json").then((response) => response.json()),
-    fetch("/data/results.json").then((response) => response.json())
+    fetch(assetPath("data/manifest.json")).then((response) => response.json()),
+    fetch(assetPath("data/results.json")).then((response) => response.json())
   ]);
   state.baseManifest = manifest;
   state.manifest = manifest;

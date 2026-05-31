@@ -1,7 +1,7 @@
 {
   "title": "书论成果线上工作台",
   "version": "2026-05-29-online-app",
-  "generatedAt": "2026-05-30T05:19:52.239Z",
+  "generatedAt": "2026-05-31T12:52:02.234Z",
   "description": "由书论工作区生成的静态数据包。线上应用只读取 JSON、page 文本和下载附件，不依赖本地文件系统 API。",
   "stats": {
     "total": 409,
@@ -35,7 +35,7 @@
     {
       "id": "second-round-html",
       "title": "第二轮综合成果 HTML",
-      "href": "/downloads/second-round-results.html",
+      "href": "downloads/second-round-results.html",
       "format": "HTML",
       "role": "静态报告浏览",
       "primary": false,
@@ -44,7 +44,7 @@
     {
       "id": "second-round-xlsx",
       "title": "第二轮综合成果 XLSX",
-      "href": "/downloads/second-round-results.xlsx",
+      "href": "downloads/second-round-results.xlsx",
       "format": "XLSX",
       "role": "完整表格下载",
       "primary": true,
@@ -53,7 +53,7 @@
     {
       "id": "second-round-csv",
       "title": "第二轮综合成果 CSV",
-      "href": "/downloads/second-round-results.csv",
+      "href": "downloads/second-round-results.csv",
       "format": "CSV",
       "role": "数据分析导出",
       "primary": false,
@@ -62,7 +62,7 @@
     {
       "id": "second-round-report",
       "title": "第二轮综合成果说明",
-      "href": "/downloads/second-round-report.md",
+      "href": "downloads/second-round-report.md",
       "format": "MD",
       "role": "结果口径说明",
       "primary": false,
@@ -71,7 +71,7 @@
     {
       "id": "first-round-xlsx",
       "title": "第一轮结果 v1",
-      "href": "/downloads/first-round-results.xlsx",
+      "href": "downloads/first-round-results.xlsx",
       "format": "XLSX",
       "role": "历史对照",
       "primary": false,
@@ -80,7 +80,7 @@
     {
       "id": "second-round-sources",
       "title": "第二轮来源清单",
-      "href": "/downloads/second-round-sources.csv",
+      "href": "downloads/second-round-sources.csv",
       "format": "CSV",
       "role": "来源依赖说明",
       "primary": false,
@@ -88,7 +88,7 @@
     }
   ],
   "dataFiles": {
-    "results": "/data/results.json",
-    "sourcePages": "/data/source-pages/"
+    "results": "data/results.json",
+    "sourcePages": "data/source-pages/"
   }
 }
