@@ -1,0 +1,94 @@
+{
+  "title": "书论成果线上工作台",
+  "version": "2026-05-29-online-app",
+  "generatedAt": "2026-05-30T05:19:52.239Z",
+  "description": "由书论工作区生成的静态数据包。线上应用只读取 JSON、page 文本和下载附件，不依赖本地文件系统 API。",
+  "stats": {
+    "total": 409,
+    "sourcePages": 55,
+    "linkedRows": 409,
+    "exactHits": 325,
+    "reviewRows": 72,
+    "abnormalRows": 72,
+    "appendix": {
+      "附表A｜第二轮确定风格主表": 53,
+      "附表B｜优先补入候选": 63,
+      "附表C｜宽口径已入对照": 44,
+      "附表D｜非风格/品级目录保留": 177,
+      "附表E｜来源/OCR待校验": 72
+    },
+    "hit": {
+      "exact": 325,
+      "compact": 12,
+      "miss": 45,
+      "partial": 27
+    },
+    "bucket": {
+      "main": 53,
+      "candidate": 63,
+      "matched": 44,
+      "excluded": 177,
+      "review": 72
+    }
+  },
+  "downloads": [
+    {
+      "id": "second-round-html",
+      "title": "第二轮综合成果 HTML",
+      "href": "/downloads/second-round-results.html",
+      "format": "HTML",
+      "role": "静态报告浏览",
+      "primary": false,
+      "size": "243 KB"
+    },
+    {
+      "id": "second-round-xlsx",
+      "title": "第二轮综合成果 XLSX",
+      "href": "/downloads/second-round-results.xlsx",
+      "format": "XLSX",
+      "role": "完整表格下载",
+      "primary": true,
+      "size": "65 KB"
+    },
+    {
+      "id": "second-round-csv",
+      "title": "第二轮综合成果 CSV",
+      "href": "/downloads/second-round-results.csv",
+      "format": "CSV",
+      "role": "数据分析导出",
+      "primary": false,
+      "size": "184 KB"
+    },
+    {
+      "id": "second-round-report",
+      "title": "第二轮综合成果说明",
+      "href": "/downloads/second-round-report.md",
+      "format": "MD",
+      "role": "结果口径说明",
+      "primary": false,
+      "size": "1 KB"
+    },
+    {
+      "id": "first-round-xlsx",
+      "title": "第一轮结果 v1",
+      "href": "/downloads/first-round-results.xlsx",
+      "format": "XLSX",
+      "role": "历史对照",
+      "primary": false,
+      "size": "103 KB"
+    },
+    {
+      "id": "second-round-sources",
+      "title": "第二轮来源清单",
+      "href": "/downloads/second-round-sources.csv",
+      "format": "CSV",
+      "role": "来源依赖说明",
+      "primary": false,
+      "size": "321 B"
+    }
+  ],
+  "dataFiles": {
+    "results": "/data/results.json",
+    "sourcePages": "/data/source-pages/"
+  }
+}
