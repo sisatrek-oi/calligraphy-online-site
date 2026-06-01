@@ -1,9 +1,6 @@
 const app = document.querySelector("#app");
-const REVIEW_STORAGE_KEY = "calligraphy-review-state-v1";
-
-function assetPath(path) {
-  return new URL(path.replace(/^\/+/, ""), document.baseURI).toString();
-}
+const WORKSPACE_POINTER_KEY = "calligraphy-current-workspace-v2";
+const WORKSPACE_STORAGE_PREFIX = "calligraphy-workspace-v2:";
 
 const filters = [
   { id: "all", label: "全部", tone: "All" },
@@ -22,7 +19,9 @@ const state = {
   baseRows: [],
   uploadedPages: new Map(),
   uploadLog: [],
-  datasetName: "内置第二轮成果",
+  datasetName: "空白隔离工作区",
+  workspaceId: "",
+  lastSavedAt: "",
   view: location.hash === "#detail" ? "detail" : "home",
   filter: "all",
   query: "",
@@ -36,6 +35,20 @@ const state = {
   editingId: "",
   detailCollapsed: false
 };
+
+function newWorkspaceId() {
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  return `ws-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function ensureWorkspaceId() {
+  if (!state.workspaceId) state.workspaceId = newWorkspaceId();
+  return state.workspaceId;
+}
+
+function storageKey(id = ensureWorkspaceId()) {
+  return `${WORKSPACE_STORAGE_PREFIX}${id}`;
+}
 
 function escapeHtml(value = "") {
   return String(value ?? "")
@@ -59,23 +72,80 @@ function reviewDefaults() {
 }
 
 function canPersistReview() {
-  return state.datasetName === "内置第二轮成果";
-}
-
-function loadReviewState() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(REVIEW_STORAGE_KEY) || "null");
-    return saved && typeof saved === "object"
-      ? { ...reviewDefaults(), ...saved, edits: saved.edits || {} }
-      : reviewDefaults();
-  } catch {
-    return reviewDefaults();
-  }
+  return Boolean(state.workspaceId);
 }
 
 function saveReviewState() {
-  if (!canPersistReview()) return;
-  localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(state.reviewState));
+  if (canPersistReview()) saveWorkspace();
+}
+
+function workspacePayload() {
+  return {
+    type: "calligraphy-workspace",
+    version: 2,
+    workspaceId: state.workspaceId,
+    datasetName: state.datasetName,
+    exportedAt: new Date().toISOString(),
+    rows: state.rows,
+    originalRows: state.originalRows,
+    uploadedPages: Object.fromEntries(state.uploadedPages),
+    uploadLog: state.uploadLog,
+    reviewState: state.reviewState
+  };
+}
+
+function saveWorkspace() {
+  const id = ensureWorkspaceId();
+  state.lastSavedAt = new Date().toISOString();
+  localStorage.setItem(WORKSPACE_POINTER_KEY, id);
+  localStorage.setItem(storageKey(id), JSON.stringify({ ...workspacePayload(), savedAt: state.lastSavedAt }));
+}
+
+function loadWorkspace() {
+  const id = localStorage.getItem(WORKSPACE_POINTER_KEY);
+  if (!id) return false;
+  try {
+    const payload = JSON.parse(localStorage.getItem(storageKey(id)) || "null");
+    if (!payload || !Array.isArray(payload.rows)) return false;
+    state.workspaceId = id;
+    state.datasetName = payload.datasetName || "本地隔离工作区";
+    state.uploadedPages = new Map(Object.entries(payload.uploadedPages || {}));
+    state.uploadLog = payload.uploadLog || [];
+    state.reviewState = { ...reviewDefaults(), ...(payload.reviewState || {}) };
+    state.originalRows = (payload.originalRows?.length ? payload.originalRows : payload.rows).map(cloneRow);
+    state.rows = payload.rows.map(makeResult);
+    state.baseRows = [];
+    state.baseManifest = null;
+    state.manifest = buildManifest(state.rows);
+    state.selectedId = state.rows[0]?.id || "";
+    state.lastSavedAt = payload.savedAt || "";
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearWorkspace() {
+  const id = state.workspaceId || localStorage.getItem(WORKSPACE_POINTER_KEY);
+  if (id) localStorage.removeItem(storageKey(id));
+  localStorage.removeItem(WORKSPACE_POINTER_KEY);
+  localStorage.removeItem("calligraphy-review-state-v1");
+  state.workspaceId = newWorkspaceId();
+  state.datasetName = "空白隔离工作区";
+  state.uploadedPages = new Map();
+  state.uploadLog = [];
+  state.reviewState = reviewDefaults();
+  state.originalRows = [];
+  state.rows = [];
+  state.baseRows = [];
+  state.sourceCache = new Map();
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  state.selectedId = "";
+  state.filter = "all";
+  state.query = "";
+  state.manifest = buildManifest([]);
+  saveWorkspace();
 }
 
 function editableSnapshot(row) {
@@ -229,10 +299,9 @@ function countBy(rows, key) {
 }
 
 function buildManifest(rows, source = state.baseManifest, options = {}) {
-  const inheritedSourcePages = Number(source?.stats?.sourcePages || 0);
   const stats = {
     total: rows.length,
-    sourcePages: Math.max(inheritedSourcePages, state.uploadedPages.size),
+    sourcePages: state.uploadedPages.size,
     linkedRows: rows.filter((row) => row.sourceFile).length,
     exactHits: rows.filter((row) => row.hit === "exact").length,
     reviewRows: rows.filter((row) => row.bucket === "review").length,
@@ -246,9 +315,9 @@ function buildManifest(rows, source = state.baseManifest, options = {}) {
   return {
     ...(source || {}),
     title: "书论成果线上工作台",
-    description: "上传文件后，系统会在浏览器内解析并生成前端可视化结果；不把文件上传到服务器。",
+    description: "上传文件后，系统会在当前浏览器内解析并生成隔离工作区；不读取、不展示、不上传后端文件。",
     stats,
-    downloads: options.keepDownloads === false ? [] : source?.downloads || []
+    downloads: []
   };
 }
 
@@ -323,7 +392,7 @@ function uploadLog() {
     return `
       <div class="upload-log empty">
         <strong>等待文件</strong>
-        <p>支持上传 CSV/JSON 结果表，也可以同时上传 page_*.txt 原文页。XLSX 建议由后端或工作流先安全转换为 CSV。</p>
+        <p>支持上传 CSV/JSON 结果表、导出的工作区 JSON，也可以同时上传 page_*.txt 原文页。所有内容只保存在当前浏览器。</p>
       </div>
     `;
   }
@@ -339,23 +408,24 @@ function uploadLog() {
   `;
 }
 
-function downloadCards() {
-  if (!state.manifest.downloads.length) {
-    return `
-      <div class="empty-inline">
-        <strong>当前是上传数据集</strong>
-        <p>上传内容已经进入当前浏览器会话。要把它变成可公开访问的数据包，需要后端或工作流写入 <code>public/data</code> 后重新发布。</p>
-      </div>
-    `;
-  }
+function workspaceStatus() {
+  const saved = state.lastSavedAt ? new Date(state.lastSavedAt).toLocaleString("zh-CN") : "尚未保存";
+  return `
+    <div class="workspace-status">
+      <span>工作区 <strong>${escapeHtml(state.workspaceId.slice(0, 8) || "local")}</strong></span>
+      <span>${escapeHtml(saved)}</span>
+    </div>
+  `;
+}
 
-  return state.manifest.downloads.map((file) => `
-    <a class="download-card ${file.primary ? "primary" : ""}" href="${escapeHtml(assetPath(file.href))}">
-      <span>${escapeHtml(file.format)} · ${escapeHtml(file.size)}</span>
-      <strong>${escapeHtml(file.title)}</strong>
-      <small>${escapeHtml(file.role)}</small>
-    </a>
-  `).join("");
+function workspaceActions() {
+  return `
+    <div class="workspace-actions">
+      <button type="button" data-workspace-export ${state.rows.length ? "" : "disabled"}>导出工作区</button>
+      <button type="button" data-template-download>下载 CSV 模板</button>
+      <button type="button" data-workspace-reset>清空本地工作区</button>
+    </div>
+  `;
 }
 
 function filterChips(rows) {
@@ -801,14 +871,48 @@ function saveEdit(form) {
 
 function resetReviewState() {
   state.reviewState = reviewDefaults();
-  if (canPersistReview()) localStorage.removeItem(REVIEW_STORAGE_KEY);
   state.rows = state.originalRows.map(cloneRow);
   state.manifest = buildManifest(state.rows);
   state.selectedId = state.rows[0]?.id || "";
   state.sourceText = "";
   state.sourceStatus = "idle";
+  saveWorkspace();
   render();
   loadSelectedSource();
+}
+
+function downloadBlob(filename, content, type = "application/json") {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportWorkspace() {
+  if (!state.rows.length) return;
+  saveWorkspace();
+  const stamp = new Date().toISOString().slice(0, 10);
+  const safeName = state.datasetName.replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/-+/g, "-").slice(0, 48) || "calligraphy-workspace";
+  downloadBlob(`${stamp}-${safeName}.json`, JSON.stringify(workspacePayload(), null, 2));
+}
+
+function downloadTemplateCsv() {
+  const headers = ["材料ID", "附表", "二轮状态", "书家", "书体/可能书体", "quote", "page_no", "source_file", "原文命中", "证据等级", "门禁", "第二轮动作", "问题/隐患", "备注"];
+  const sample = ["ITEM-0001", "附表A｜确定风格主表", "待审校", "张旭", "草书", "示例摘录", "191", "page_191.txt", "exact", "高", "可入主表", "确认", "", ""];
+  downloadBlob("calligraphy-workspace-template.csv", `${headers.join(",")}\n${sample.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")}\n`, "text/csv;charset=utf-8");
+}
+
+function resetWorkspace() {
+  if (state.rows.length && !window.confirm("清空当前浏览器里的书论工作区？此操作不会影响其他用户或线上代码。")) return;
+  clearWorkspace();
+  state.view = "home";
+  location.hash = "#home";
+  render();
 }
 
 function handleRowAction(action, rowId) {
@@ -938,7 +1042,7 @@ function renderShell(content) {
         <nav class="top-actions">
           <button type="button" class="${state.view === "home" ? "active" : ""}" data-view="home">首页</button>
           <button type="button" class="${state.view === "detail" ? "active" : ""}" data-view="detail">详情</button>
-          <a href="${assetPath("data/manifest.json")}">数据清单</a>
+          <button type="button" data-workspace-export ${state.rows.length ? "" : "disabled"}>导出</button>
         </nav>
       </header>
       ${content}
@@ -953,19 +1057,21 @@ function renderHome() {
     <section class="home-layout">
       <article class="home-intro">
         <p class="kicker">Home</p>
-        <h2>上传结果表，自动生成前端可视化</h2>
-        <p>这里不是下载页。上传 CSV/JSON 结果表后，系统会在浏览器内解析字段、分类附表、生成筛选视图，并把 <code>source_file + page_no + quote</code> 接入原文回检。</p>
+        <h2>每个人都有自己的本地书论工作区</h2>
+        <p>这个线上入口不再展示后端数据包或下载附件。上传 CSV/JSON/page 文本后，内容只进入当前浏览器；导出的工作区 JSON 可以发给别人导入复现。</p>
+        ${workspaceStatus()}
+        ${workspaceActions()}
       </article>
       <section class="upload-panel">
         <div>
           <p class="kicker">Upload</p>
-          <h2>上传文件</h2>
-          <p>支持：结果表 CSV/JSON，原文页 <code>page_*.txt</code>。XLSX 不直接在公网前端解析，建议由后端或工作流转换为 CSV。</p>
+          <h2>上传或导入</h2>
+          <p>支持：结果表 CSV/JSON、工作区 JSON、原文页 <code>page_*.txt</code>。XLSX 不在公网前端解析，请先转换为 CSV。</p>
         </div>
         <label class="drop-zone">
-          <input id="fileInput" type="file" multiple accept=".csv,.json,.txt,.xlsx" />
+          <input id="fileInput" type="file" multiple accept=".csv,.json,.txt,.xlsx,application/json,text/csv,text/plain" />
           <strong>选择或拖入文件</strong>
-          <span>可以一次上传结果表和原文页文本</span>
+          <span>可以一次上传结果表、原文页文本或工作区包</span>
         </label>
         ${uploadLog()}
       </section>
@@ -978,8 +1084,8 @@ function renderHome() {
     <section class="flow-strip">
       <article><span>01</span><strong>上传</strong><p>CSV/JSON 结果表进入浏览器内处理。</p></article>
       <article><span>02</span><strong>识别</strong><p>字段映射为附表、书家、书体、摘录、页码和门禁。</p></article>
-      <article><span>03</span><strong>展示</strong><p>详情页生成结果表、筛选、来源面板和回检高亮。</p></article>
-      <article><span>04</span><strong>发布</strong><p>需要持久化时再接后端上传、存储和任务队列。</p></article>
+      <article><span>03</span><strong>隔离</strong><p>数据保存在当前浏览器，不进入公共后端目录。</p></article>
+      <article><span>04</span><strong>导出</strong><p>下载工作区 JSON，发给其他人导入使用。</p></article>
     </section>
   `);
   attachHomeEvents();
@@ -996,17 +1102,15 @@ function renderDetail() {
         <div>
           <p class="kicker">Current Dataset</p>
           <h2>${escapeHtml(state.datasetName)}</h2>
-          <p>表格、原文回检、审校状态都固定在同一屏内，避免来回滑动。</p>
+          <p>当前屏幕只使用你的本地工作区数据；不会读取公开后端文件。</p>
         </div>
+        ${workspaceStatus()}
+        ${workspaceActions()}
         <div class="rail-metrics">${railMetrics()}</div>
         ${reviewToolbar()}
         <details class="rail-section">
           <summary>上传处理</summary>
           ${uploadLog()}
-        </details>
-        <details class="rail-section">
-          <summary>发布附件</summary>
-          <div class="download-grid compact">${downloadCards()}</div>
         </details>
         <details class="rail-section">
           <summary>附表分布</summary>
@@ -1067,6 +1171,18 @@ function attachGlobalEvents() {
   document.querySelector("#editForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     saveEdit(event.currentTarget);
+  });
+
+  document.querySelectorAll("[data-workspace-export]").forEach((button) => {
+    button.addEventListener("click", exportWorkspace);
+  });
+
+  document.querySelectorAll("[data-template-download]").forEach((button) => {
+    button.addEventListener("click", downloadTemplateCsv);
+  });
+
+  document.querySelectorAll("[data-workspace-reset]").forEach((button) => {
+    button.addEventListener("click", resetWorkspace);
   });
 }
 
@@ -1140,6 +1256,7 @@ async function processFiles(files) {
   if (!files.length) return;
   const nextLog = [];
   let nextRows = null;
+  let importedWorkspace = null;
 
   for (const file of files) {
     const name = file.name;
@@ -1159,6 +1276,17 @@ async function processFiles(files) {
         }
       } else if (lower.endsWith(".json")) {
         const payload = JSON.parse(await file.text());
+        if (payload.type === "calligraphy-workspace" && Array.isArray(payload.rows)) {
+          importedWorkspace = payload;
+          nextRows = payload.rows.map(makeResult);
+          Object.entries(payload.uploadedPages || {}).forEach(([page, content]) => {
+            if (/^page_\d+\.txt$/i.test(page)) state.uploadedPages.set(page, String(content));
+          });
+          state.reviewState = { ...reviewDefaults(), ...(payload.reviewState || {}) };
+          state.datasetName = payload.datasetName ? `导入：${payload.datasetName}` : `导入：${name}`;
+          nextLog.push({ type: "success", title: name, message: `已导入 ${nextRows.length} 行和 ${state.uploadedPages.size} 个原文页。` });
+          continue;
+        }
         const rows = Array.isArray(payload) ? payload : payload.results || [];
         if (!rows.length) {
           nextLog.push({ type: "warn", title: name, message: "JSON 中没有找到 results 数组。" });
@@ -1179,21 +1307,26 @@ async function processFiles(files) {
 
   state.uploadLog = nextLog;
   if (nextRows) {
-    state.reviewState = reviewDefaults();
-    state.originalRows = nextRows.map(cloneRow);
+    if (!importedWorkspace) state.reviewState = reviewDefaults();
+    state.originalRows = (importedWorkspace?.originalRows?.length ? importedWorkspace.originalRows : nextRows).map(cloneRow);
     state.rows = nextRows;
-    state.manifest = buildManifest(nextRows, state.baseManifest, { keepDownloads: false });
+    state.workspaceId = newWorkspaceId();
+    state.manifest = buildManifest(nextRows);
     state.selectedId = nextRows[0]?.id || "";
     state.filter = "all";
     state.query = "";
     state.sourceText = "";
     state.sourceStatus = "idle";
+    state.sourceCache = new Map();
     state.view = "detail";
     location.hash = "#detail";
+    state.uploadLog = nextLog;
+    saveWorkspace();
     render();
     loadSelectedSource();
   } else {
     state.manifest = buildManifest(state.rows);
+    saveWorkspace();
     render();
   }
 }
@@ -1224,36 +1357,20 @@ async function loadSelectedSource(options = {}) {
     return;
   }
 
-  state.sourceStatus = "loading";
-  if (!options.loadingRendered) updateSourceDom(row);
-  try {
-    const response = await fetch(assetPath(`data/source-pages/${encodeURIComponent(row.sourceFile)}`));
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    if (requestId !== state.sourceRequestId) return;
-    state.sourceText = await response.text();
-    state.sourceCache.set(row.sourceFile, state.sourceText);
-    state.sourceStatus = "ready";
-  } catch {
-    if (requestId !== state.sourceRequestId) return;
-    state.sourceText = "";
-    state.sourceStatus = "error";
-  }
+  state.sourceText = "";
+  state.sourceStatus = "error";
   updateSourceDom(row);
 }
 
 async function init() {
-  const [manifest, payload] = await Promise.all([
-    fetch(assetPath("data/manifest.json")).then((response) => response.json()),
-    fetch(assetPath("data/results.json")).then((response) => response.json())
-  ]);
-  state.baseManifest = manifest;
-  state.manifest = manifest;
-  state.baseRows = payload.results.map(makeResult);
-  state.originalRows = state.baseRows.map(cloneRow);
-  state.reviewState = loadReviewState();
-  state.rows = applyReviewState(state.baseRows);
-  state.manifest = buildManifest(state.rows);
-  state.selectedId = state.rows[0]?.id || "";
+  if (!loadWorkspace()) {
+    state.workspaceId = newWorkspaceId();
+    state.reviewState = reviewDefaults();
+    state.rows = [];
+    state.originalRows = [];
+    state.manifest = buildManifest([]);
+    saveWorkspace();
+  }
   render();
   if (state.view === "detail") loadSelectedSource();
 }

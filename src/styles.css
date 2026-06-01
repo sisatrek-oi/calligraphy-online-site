@@ -166,6 +166,12 @@ code {
   transform: translateY(-1px);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+}
+
 .top-actions button.active {
   border-color: rgba(159, 63, 47, 0.4);
   color: var(--red);
@@ -307,6 +313,52 @@ code {
 .upload-log .error {
   border-color: rgba(159, 63, 47, 0.42);
   background: rgba(159, 63, 47, 0.08);
+}
+
+.workspace-status,
+.workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-status {
+  margin-top: 4px;
+}
+
+.workspace-status span {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(51, 75, 92, 0.18);
+  background: rgba(51, 75, 92, 0.06);
+  color: var(--blue);
+  padding: 3px 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.workspace-status strong {
+  margin-left: 4px;
+}
+
+.workspace-actions {
+  margin-top: 2px;
+}
+
+.workspace-actions button {
+  min-height: 34px;
+  border: 1px solid rgba(31, 111, 104, 0.34);
+  background: rgba(31, 111, 104, 0.08);
+  color: var(--teal);
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+.workspace-actions button:last-child {
+  border-color: rgba(159, 63, 47, 0.28);
+  background: rgba(159, 63, 47, 0.06);
+  color: var(--red);
 }
 
 .home-metrics {

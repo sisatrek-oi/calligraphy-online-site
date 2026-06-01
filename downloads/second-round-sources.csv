@@ -1,4 +1,0 @@
-来源文件,用途,说明
-downloads/first-round-results.xlsx,第一轮成果,读取高置信、宽口径匹配、优先补入、未入高置信四类数据
-data/source-pages/,原文页文本,用于 quote/page_no/source_file 回源命中检查
-downloads/second-round-results.xlsx,第二轮成果,单 sheet 综合成果表
