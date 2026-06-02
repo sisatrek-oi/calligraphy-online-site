@@ -81,7 +81,8 @@ const filters = [
   { id: "matched", label: "已入对照", tone: "C" },
   { id: "excluded", label: "非风格/品级", tone: "D" },
   { id: "review", label: "待校验", tone: "E" },
-  { id: "abnormal", label: "命中异常", tone: "!" }
+  { id: "abnormal", label: "命中异常", tone: "!" },
+  { id: "invalid", label: "字段待补", tone: "Fix" }
 ];
 
 const state = {
@@ -528,7 +529,34 @@ function countBy(rows, key) {
   }, {});
 }
 
+function rowValidation(row) {
+  const missingRequired = orderedSchema().filter((field) => field.required && !String(fieldValue(row, field.id) || "").trim());
+  const hasEvidenceAnchor = Boolean(String(fieldValue(row, "quote") || row.quote || "").trim())
+    && Boolean(String(fieldValue(row, "pageNo") || row.pageNo || fieldValue(row, "sourceFile") || row.sourceFile || "").trim());
+  const missingEvidence = orderedSchema().filter((field) => {
+    if (!field.evidenceRequired) return false;
+    const value = String(fieldValue(row, field.id) || "").trim();
+    return value && !hasEvidenceAnchor;
+  });
+  const confirmedThenChanged = Boolean(row.reviewed && row.edited);
+  const issues = [
+    ...missingRequired.map((field) => ({ type: "required", field, label: `${field.label}缺失` })),
+    ...missingEvidence.map((field) => ({ type: "evidence", field, label: `${field.label}缺证据定位` })),
+    ...(confirmedThenChanged ? [{ type: "changed", field: null, label: "确认后有修改" }] : [])
+  ];
+  const level = missingRequired.length ? "risk" : missingEvidence.length || confirmedThenChanged ? "warn" : "ok";
+  return {
+    ok: issues.length === 0,
+    level,
+    missingRequired,
+    missingEvidence,
+    confirmedThenChanged,
+    issues
+  };
+}
+
 function buildManifest(rows, source = state.baseManifest, options = {}) {
+  const validations = rows.map(rowValidation);
   const stats = {
     total: rows.length,
     sourcePages: state.uploadedPages.size,
@@ -536,6 +564,10 @@ function buildManifest(rows, source = state.baseManifest, options = {}) {
     exactHits: rows.filter((row) => row.hit === "exact").length,
     reviewRows: rows.filter((row) => row.bucket === "review").length,
     abnormalRows: rows.filter((row) => row.abnormal).length,
+    invalidRows: validations.filter((validation) => !validation.ok).length,
+    missingRequiredRows: validations.filter((validation) => validation.missingRequired.length).length,
+    missingEvidenceRows: validations.filter((validation) => validation.missingEvidence.length).length,
+    changedAfterConfirmRows: validations.filter((validation) => validation.confirmedThenChanged).length,
     confirmedRows: rows.filter((row) => row.reviewed).length,
     editedRows: rows.filter((row) => row.edited).length,
     appendix: countBy(rows, "appendix"),
@@ -567,7 +599,7 @@ function visibleRows() {
   const query = state.query.trim().toLowerCase();
   return state.rows.filter((row) => {
     const filterPass = state.filter === "all"
-      || (state.filter === "abnormal" ? row.abnormal : row.bucket === state.filter);
+      || (state.filter === "abnormal" ? row.abnormal : state.filter === "invalid" ? !rowValidation(row).ok : row.bucket === state.filter);
     const queryPass = !query || rowText(row).toLowerCase().includes(query);
     return filterPass && queryPass;
   });
@@ -582,7 +614,7 @@ function metricCards() {
   const items = [
     { value: stats.total, label: "成果行", note: state.datasetName },
     { value: stats.exactHits, label: "精确命中", note: "quote 可直接回源" },
-    { value: stats.reviewRows, label: "待校验", note: "来源/OCR 队列" },
+    { value: stats.invalidRows, label: "字段待补", note: "缺必填/证据定位" },
     { value: stats.sourcePages, label: "原文页", note: "静态或上传 page 文本" }
   ];
   return items.map((item) => `
@@ -599,7 +631,7 @@ function railMetrics() {
   const items = [
     { value: stats.total, label: "成果行" },
     { value: stats.exactHits, label: "精确命中" },
-    { value: stats.reviewRows, label: "待校验" },
+    { value: stats.invalidRows, label: "字段待补" },
     { value: stats.sourcePages, label: "原文页" }
   ];
   return items.map((item) => `
@@ -696,6 +728,7 @@ function filterChips(rows) {
     counts.all += 1;
     counts[row.bucket] = (counts[row.bucket] || 0) + 1;
     if (row.abnormal) counts.abnormal += 1;
+    if (!rowValidation(row).ok) counts.invalid += 1;
   });
   return filters.map((filter) => `
     <button class="${state.filter === filter.id ? "active" : ""}" type="button" data-filter="${filter.id}">
@@ -767,6 +800,17 @@ function confidencePill(row) {
   return `<span class="confidence-chip ${quality.tone}">${quality.score} · ${quality.label}</span>`;
 }
 
+function validationBadge(row) {
+  const validation = rowValidation(row);
+  if (validation.ok) return `<span class="validation-badge ok">字段 OK</span>`;
+  const label = validation.missingRequired.length
+    ? `缺必填 ${validation.missingRequired.length}`
+    : validation.missingEvidence.length
+      ? `缺证据 ${validation.missingEvidence.length}`
+      : "需复核";
+  return `<span class="validation-badge ${validation.level}">${escapeHtml(label)}</span>`;
+}
+
 function reviewLabel(row) {
   if (row.reviewed) return { label: "已确认", tone: "confirmed" };
   if (row.edited) return { label: "已修改", tone: "edited" };
@@ -811,6 +855,7 @@ function resultTable(rows) {
           <tr>
             <th>回检</th>
             <th>审校</th>
+            <th>字段</th>
             <th>置信</th>
             <th>附表</th>
             ${tableFields.map((field) => `<th>${escapeHtml(field.label)}</th>`).join("")}
@@ -818,9 +863,10 @@ function resultTable(rows) {
         </thead>
         <tbody>
           ${rows.map((row, index) => `
-            <tr class="${row.id === state.selectedId ? "selected" : ""} ${row.abnormal ? "abnormal" : ""}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
+            <tr class="${row.id === state.selectedId ? "selected" : ""} ${row.abnormal ? "abnormal" : ""} ${!rowValidation(row).ok ? "invalid" : ""}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
               <td><button type="button" data-row-id="${escapeHtml(row.id)}">查看</button></td>
               <td>${reviewBadge(row)}${rowActionButtons(row)}</td>
+              <td>${validationBadge(row)}</td>
               <td>${confidencePill(row)}</td>
               <td><span class="appendix">${escapeHtml(row.appendixCode)}</span>${escapeHtml(row.status)}</td>
               ${tableFields.map((field, fieldIndex) => {
@@ -968,6 +1014,28 @@ function detailCard(row) {
   `;
 }
 
+function validationPanel(row) {
+  const validation = rowValidation(row);
+  return `
+    <section class="validation-card ${validation.level}">
+      <div class="validation-head">
+        <div>
+          <p class="kicker">Field Audit</p>
+          <h2>${validation.ok ? "字段完整" : "字段待补"}</h2>
+        </div>
+        ${validationBadge(row)}
+      </div>
+      ${validation.ok ? `
+        <p>当前条目满足模板的必填字段和证据定位要求。</p>
+      ` : `
+        <ul>
+          ${validation.issues.map((issue) => `<li>${escapeHtml(issue.label)}</li>`).join("")}
+        </ul>
+      `}
+    </section>
+  `;
+}
+
 function sourceCardContent(row) {
   const quality = sourceQuality(row, true);
   return `
@@ -1029,6 +1097,7 @@ function detailPanel(row) {
       </div>
       <div class="detail-dock-body">
         ${detailCard(row)}
+        ${validationPanel(row)}
         ${historyPanel(row)}
         ${sourceCard(row)}
       </div>
@@ -1054,6 +1123,7 @@ function updateDetailDom(row) {
   }
 
   const detail = panel.querySelector(".detail-card");
+  const validationCard = panel.querySelector(".validation-card");
   const source = panel.querySelector(".source-card");
   if (!detail || !source) {
     render();
@@ -1063,6 +1133,7 @@ function updateDetailDom(row) {
   const dockTitle = panel.querySelector(".detail-dock-head h2");
   if (dockTitle) dockTitle.textContent = `${fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注条目"} · ${row.id}`;
   detail.innerHTML = detailCardContent(row);
+  if (validationCard) validationCard.outerHTML = validationPanel(row);
   const trace = panel.querySelector(".trace-card");
   if (trace) trace.outerHTML = historyPanel(row);
   source.innerHTML = sourceCardContent(row);
@@ -1332,10 +1403,13 @@ function toggleDetailDock() {
 }
 
 function reviewStats() {
+  const validations = state.rows.map(rowValidation);
   return {
     confirmed: state.rows.filter((row) => row.reviewed).length,
     edited: state.rows.filter((row) => row.edited).length,
-    deleted: state.reviewState.deletedIds.length
+    deleted: state.reviewState.deletedIds.length,
+    invalid: validations.filter((validation) => !validation.ok).length,
+    missingRequired: validations.filter((validation) => validation.missingRequired.length).length
   };
 }
 
@@ -1345,6 +1419,8 @@ function reviewToolbar() {
     <div class="review-toolbar">
       <span>已确认 <strong>${stats.confirmed}</strong></span>
       <span>已修改 <strong>${stats.edited}</strong></span>
+      <span>字段待补 <strong>${stats.invalid}</strong></span>
+      <span>缺必填 <strong>${stats.missingRequired}</strong></span>
       <span>已删除 <strong>${stats.deleted}</strong></span>
       <button type="button" data-review-reset>重置审校</button>
     </div>
@@ -1366,9 +1442,12 @@ function updateTableRowStatus(row) {
   const tableRow = document.querySelector(`tbody tr[data-row-id="${CSS.escape(row.id)}"]`);
   if (!tableRow) return;
   tableRow.classList.toggle("abnormal", row.abnormal);
+  tableRow.classList.toggle("invalid", !rowValidation(row).ok);
   const reviewCell = tableRow.children[1];
-  const confidenceCell = tableRow.children[2];
+  const validationCell = tableRow.children[2];
+  const confidenceCell = tableRow.children[3];
   if (reviewCell) reviewCell.innerHTML = `${reviewBadge(row)}${rowActionButtons(row)}`;
+  if (validationCell) validationCell.innerHTML = validationBadge(row);
   if (confidenceCell) confidenceCell.innerHTML = confidencePill(row);
 }
 

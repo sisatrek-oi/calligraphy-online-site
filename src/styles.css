@@ -474,6 +474,7 @@ button:disabled {
 .main-panel,
 .detail-card,
 .source-card,
+.validation-card,
 .download-panel,
 .appendix-panel {
   animation: panelRise 380ms ease both;
@@ -777,7 +778,8 @@ button:disabled {
 .review-toolbar span,
 .review-toolbar button,
 .review-badge,
-.confidence-chip {
+.confidence-chip,
+.validation-badge {
   min-height: 28px;
   display: inline-flex;
   align-items: center;
@@ -799,14 +801,16 @@ button:disabled {
 }
 
 .review-badge.confirmed,
-.confidence-chip.high {
+.confidence-chip.high,
+.validation-badge.ok {
   border-color: rgba(31, 111, 104, 0.34);
   background: rgba(31, 111, 104, 0.1);
   color: var(--teal);
 }
 
 .review-badge.edited,
-.confidence-chip.medium {
+.confidence-chip.medium,
+.validation-badge.warn {
   border-color: rgba(165, 120, 36, 0.34);
   background: rgba(165, 120, 36, 0.1);
   color: var(--gold);
@@ -814,7 +818,8 @@ button:disabled {
 
 .review-badge.pending,
 .confidence-chip.low,
-.confidence-chip.risk {
+.confidence-chip.risk,
+.validation-badge.risk {
   border-color: rgba(159, 63, 47, 0.32);
   background: rgba(159, 63, 47, 0.08);
   color: var(--red);
@@ -942,6 +947,10 @@ tbody tr.selected {
 
 tbody tr.abnormal:not(.selected) {
   background: rgba(159, 63, 47, 0.055);
+}
+
+tbody tr.invalid:not(.selected) {
+  box-shadow: inset 3px 0 0 rgba(165, 120, 36, 0.58);
 }
 
 td button {
@@ -1099,15 +1108,17 @@ td small {
 
 .detail-panel .detail-card,
 .detail-panel .source-card,
-.detail-panel .trace-card {
+.detail-panel .trace-card,
+.detail-panel .validation-card {
   animation: none;
   box-shadow: none;
 }
 
 .detail-panel .detail-card,
-.detail-panel .trace-card {
+.detail-panel .trace-card,
+.detail-panel .validation-card {
   flex: 0 0 auto;
-  max-height: 240px;
+  max-height: 220px;
   overflow: auto;
 }
 
@@ -1183,8 +1194,47 @@ td small {
   background: rgba(255, 253, 246, 0.84);
 }
 
-.trace-card h2 {
+.validation-card {
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 246, 0.84);
+}
+
+.validation-card.warn {
+  border-color: rgba(165, 120, 36, 0.36);
+  background: rgba(165, 120, 36, 0.08);
+}
+
+.validation-card.risk {
+  border-color: rgba(159, 63, 47, 0.36);
+  background: rgba(159, 63, 47, 0.075);
+}
+
+.validation-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trace-card h2,
+.validation-card h2 {
   font-size: 18px;
+}
+
+.validation-card p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.validation-card ul {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .trace-list {
