@@ -361,6 +361,106 @@ button:disabled {
   color: var(--red);
 }
 
+.schema-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(217, 208, 194, 0.88);
+}
+
+.schema-head h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 20px;
+}
+
+.schema-head p,
+.field-config p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.schema-select,
+.field-config label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.schema-select select,
+.field-config input,
+.field-config textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 246, 0.92);
+  color: var(--ink);
+  padding: 7px 8px;
+  font-size: 12px;
+}
+
+.field-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.field-config {
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(217, 208, 194, 0.92);
+  background: rgba(244, 241, 234, 0.45);
+  padding: 9px;
+}
+
+.field-config.muted {
+  opacity: 0.78;
+}
+
+.field-config-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-config-head strong {
+  font-size: 13px;
+}
+
+.field-config-head span,
+.field-config small,
+.trace-card small {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.field-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.field-switches label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.schema-add {
+  min-height: 32px;
+  border: 1px solid rgba(31, 111, 104, 0.34);
+  background: rgba(31, 111, 104, 0.08);
+  color: var(--teal);
+  cursor: pointer;
+}
+
 .home-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -635,7 +735,8 @@ button:disabled {
 }
 
 .detail-card,
-.source-card {
+.source-card,
+.trace-card {
   padding: 13px;
 }
 
@@ -997,14 +1098,16 @@ td small {
 }
 
 .detail-panel .detail-card,
-.detail-panel .source-card {
+.detail-panel .source-card,
+.detail-panel .trace-card {
   animation: none;
   box-shadow: none;
 }
 
-.detail-panel .detail-card {
+.detail-panel .detail-card,
+.detail-panel .trace-card {
   flex: 0 0 auto;
-  max-height: 306px;
+  max-height: 240px;
   overflow: auto;
 }
 
@@ -1065,6 +1168,83 @@ td small {
 .detail-card dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.detail-card dd small {
+  display: inline-flex;
+  margin-left: 5px;
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+.trace-card {
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 246, 0.84);
+}
+
+.trace-card h2 {
+  font-size: 18px;
+}
+
+.trace-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.trace-list article {
+  border: 1px solid rgba(217, 208, 194, 0.88);
+  background: rgba(244, 241, 234, 0.48);
+  padding: 8px;
+}
+
+.trace-event-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.trace-event-head strong {
+  color: var(--teal);
+  font-size: 12px;
+}
+
+.trace-event-head span {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.trace-list p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.trace-list dl {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 4px 8px;
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+
+.trace-list dt {
+  color: var(--muted);
+}
+
+.trace-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.trace-list b {
+  margin-right: 4px;
+  color: var(--red);
+  font-family: var(--mono);
+  font-size: 9px;
 }
 
 .source-card pre {

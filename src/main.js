@@ -1,6 +1,78 @@
 const app = document.querySelector("#app");
 const WORKSPACE_POINTER_KEY = "calligraphy-current-workspace-v2";
 const WORKSPACE_STORAGE_PREFIX = "calligraphy-workspace-v2:";
+const SCHEMA_VERSION = 1;
+const PROMPT_VERSION = 1;
+
+const schemaTemplates = [
+  {
+    id: "calligraphy-style",
+    name: "书论风格评价抽取模板",
+    description: "适合书论、书法品评、风格术语和原文证据整理。",
+    fields: [
+      { id: "author", label: "书家", type: "text", prompt: "抽取被评价或被讨论的书家姓名。若原文没有明确书家，留空并在待复核问题中说明。", required: true, evidenceRequired: true, visible: true },
+      { id: "scriptType", label: "书体", type: "text", prompt: "抽取书体或可能书体，如楷书、草书、隶书等；无法确定时写“未标注”。", required: false, evidenceRequired: true, visible: true },
+      { id: "quote", label: "原文摘录", type: "longtext", prompt: "摘录能够支持判断的最小原文片段，优先保留完整评价短语。", required: true, evidenceRequired: true, visible: true },
+      { id: "pageNo", label: "页码", type: "text", prompt: "记录原文页码或页序，用于回到 page_*.txt。", required: true, evidenceRequired: false, visible: true },
+      { id: "sourceFile", label: "原文文件", type: "text", prompt: "记录对应原文文件名，例如 page_191.txt。", required: true, evidenceRequired: false, visible: false },
+      { id: "confidence", label: "证据等级", type: "select", prompt: "判断摘录是否足以支持入表，建议使用 高/中/低/待复核。", required: false, evidenceRequired: true, visible: true },
+      { id: "gate", label: "门禁", type: "text", prompt: "判断该条是否可入主表、需补证、或应排除。", required: false, evidenceRequired: false, visible: true },
+      { id: "issue", label: "待复核问题", type: "longtext", prompt: "记录 OCR、页码、归属、解释歧义等需要人工处理的问题。", required: false, evidenceRequired: false, visible: false },
+      { id: "note", label: "备注", type: "longtext", prompt: "记录人工判断、补充说明或后续处理建议。", required: false, evidenceRequired: false, visible: false }
+    ]
+  },
+  {
+    id: "inscription-note",
+    name: "碑帖题跋抽取模板",
+    description: "适合题跋作者、作品对象、评价语、时间和出处整理。",
+    fields: [
+      { id: "author", label: "题跋作者", type: "text", prompt: "抽取题跋、评论或记录的作者。", required: false, evidenceRequired: true, visible: true },
+      { id: "workTitle", label: "作品/碑帖", type: "text", prompt: "抽取被题跋或被评价的作品、碑帖、法书名称。", required: true, evidenceRequired: true, visible: true },
+      { id: "quote", label: "原文摘录", type: "longtext", prompt: "摘录包含题跋判断或事实信息的原文片段。", required: true, evidenceRequired: true, visible: true },
+      { id: "time", label: "时间", type: "text", prompt: "抽取题跋时间、朝代、年号或相对时间。", required: false, evidenceRequired: true, visible: true },
+      { id: "pageNo", label: "页码", type: "text", prompt: "记录原文页码。", required: true, evidenceRequired: false, visible: true },
+      { id: "sourceFile", label: "原文文件", type: "text", prompt: "记录对应原文文件名。", required: true, evidenceRequired: false, visible: false },
+      { id: "issue", label: "待复核问题", type: "longtext", prompt: "记录归属、断句、版本和释读疑问。", required: false, evidenceRequired: false, visible: false }
+    ]
+  },
+  {
+    id: "local-gazetteer-person",
+    name: "地方志人物资料抽取模板",
+    description: "适合从地方志中抽取人物、籍贯、职官、事件和证据。",
+    fields: [
+      { id: "personName", label: "人物", type: "text", prompt: "抽取人物姓名。", required: true, evidenceRequired: true, visible: true },
+      { id: "place", label: "籍贯/地点", type: "text", prompt: "抽取籍贯、活动地或相关地点。", required: false, evidenceRequired: true, visible: true },
+      { id: "office", label: "职官/身份", type: "text", prompt: "抽取职官、身份、职业或社会角色。", required: false, evidenceRequired: true, visible: true },
+      { id: "event", label: "事件", type: "longtext", prompt: "概括人物相关事件或事迹。", required: false, evidenceRequired: true, visible: true },
+      { id: "quote", label: "原文摘录", type: "longtext", prompt: "摘录支持人物信息的原文片段。", required: true, evidenceRequired: true, visible: true },
+      { id: "pageNo", label: "页码", type: "text", prompt: "记录原文页码。", required: true, evidenceRequired: false, visible: true },
+      { id: "sourceFile", label: "原文文件", type: "text", prompt: "记录对应原文文件名。", required: true, evidenceRequired: false, visible: false }
+    ]
+  },
+  {
+    id: "text-coding",
+    name: "访谈/文本编码模板",
+    description: "适合访谈、田野材料、政策文本和文学批评材料的主题编码。",
+    fields: [
+      { id: "speaker", label: "说话人/来源", type: "text", prompt: "抽取说话人、材料来源或文本出处。", required: false, evidenceRequired: false, visible: true },
+      { id: "theme", label: "主题编码", type: "text", prompt: "为片段归纳一个主题编码。", required: true, evidenceRequired: true, visible: true },
+      { id: "quote", label: "原文摘录", type: "longtext", prompt: "摘录支持该编码的原文片段。", required: true, evidenceRequired: true, visible: true },
+      { id: "interpretation", label: "解释", type: "longtext", prompt: "说明为什么该片段属于该主题编码。", required: false, evidenceRequired: true, visible: true },
+      { id: "issue", label: "待复核问题", type: "longtext", prompt: "记录编码边界、歧义和需要讨论的问题。", required: false, evidenceRequired: false, visible: false }
+    ]
+  },
+  {
+    id: "blank",
+    name: "空白自定义模板",
+    description: "只保留原文摘录和页码，适合从零配置研究字段。",
+    fields: [
+      { id: "quote", label: "原文摘录", type: "longtext", prompt: "摘录需要分析的原文片段。", required: true, evidenceRequired: true, visible: true },
+      { id: "pageNo", label: "页码", type: "text", prompt: "记录原文页码。", required: false, evidenceRequired: false, visible: true },
+      { id: "sourceFile", label: "原文文件", type: "text", prompt: "记录对应原文文件名。", required: false, evidenceRequired: false, visible: false },
+      { id: "issue", label: "待复核问题", type: "longtext", prompt: "记录需要人工判断的问题。", required: false, evidenceRequired: false, visible: true }
+    ]
+  }
+];
 
 const filters = [
   { id: "all", label: "全部", tone: "All" },
@@ -21,6 +93,10 @@ const state = {
   uploadLog: [],
   datasetName: "空白隔离工作区",
   workspaceId: "",
+  schema: null,
+  schemaTemplateId: "calligraphy-style",
+  schemaVersion: SCHEMA_VERSION,
+  promptVersion: PROMPT_VERSION,
   lastSavedAt: "",
   view: location.hash === "#detail" ? "detail" : "home",
   filter: "all",
@@ -67,6 +143,111 @@ function cloneRow(row) {
   return { ...row };
 }
 
+function cloneSchema(fields) {
+  return fields.map((field, index) => ({
+    id: field.id || `field_${index + 1}`,
+    label: field.label || field.id || `字段 ${index + 1}`,
+    type: field.type || "text",
+    prompt: field.prompt || "",
+    required: Boolean(field.required),
+    evidenceRequired: Boolean(field.evidenceRequired),
+    visible: field.visible !== false,
+    order: Number.isFinite(field.order) ? field.order : index + 1
+  }));
+}
+
+function templateById(id) {
+  return schemaTemplates.find((template) => template.id === id) || schemaTemplates[0];
+}
+
+function defaultSchema(templateId = "calligraphy-style") {
+  const template = templateById(templateId);
+  return cloneSchema(template.fields);
+}
+
+function ensureSchema() {
+  if (!Array.isArray(state.schema) || !state.schema.length) {
+    state.schema = defaultSchema(state.schemaTemplateId);
+  }
+  return state.schema;
+}
+
+function orderedSchema(options = {}) {
+  const includeHidden = options.includeHidden ?? true;
+  return ensureSchema()
+    .filter((field) => includeHidden || field.visible !== false)
+    .slice()
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
+function schemaField(id) {
+  return ensureSchema().find((field) => field.id === id);
+}
+
+function fieldValue(row, fieldId) {
+  if (!row) return "";
+  if (row.fields && Object.prototype.hasOwnProperty.call(row.fields, fieldId)) return row.fields[fieldId] ?? "";
+  return row[fieldId] ?? "";
+}
+
+function setFieldValue(row, fieldId, value) {
+  if (!row.fields) row.fields = {};
+  row.fields[fieldId] = value;
+  row[fieldId] = value;
+}
+
+function syncLegacyFields(row) {
+  row.author = fieldValue(row, "author");
+  row.scriptType = fieldValue(row, "scriptType");
+  row.quote = fieldValue(row, "quote");
+  row.pageNo = fieldValue(row, "pageNo");
+  row.sourceFile = normalizePageFile(fieldValue(row, "sourceFile") || row.pageNo);
+  row.hit = fieldValue(row, "hit") || row.hit || "";
+  row.confidence = fieldValue(row, "confidence");
+  row.gate = fieldValue(row, "gate");
+  row.issue = fieldValue(row, "issue");
+  row.note = fieldValue(row, "note");
+  if (row.sourceFile) setFieldValue(row, "sourceFile", row.sourceFile);
+  return row;
+}
+
+function rowDraftFromFields(fields) {
+  return { ...fields };
+}
+
+function normalizeHistory(row) {
+  if (Array.isArray(row.history)) return row.history;
+  return [];
+}
+
+function createInitialHistory(row, importedAt = new Date().toISOString()) {
+  return [
+    {
+      id: `hist-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      type: "ai-draft",
+      actor: "AI/导入",
+      at: importedAt,
+      reason: "上传 CSV/JSON 的原始值作为 AI 初稿。",
+      schemaVersion: row.schemaVersion || state.schemaVersion,
+      promptVersion: row.promptVersion || state.promptVersion,
+      modelVersion: row.modelVersion || "csv-import",
+      changes: Object.entries(row.aiDraft || {}).map(([fieldId, value]) => ({ fieldId, before: "", after: value }))
+    }
+  ];
+}
+
+function addHistory(row, event) {
+  row.history = normalizeHistory(row);
+  row.history.push({
+    id: `hist-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    at: new Date().toISOString(),
+    schemaVersion: state.schemaVersion,
+    promptVersion: state.promptVersion,
+    modelVersion: row.modelVersion || "csv-import",
+    ...event
+  });
+}
+
 function reviewDefaults() {
   return { confirmedIds: [], deletedIds: [], edits: {} };
 }
@@ -86,6 +267,10 @@ function workspacePayload() {
     workspaceId: state.workspaceId,
     datasetName: state.datasetName,
     exportedAt: new Date().toISOString(),
+    schema: ensureSchema(),
+    schemaTemplateId: state.schemaTemplateId,
+    schemaVersion: state.schemaVersion,
+    promptVersion: state.promptVersion,
     rows: state.rows,
     originalRows: state.originalRows,
     uploadedPages: Object.fromEntries(state.uploadedPages),
@@ -109,6 +294,10 @@ function loadWorkspace() {
     if (!payload || !Array.isArray(payload.rows)) return false;
     state.workspaceId = id;
     state.datasetName = payload.datasetName || "本地隔离工作区";
+    state.schemaTemplateId = payload.schemaTemplateId || state.schemaTemplateId || "calligraphy-style";
+    state.schema = cloneSchema(payload.schema?.length ? payload.schema : defaultSchema(state.schemaTemplateId));
+    state.schemaVersion = payload.schemaVersion || SCHEMA_VERSION;
+    state.promptVersion = payload.promptVersion || PROMPT_VERSION;
     state.uploadedPages = new Map(Object.entries(payload.uploadedPages || {}));
     state.uploadLog = payload.uploadLog || [];
     state.reviewState = { ...reviewDefaults(), ...(payload.reviewState || {}) };
@@ -132,6 +321,10 @@ function clearWorkspace() {
   localStorage.removeItem("calligraphy-review-state-v1");
   state.workspaceId = newWorkspaceId();
   state.datasetName = "空白隔离工作区";
+  state.schemaTemplateId = "calligraphy-style";
+  state.schema = defaultSchema(state.schemaTemplateId);
+  state.schemaVersion = SCHEMA_VERSION;
+  state.promptVersion = PROMPT_VERSION;
   state.uploadedPages = new Map();
   state.uploadLog = [];
   state.reviewState = reviewDefaults();
@@ -150,6 +343,9 @@ function clearWorkspace() {
 
 function editableSnapshot(row) {
   return {
+    fields: { ...(row.fields || {}) },
+    history: normalizeHistory(row),
+    aiDraft: { ...(row.aiDraft || {}) },
     status: row.status,
     author: row.author,
     scriptType: row.scriptType,
@@ -241,36 +437,48 @@ function normalizePageFile(value = "") {
 }
 
 function hasAbnormal(row) {
-  const hit = row["原文命中"] ?? row.hit ?? "";
-  const quote = row.quote ?? row["quote"] ?? "";
-  const pageNo = row.pageNo ?? row["page_no"] ?? "";
-  const sourceFile = row.sourceFile ?? row["source_file"] ?? "";
+  const hit = row["原文命中"] ?? row.hit ?? fieldValue(row, "hit") ?? "";
+  const quote = row.quote ?? fieldValue(row, "quote") ?? row["quote"] ?? "";
+  const pageNo = row.pageNo ?? fieldValue(row, "pageNo") ?? row["page_no"] ?? "";
+  const sourceFile = row.sourceFile ?? fieldValue(row, "sourceFile") ?? row["source_file"] ?? "";
   return !quote || !pageNo || !sourceFile || !["exact", "compact"].includes(hit);
 }
 
 function makeResult(row, index) {
+  const importedAt = new Date().toISOString();
   if (row.appendix && row.id) {
-    return {
+    const fields = {
+      ...(row.fields || {}),
+      author: row.author || row.fields?.author || "",
+      scriptType: row.scriptType || row.fields?.scriptType || "",
+      quote: row.quote || row.fields?.quote || "",
+      pageNo: row.pageNo || row.fields?.pageNo || "",
+      sourceFile: normalizePageFile(row.sourceFile || row.fields?.sourceFile || row.pageNo),
+      confidence: row.confidence || row.fields?.confidence || "",
+      gate: row.gate || row.fields?.gate || "",
+      issue: row.issue || row.fields?.issue || "",
+      note: row.note || row.fields?.note || ""
+    };
+    const result = {
       ...row,
+      fields,
+      aiDraft: row.aiDraft || rowDraftFromFields(fields),
+      history: normalizeHistory(row).length ? normalizeHistory(row) : createInitialHistory({ ...row, fields, aiDraft: row.aiDraft || rowDraftFromFields(fields) }, importedAt),
+      schemaVersion: row.schemaVersion || state.schemaVersion,
+      promptVersion: row.promptVersion || state.promptVersion,
+      modelVersion: row.modelVersion || "csv-import",
       bucket: row.bucket || classifyBucket(row),
       appendixCode: row.appendixCode || appendixCode(row.appendix),
-      sourceFile: normalizePageFile(row.sourceFile || row.pageNo),
       abnormal: row.abnormal ?? hasAbnormal(row),
       reviewed: Boolean(row.reviewed),
       edited: Boolean(row.edited)
     };
+    return syncLegacyFields(result);
   }
 
   const sourceFile = normalizePageFile(row["source_file"] || row["page_no"]);
   const id = row["材料ID"] || `UPLOAD-${String(index + 1).padStart(4, "0")}`;
-  return {
-    id,
-    rowNumber: row.__rowNumber || index + 2,
-    appendix: row["附表"] || "",
-    appendixCode: appendixCode(row["附表"]),
-    bucket: classifyBucket(row),
-    status: row["二轮状态"] || "",
-    sourceData: row["来源数据"] || "",
+  const fields = {
     author: row["书家"] || "",
     scriptType: row["书体/可能书体"] || row["书体"] || "",
     quote: row["quote"] || row["摘录"] || row["原文"] || "",
@@ -279,15 +487,37 @@ function makeResult(row, index) {
     hit: row["原文命中"] || "",
     confidence: row["证据等级"] || "",
     gate: row["门禁"] || "",
+    issue: row["问题/隐患"] || "",
+    note: row["备注"] || ""
+  };
+  orderedSchema().forEach((field) => {
+    if (!Object.prototype.hasOwnProperty.call(fields, field.id)) {
+      fields[field.id] = row[field.label] || row[field.id] || "";
+    }
+  });
+  const result = {
+    id,
+    rowNumber: row.__rowNumber || index + 2,
+    appendix: row["附表"] || "",
+    appendixCode: appendixCode(row["附表"]),
+    bucket: classifyBucket(row),
+    status: row["二轮状态"] || "",
+    sourceData: row["来源数据"] || "",
+    fields,
+    aiDraft: rowDraftFromFields(fields),
+    history: [],
+    schemaVersion: state.schemaVersion,
+    promptVersion: state.promptVersion,
+    modelVersion: "csv-import",
     action: row["第二轮动作"] || "",
     recommendation: row["进入主表建议"] || "",
-    issue: row["问题/隐患"] || "",
-    note: row["备注"] || "",
     originalRecord: row["对应原高置信记录"] || "",
     abnormal: hasAbnormal(row),
     reviewed: false,
     edited: false
   };
+  result.history = createInitialHistory(result, importedAt);
+  return syncLegacyFields(result);
 }
 
 function countBy(rows, key) {
@@ -326,17 +556,10 @@ function rowText(row) {
     row.id,
     row.appendix,
     row.status,
-    row.author,
-    row.scriptType,
-    row.quote,
-    row.pageNo,
-    row.sourceFile,
+    ...orderedSchema().map((field) => fieldValue(row, field.id)),
     row.hit,
-    row.confidence,
     row.reviewed ? "已确认" : "",
     row.edited ? "已修改" : "",
-    row.issue,
-    row.note
   ].join(" ");
 }
 
@@ -425,6 +648,45 @@ function workspaceActions() {
       <button type="button" data-template-download>下载 CSV 模板</button>
       <button type="button" data-workspace-reset>清空本地工作区</button>
     </div>
+  `;
+}
+
+function templatePanel() {
+  const current = templateById(state.schemaTemplateId);
+  return `
+    <section class="schema-panel">
+      <div class="schema-head">
+        <div>
+          <p class="kicker">Schema Studio</p>
+          <h3>字段模板</h3>
+          <p>${escapeHtml(current.description)}</p>
+        </div>
+      </div>
+      <label class="schema-select">
+        <span>研究任务模板</span>
+        <select data-template-select>
+          ${schemaTemplates.map((template) => `<option value="${escapeHtml(template.id)}" ${template.id === state.schemaTemplateId ? "selected" : ""}>${escapeHtml(template.name)}</option>`).join("")}
+        </select>
+      </label>
+      <div class="field-list">
+        ${orderedSchema().map((field) => `
+          <article class="field-config ${field.visible ? "" : "muted"}">
+            <div class="field-config-head">
+              <strong>${escapeHtml(field.label)}</strong>
+              <span>${escapeHtml(field.id)} · ${escapeHtml(field.type)}</span>
+            </div>
+            <label>字段名<input data-schema-field="${escapeHtml(field.id)}" data-schema-prop="label" value="${escapeHtml(field.label)}" /></label>
+            <label>抽取 prompt<textarea data-schema-field="${escapeHtml(field.id)}" data-schema-prop="prompt" rows="3">${escapeHtml(field.prompt || "")}</textarea></label>
+            <div class="field-switches">
+              <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="required" ${field.required ? "checked" : ""} /> 必填</label>
+              <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="evidenceRequired" ${field.evidenceRequired ? "checked" : ""} /> 需证据</label>
+              <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="visible" ${field.visible ? "checked" : ""} /> 表格显示</label>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+      <button type="button" class="schema-add" data-schema-add>添加自定义字段</button>
+    </section>
   `;
 }
 
@@ -526,6 +788,11 @@ function rowActionButtons(row) {
   `;
 }
 
+function visibleTableFields() {
+  const fields = orderedSchema({ includeHidden: false });
+  return fields.length ? fields.slice(0, 6) : orderedSchema().slice(0, 6);
+}
+
 function resultTable(rows) {
   if (!rows.length) {
     return `
@@ -536,6 +803,7 @@ function resultTable(rows) {
     `;
   }
 
+  const tableFields = visibleTableFields();
   return `
     <div class="table-shell">
       <table>
@@ -545,11 +813,7 @@ function resultTable(rows) {
             <th>审校</th>
             <th>置信</th>
             <th>附表</th>
-            <th>书家</th>
-            <th>书体</th>
-            <th>摘录</th>
-            <th>命中</th>
-            <th>门禁</th>
+            ${tableFields.map((field) => `<th>${escapeHtml(field.label)}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
@@ -559,11 +823,14 @@ function resultTable(rows) {
               <td>${reviewBadge(row)}${rowActionButtons(row)}</td>
               <td>${confidencePill(row)}</td>
               <td><span class="appendix">${escapeHtml(row.appendixCode)}</span>${escapeHtml(row.status)}</td>
-              <td><strong>${escapeHtml(row.author || "未标注")}</strong><small>${escapeHtml(row.id)}</small></td>
-              <td>${escapeHtml(row.scriptType || "未标注")}</td>
-              <td title="${escapeHtml(row.quote)}">${escapeHtml(clip(row.quote, 110))}</td>
-              <td><span class="hit ${escapeHtml(row.hit || "none")}">${escapeHtml(row.hit || "none")}</span></td>
-              <td>${escapeHtml(row.gate || "未标注")}</td>
+              ${tableFields.map((field, fieldIndex) => {
+                const value = fieldValue(row, field.id);
+                const cell = field.type === "longtext" ? clip(value, 110) : value;
+                const content = fieldIndex === 0
+                  ? `<strong>${escapeHtml(cell || "未标注")}</strong><small>${escapeHtml(row.id)}</small>`
+                  : escapeHtml(cell || "未标注");
+                return `<td title="${escapeHtml(value)}">${content}</td>`;
+              }).join("")}
             </tr>
           `).join("")}
         </tbody>
@@ -619,10 +886,13 @@ function highlightedSource(row) {
 }
 
 function detailCardContent(row) {
+  const titleField = schemaField("author") || orderedSchema({ includeHidden: false })[0];
+  const title = titleField ? fieldValue(row, titleField.id) : row.author;
+  const quote = fieldValue(row, "quote") || row.quote;
   return `
       <p class="kicker">Source Trace</p>
       <div class="detail-title-row">
-        <h2>${escapeHtml(row.author || "未标注书家")}</h2>
+        <h2>${escapeHtml(title || "未标注条目")}</h2>
         ${reviewBadge(row)}
       </div>
       <div class="detail-meta">
@@ -630,19 +900,63 @@ function detailCardContent(row) {
         <span>${escapeHtml(row.pageNo || "无页码")}</span>
         <span>${escapeHtml(row.sourceFile || "无原文文件")}</span>
       </div>
-      <blockquote>${escapeHtml(row.quote || "无摘录")}</blockquote>
+      <blockquote>${escapeHtml(quote || "无摘录")}</blockquote>
       <div class="review-actions">
         <button type="button" data-row-action="confirm" data-row-id="${escapeHtml(row.id)}">${row.reviewed ? "已确认" : "确认此条"}</button>
         <button type="button" data-row-action="edit" data-row-id="${escapeHtml(row.id)}">修改字段</button>
         <button type="button" class="danger" data-row-action="delete" data-row-id="${escapeHtml(row.id)}">删除条目</button>
       </div>
       <dl>
+        ${orderedSchema().map((field) => `
+          <dt>${escapeHtml(field.label)}</dt>
+          <dd>
+            ${escapeHtml(fieldValue(row, field.id) || "未标注")}
+            ${field.evidenceRequired ? "<small>需证据</small>" : ""}
+          </dd>
+        `).join("")}
         <dt>命中</dt><dd>${escapeHtml(row.hit || "none")}</dd>
-        <dt>证据</dt><dd>${escapeHtml(row.confidence || "未标注")}</dd>
-        <dt>门禁</dt><dd>${escapeHtml(row.gate || "未标注")}</dd>
-        <dt>动作</dt><dd>${escapeHtml(row.action || "未标注")}</dd>
-        <dt>隐患</dt><dd>${escapeHtml(row.issue || "无")}</dd>
       </dl>
+  `;
+}
+
+function historyPanel(row) {
+  const history = normalizeHistory(row).slice().reverse();
+  if (!history.length) {
+    return `
+      <section class="trace-card">
+        <p class="kicker">Revision Trace</p>
+        <h2>暂无回溯记录</h2>
+      </section>
+    `;
+  }
+  return `
+    <section class="trace-card">
+      <p class="kicker">Revision Trace</p>
+      <h2>AI 初稿与人工修改</h2>
+      <div class="trace-list">
+        ${history.map((event) => `
+          <article>
+            <div class="trace-event-head">
+              <strong>${escapeHtml(event.type === "ai-draft" ? "AI 初稿" : event.type === "confirm" ? "人工确认" : "人工修订")}</strong>
+              <span>${escapeHtml(new Date(event.at).toLocaleString("zh-CN"))}</span>
+            </div>
+            <p>${escapeHtml(event.reason || "未填写说明")}</p>
+            <small>actor: ${escapeHtml(event.actor || "human")} · prompt v${escapeHtml(event.promptVersion || state.promptVersion)} · model ${escapeHtml(event.modelVersion || "csv-import")}</small>
+            ${(event.changes || []).length ? `
+              <dl>
+                ${(event.changes || []).map((change) => {
+                  const field = schemaField(change.fieldId);
+                  return `
+                    <dt>${escapeHtml(field?.label || change.fieldId)}</dt>
+                    <dd><b>原</b>${escapeHtml(clip(change.before, 48) || "空")} <b>新</b>${escapeHtml(clip(change.after, 48) || "空")}</dd>
+                  `;
+                }).join("")}
+              </dl>
+            ` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -709,12 +1023,13 @@ function detailPanel(row) {
       <div class="detail-dock-head">
         <div>
           <p class="kicker">Inspection Dock</p>
-          <h2>${escapeHtml(row.author || "未标注书家")} · ${escapeHtml(row.id)}</h2>
+          <h2>${escapeHtml(fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注条目")} · ${escapeHtml(row.id)}</h2>
         </div>
         <button type="button" data-detail-toggle aria-expanded="${String(!state.detailCollapsed)}">${state.detailCollapsed ? "展开" : "收起"}</button>
       </div>
       <div class="detail-dock-body">
         ${detailCard(row)}
+        ${historyPanel(row)}
         ${sourceCard(row)}
       </div>
     </aside>
@@ -746,8 +1061,10 @@ function updateDetailDom(row) {
   }
 
   const dockTitle = panel.querySelector(".detail-dock-head h2");
-  if (dockTitle) dockTitle.textContent = `${row.author || "未标注书家"} · ${row.id}`;
+  if (dockTitle) dockTitle.textContent = `${fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注条目"} · ${row.id}`;
   detail.innerHTML = detailCardContent(row);
+  const trace = panel.querySelector(".trace-card");
+  if (trace) trace.outerHTML = historyPanel(row);
   source.innerHTML = sourceCardContent(row);
 }
 
@@ -809,6 +1126,12 @@ function confirmRow(rowId) {
   if (!row) return;
   row.reviewed = true;
   row.reviewedAt = new Date().toISOString();
+  addHistory(row, {
+    type: "confirm",
+    actor: "human",
+    reason: "人工确认当前条目。",
+    changes: []
+  });
   persistRow(row);
   state.manifest = buildManifest(state.rows);
   updateSelectedRowDom();
@@ -847,19 +1170,25 @@ function saveEdit(form) {
   const row = state.rows.find((item) => item.id === state.editingId);
   if (!row) return;
   const data = new FormData(form);
+  const changes = [];
+  orderedSchema().forEach((field) => {
+    const before = String(fieldValue(row, field.id) || "");
+    const after = String(data.get(`field:${field.id}`) || "");
+    if (before !== after) changes.push({ fieldId: field.id, before, after });
+    setFieldValue(row, field.id, after);
+  });
   row.status = String(data.get("status") || "");
-  row.author = String(data.get("author") || "");
-  row.scriptType = String(data.get("scriptType") || "");
-  row.quote = String(data.get("quote") || "");
-  row.pageNo = String(data.get("pageNo") || "");
-  row.sourceFile = normalizePageFile(String(data.get("sourceFile") || row.pageNo));
-  row.hit = String(data.get("hit") || "");
-  row.confidence = String(data.get("confidence") || "");
-  row.gate = String(data.get("gate") || "");
-  row.issue = String(data.get("issue") || "");
-  row.note = String(data.get("note") || "");
+  row.hit = String(data.get("hit") || row.hit || "");
+  row.sourceFile = normalizePageFile(fieldValue(row, "sourceFile") || fieldValue(row, "pageNo"));
+  syncLegacyFields(row);
   row.abnormal = hasAbnormal(row);
   row.edited = true;
+  addHistory(row, {
+    type: "human-edit",
+    actor: "human",
+    reason: String(data.get("editReason") || "人工修订字段。"),
+    changes
+  });
   persistRow(row);
   state.manifest = buildManifest(state.rows);
   state.editingId = "";
@@ -879,6 +1208,59 @@ function resetReviewState() {
   saveWorkspace();
   render();
   loadSelectedSource();
+}
+
+function applyTemplate(templateId) {
+  const template = templateById(templateId);
+  if (state.rows.length && !window.confirm("切换模板会替换字段配置，但不会删除已导入的行数据。继续？")) {
+    render();
+    return;
+  }
+  state.schemaTemplateId = template.id;
+  state.schema = defaultSchema(template.id);
+  state.schemaVersion += 1;
+  state.promptVersion += 1;
+  state.rows.forEach(syncLegacyFields);
+  state.manifest = buildManifest(state.rows);
+  saveWorkspace();
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
+function updateSchemaField(fieldId, prop, value) {
+  const field = schemaField(fieldId);
+  if (!field) return;
+  field[prop] = value;
+  state.schemaVersion += prop === "label" || prop === "visible" || prop === "required" || prop === "evidenceRequired" ? 1 : 0;
+  state.promptVersion += prop === "prompt" ? 1 : 0;
+  saveWorkspace();
+  if (prop === "label" || prop === "visible") {
+    render();
+    if (state.view === "detail") loadSelectedSource();
+  }
+}
+
+function addSchemaField() {
+  const next = ensureSchema().length + 1;
+  const id = `custom_${next}`;
+  state.schema.push({
+    id,
+    label: `自定义字段 ${next}`,
+    type: "text",
+    prompt: "说明这个字段要从材料中抽取什么，以及何时留空。",
+    required: false,
+    evidenceRequired: false,
+    visible: true,
+    order: next
+  });
+  state.rows.forEach((row) => {
+    setFieldValue(row, id, "");
+  });
+  state.schemaVersion += 1;
+  state.promptVersion += 1;
+  saveWorkspace();
+  render();
+  if (state.view === "detail") loadSelectedSource();
 }
 
 function downloadBlob(filename, content, type = "application/json") {
@@ -902,8 +1284,19 @@ function exportWorkspace() {
 }
 
 function downloadTemplateCsv() {
-  const headers = ["材料ID", "附表", "二轮状态", "书家", "书体/可能书体", "quote", "page_no", "source_file", "原文命中", "证据等级", "门禁", "第二轮动作", "问题/隐患", "备注"];
-  const sample = ["ITEM-0001", "附表A｜确定风格主表", "待审校", "张旭", "草书", "示例摘录", "191", "page_191.txt", "exact", "高", "可入主表", "确认", "", ""];
+  const schemaHeaders = orderedSchema().map((field) => field.label);
+  const headers = ["材料ID", "附表", "二轮状态", ...schemaHeaders, "原文命中"];
+  const sampleFields = orderedSchema().map((field) => {
+    if (field.id === "author") return "张旭";
+    if (field.id === "scriptType") return "草书";
+    if (field.id === "quote") return "示例摘录";
+    if (field.id === "pageNo") return "191";
+    if (field.id === "sourceFile") return "page_191.txt";
+    if (field.id === "confidence") return "高";
+    if (field.id === "gate") return "可入主表";
+    return "";
+  });
+  const sample = ["ITEM-0001", "附表A｜确定风格主表", "待审校", ...sampleFields, "exact"];
   downloadBlob("calligraphy-workspace-template.csv", `${headers.join(",")}\n${sample.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")}\n`, "text/csv;charset=utf-8");
 }
 
@@ -1007,20 +1400,29 @@ function editModal() {
         </div>
         <div class="edit-grid">
           <label>二轮状态<input name="status" value="${escapeHtml(row.status)}" /></label>
-          <label>书家<input name="author" value="${escapeHtml(row.author)}" /></label>
-          <label>书体<input name="scriptType" value="${escapeHtml(row.scriptType)}" /></label>
-          <label>页码<input name="pageNo" value="${escapeHtml(row.pageNo)}" /></label>
-          <label>原文文件<input name="sourceFile" value="${escapeHtml(row.sourceFile)}" /></label>
           <label>原文命中
             <select name="hit">
               ${["exact", "compact", "partial", "miss", ""].map((hit) => `<option value="${hit}" ${row.hit === hit ? "selected" : ""}>${hit || "none"}</option>`).join("")}
             </select>
           </label>
-          <label>证据等级<input name="confidence" value="${escapeHtml(row.confidence)}" /></label>
-          <label>门禁<input name="gate" value="${escapeHtml(row.gate)}" /></label>
-          <label class="wide">摘录<textarea name="quote" rows="4">${escapeHtml(row.quote)}</textarea></label>
-          <label class="wide">问题/隐患<textarea name="issue" rows="3">${escapeHtml(row.issue)}</textarea></label>
-          <label class="wide">备注<textarea name="note" rows="3">${escapeHtml(row.note)}</textarea></label>
+          ${orderedSchema().map((field) => {
+            const value = fieldValue(row, field.id);
+            const wide = field.type === "longtext" || String(value).length > 42;
+            const control = field.type === "longtext"
+              ? `<textarea name="field:${escapeHtml(field.id)}" rows="3">${escapeHtml(value)}</textarea>`
+              : `<input name="field:${escapeHtml(field.id)}" value="${escapeHtml(value)}" />`;
+            return `
+              <label class="${wide ? "wide" : ""}">
+                <span>${escapeHtml(field.label)}${field.required ? " *" : ""}</span>
+                ${control}
+                <small>${escapeHtml(field.prompt || "")}</small>
+              </label>
+            `;
+          }).join("")}
+          <label class="wide">
+            <span>修改原因/复核说明</span>
+            <textarea name="editReason" rows="3" placeholder="说明为什么修改，方便后续回溯。"></textarea>
+          </label>
         </div>
         <div class="modal-actions">
           <button type="button" data-edit-cancel>取消</button>
@@ -1061,6 +1463,7 @@ function renderHome() {
         <p>这个线上入口不再展示后端数据包或下载附件。上传 CSV/JSON/page 文本后，内容只进入当前浏览器；导出的工作区 JSON 可以发给别人导入复现。</p>
         ${workspaceStatus()}
         ${workspaceActions()}
+        ${templatePanel()}
       </article>
       <section class="upload-panel">
         <div>
@@ -1106,6 +1509,7 @@ function renderDetail() {
         </div>
         ${workspaceStatus()}
         ${workspaceActions()}
+        ${templatePanel()}
         <div class="rail-metrics">${railMetrics()}</div>
         ${reviewToolbar()}
         <details class="rail-section">
@@ -1184,6 +1588,21 @@ function attachGlobalEvents() {
   document.querySelectorAll("[data-workspace-reset]").forEach((button) => {
     button.addEventListener("click", resetWorkspace);
   });
+
+  document.querySelector("[data-template-select]")?.addEventListener("change", (event) => {
+    applyTemplate(event.target.value);
+  });
+
+  document.querySelectorAll("[data-schema-field]").forEach((control) => {
+    const handler = () => {
+      const prop = control.dataset.schemaProp;
+      const value = control.type === "checkbox" ? control.checked : control.value;
+      updateSchemaField(control.dataset.schemaField, prop, value);
+    };
+    control.addEventListener(control.type === "checkbox" ? "change" : "blur", handler);
+  });
+
+  document.querySelector("[data-schema-add]")?.addEventListener("click", addSchemaField);
 }
 
 function attachHomeEvents() {
@@ -1278,6 +1697,10 @@ async function processFiles(files) {
         const payload = JSON.parse(await file.text());
         if (payload.type === "calligraphy-workspace" && Array.isArray(payload.rows)) {
           importedWorkspace = payload;
+          state.schemaTemplateId = payload.schemaTemplateId || state.schemaTemplateId || "calligraphy-style";
+          state.schema = cloneSchema(payload.schema?.length ? payload.schema : defaultSchema(state.schemaTemplateId));
+          state.schemaVersion = payload.schemaVersion || SCHEMA_VERSION;
+          state.promptVersion = payload.promptVersion || PROMPT_VERSION;
           nextRows = payload.rows.map(makeResult);
           Object.entries(payload.uploadedPages || {}).forEach(([page, content]) => {
             if (/^page_\d+\.txt$/i.test(page)) state.uploadedPages.set(page, String(content));
@@ -1365,6 +1788,10 @@ async function loadSelectedSource(options = {}) {
 async function init() {
   if (!loadWorkspace()) {
     state.workspaceId = newWorkspaceId();
+    state.schemaTemplateId = "calligraphy-style";
+    state.schema = defaultSchema(state.schemaTemplateId);
+    state.schemaVersion = SCHEMA_VERSION;
+    state.promptVersion = PROMPT_VERSION;
     state.reviewState = reviewDefaults();
     state.rows = [];
     state.originalRows = [];
