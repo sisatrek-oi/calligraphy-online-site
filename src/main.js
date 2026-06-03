@@ -123,7 +123,10 @@ const state = {
   editingId: "",
   pendingImport: null,
   detailCollapsed: false,
-  filtersCollapsed: false
+  filtersCollapsed: false,
+  railCollapsed: false,
+  tableFocus: false,
+  tableHeaderCollapsed: false
 };
 
 function newWorkspaceId() {
@@ -1327,6 +1330,16 @@ function resultsControlPanel(rows) {
   `;
 }
 
+function tableViewActions() {
+  return `
+    <div class="table-view-actions" aria-label="表格视图控制">
+      <button type="button" class="${state.tableFocus ? "active" : ""}" data-table-focus aria-pressed="${String(state.tableFocus)}">${state.tableFocus ? "退出专注" : "专注表格"}</button>
+      <button type="button" class="${state.railCollapsed ? "active" : ""}" data-rail-toggle aria-pressed="${String(state.railCollapsed)}">${state.railCollapsed ? "显示侧栏" : "隐藏侧栏"}</button>
+      <button type="button" class="${state.tableHeaderCollapsed ? "active" : ""}" data-table-head-toggle aria-pressed="${String(state.tableHeaderCollapsed)}">${state.tableHeaderCollapsed ? "显示表头" : "收起表头"}</button>
+    </div>
+  `;
+}
+
 function detailPanel(row) {
   if (!row) {
     return `
@@ -1861,6 +1874,54 @@ function toggleFilters() {
   }
 }
 
+function applyTableViewState() {
+  const screen = document.querySelector(".review-screen");
+  const shell = document.querySelector(".app-shell");
+  const headButton = document.querySelector("[data-table-head-toggle]");
+  const railButton = document.querySelector("[data-rail-toggle]");
+  const focusButton = document.querySelector("[data-table-focus]");
+  screen?.classList.toggle("detail-collapsed", state.detailCollapsed);
+  screen?.classList.toggle("rail-collapsed", state.railCollapsed || state.tableFocus);
+  screen?.classList.toggle("table-focus", state.tableFocus);
+  screen?.classList.toggle("table-head-collapsed", state.tableHeaderCollapsed);
+  shell?.classList.toggle("table-focus-shell", state.tableFocus);
+  if (headButton) {
+    headButton.textContent = state.tableHeaderCollapsed ? "显示表头" : "收起表头";
+    headButton.classList.toggle("active", state.tableHeaderCollapsed);
+    headButton.setAttribute("aria-pressed", String(state.tableHeaderCollapsed));
+  }
+  if (railButton) {
+    railButton.textContent = state.railCollapsed ? "显示侧栏" : "隐藏侧栏";
+    railButton.classList.toggle("active", state.railCollapsed);
+    railButton.setAttribute("aria-pressed", String(state.railCollapsed));
+  }
+  if (focusButton) {
+    focusButton.textContent = state.tableFocus ? "退出专注" : "专注表格";
+    focusButton.classList.toggle("active", state.tableFocus);
+    focusButton.setAttribute("aria-pressed", String(state.tableFocus));
+  }
+}
+
+function toggleRail() {
+  state.railCollapsed = !state.railCollapsed;
+  applyTableViewState();
+}
+
+function toggleTableHeader() {
+  state.tableHeaderCollapsed = !state.tableHeaderCollapsed;
+  applyTableViewState();
+}
+
+function toggleTableFocus() {
+  state.tableFocus = !state.tableFocus;
+  if (state.tableFocus) {
+    state.detailCollapsed = true;
+    state.filtersCollapsed = true;
+  }
+  render();
+  loadSelectedSource();
+}
+
 function reviewStats() {
   const validations = state.rows.map(rowValidation);
   return {
@@ -2071,7 +2132,7 @@ function importMappingModal() {
 
 function renderShell(content) {
   app.innerHTML = `
-    <main class="app-shell">
+    <main class="app-shell ${state.tableFocus ? "table-focus-shell" : ""}">
       <header class="topbar compact">
         <div>
           <p class="kicker">Upload Evidence App</p>
@@ -2137,7 +2198,7 @@ function renderDetail() {
   if (row && !state.selectedId) state.selectedId = row.id;
 
   renderShell(`
-    <section class="review-screen ${state.detailCollapsed ? "detail-collapsed" : ""}">
+    <section class="review-screen ${state.detailCollapsed ? "detail-collapsed" : ""} ${state.railCollapsed || state.tableFocus ? "rail-collapsed" : ""} ${state.tableFocus ? "table-focus" : ""} ${state.tableHeaderCollapsed ? "table-head-collapsed" : ""}">
       <aside class="dataset-rail">
         <div>
           <p class="kicker">Current Dataset</p>
@@ -2169,7 +2230,10 @@ function renderDetail() {
             <p class="kicker">Results</p>
             <h2>综合成果总表</h2>
           </div>
-          <div class="visible-count">${rows.length} / ${state.rows.length}</div>
+          <div class="panel-tools">
+            <div class="visible-count">${rows.length} / ${state.rows.length}</div>
+            ${tableViewActions()}
+          </div>
         </div>
         ${resultsControlPanel(rows)}
         ${resultTable(rows)}
@@ -2292,6 +2356,9 @@ function attachHomeEvents() {
 function attachDetailEvents() {
   document.querySelector("[data-detail-toggle]")?.addEventListener("click", toggleDetailDock);
   document.querySelector("[data-filter-toggle]")?.addEventListener("click", toggleFilters);
+  document.querySelector("[data-rail-toggle]")?.addEventListener("click", toggleRail);
+  document.querySelector("[data-table-head-toggle]")?.addEventListener("click", toggleTableHeader);
+  document.querySelector("[data-table-focus]")?.addEventListener("click", toggleTableFocus);
 
   document.querySelectorAll("[data-filter]").forEach((button) => {
     button.addEventListener("click", () => {

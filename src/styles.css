@@ -77,6 +77,16 @@ a {
   padding: 24px 0 44px;
 }
 
+.app-shell.table-focus-shell {
+  width: calc(100% - 20px);
+  max-width: none;
+  padding: 10px 0;
+}
+
+.app-shell.table-focus-shell .topbar {
+  display: none;
+}
+
 .topbar {
   min-height: 88px;
   display: flex;
@@ -595,6 +605,25 @@ button:disabled {
   grid-template-columns: minmax(210px, 245px) minmax(560px, 1fr) 64px;
 }
 
+.review-screen.rail-collapsed {
+  grid-template-columns: 0 minmax(640px, 1fr) minmax(370px, 430px);
+}
+
+.review-screen.rail-collapsed.detail-collapsed {
+  grid-template-columns: 0 minmax(640px, 1fr) 64px;
+}
+
+.review-screen.table-focus {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+  height: calc(100vh - 20px);
+  min-height: 0;
+  gap: 0;
+}
+
+.review-screen.table-focus.detail-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+
 .dataset-rail,
 .detail-panel {
   min-height: 0;
@@ -610,6 +639,18 @@ button:disabled {
   gap: 12px;
   overflow: auto;
   padding: 14px;
+}
+
+.review-screen.rail-collapsed .dataset-rail,
+.review-screen.table-focus .dataset-rail,
+.review-screen.table-focus .detail-panel {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .dataset-rail h2 {
@@ -894,6 +935,14 @@ button:disabled {
   gap: 14px;
 }
 
+.panel-tools {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .visible-count,
 .source-head span {
   border: 1px solid rgba(159, 63, 47, 0.28);
@@ -903,6 +952,64 @@ button:disabled {
   font-family: var(--mono);
   font-size: 11px;
   white-space: nowrap;
+}
+
+.table-view-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.table-view-actions button {
+  min-height: 30px;
+  border: 1px solid rgba(31, 111, 104, 0.32);
+  background: rgba(255, 253, 246, 0.72);
+  color: var(--teal);
+  cursor: pointer;
+  padding: 0 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.table-view-actions button:hover,
+.table-view-actions button.active {
+  border-color: rgba(159, 63, 47, 0.36);
+  background: rgba(159, 63, 47, 0.08);
+  color: var(--red);
+  transform: translateY(-1px);
+}
+
+.review-screen.table-focus .main-panel {
+  border-color: rgba(191, 178, 159, 0.72);
+  box-shadow: none;
+  padding: 0;
+}
+
+.review-screen.table-focus .panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(217, 208, 194, 0.78);
+  background: rgba(255, 253, 246, 0.95);
+  backdrop-filter: blur(14px);
+}
+
+.review-screen.table-focus .panel-head .kicker,
+.review-screen.table-focus .panel-head h2 {
+  display: none;
+}
+
+.review-screen.table-focus .panel-tools {
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.review-screen.table-focus .controls {
+  display: none;
 }
 
 .review-toolbar {
@@ -1086,10 +1193,23 @@ button:disabled {
   background: rgba(255, 253, 246, 0.68);
 }
 
+.review-screen.table-head-collapsed thead {
+  display: none;
+}
+
+.review-screen.table-head-collapsed td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
 .workbench-main .table-shell {
   flex: 1;
   min-height: 0;
   max-height: none;
+}
+
+.review-screen.table-focus .table-shell {
+  border-width: 0 1px 1px;
 }
 
 table {
@@ -1097,6 +1217,10 @@ table {
   min-width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+}
+
+.review-screen.table-focus table {
+  font-size: 11px;
 }
 
 th,
@@ -1107,6 +1231,12 @@ td {
   text-align: left;
   vertical-align: top;
   line-height: 1.55;
+}
+
+.review-screen.table-focus th,
+.review-screen.table-focus td {
+  padding: 7px 8px;
+  line-height: 1.45;
 }
 
 th {
@@ -1152,6 +1282,25 @@ td button {
   color: var(--teal);
   cursor: pointer;
   padding: 0 8px;
+}
+
+.review-screen.table-focus td button,
+.review-screen.table-focus .row-actions button {
+  min-height: 24px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.review-screen.table-focus .row-actions {
+  margin-top: 4px;
+}
+
+.review-screen.table-focus .review-badge,
+.review-screen.table-focus .confidence-chip,
+.review-screen.table-focus .validation-badge {
+  min-height: 23px;
+  padding: 2px 6px;
+  font-size: 9px;
 }
 
 .row-actions,
@@ -2072,6 +2221,26 @@ mark {
     width: auto;
     height: 30px;
     writing-mode: horizontal-tb;
+  }
+
+  .review-screen.table-focus,
+  .review-screen.table-focus.detail-collapsed {
+    display: grid;
+    grid-template-columns: 0 minmax(0, 1fr) 0;
+    height: calc(100vh - 20px);
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
+  .review-screen.table-focus .workbench-main {
+    height: 100%;
+    margin-bottom: 0;
+  }
+
+  .review-screen.table-focus .detail-panel {
+    position: static;
+    height: 0;
   }
 }
 
