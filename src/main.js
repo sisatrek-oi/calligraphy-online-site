@@ -1,6 +1,7 @@
 const app = document.querySelector("#app");
 const WORKSPACE_POINTER_KEY = "calligraphy-current-workspace-v2";
 const WORKSPACE_STORAGE_PREFIX = "calligraphy-workspace-v2:";
+const CUSTOM_TEMPLATES_KEY = "calligraphy-custom-schema-templates-v1";
 const SCHEMA_VERSION = 1;
 const PROMPT_VERSION = 1;
 
@@ -85,6 +86,15 @@ const filters = [
   { id: "invalid", label: "字段待补", tone: "Fix" }
 ];
 
+const annotationTypes = [
+  { id: "page", label: "页码问题" },
+  { id: "attribution", label: "归属问题" },
+  { id: "quote", label: "摘录不足" },
+  { id: "mapping", label: "字段映射问题" },
+  { id: "expert", label: "专家判断" },
+  { id: "other", label: "其他" }
+];
+
 const state = {
   manifest: null,
   baseManifest: null,
@@ -101,6 +111,7 @@ const state = {
   lastSavedAt: "",
   view: location.hash === "#detail" ? "detail" : "home",
   filter: "all",
+  qualityFocus: null,
   query: "",
   selectedId: "",
   sourceText: "",
@@ -110,7 +121,9 @@ const state = {
   reviewState: { confirmedIds: [], deletedIds: [], edits: {} },
   originalRows: [],
   editingId: "",
-  detailCollapsed: false
+  pendingImport: null,
+  detailCollapsed: false,
+  filtersCollapsed: false
 };
 
 function newWorkspaceId() {
@@ -157,8 +170,32 @@ function cloneSchema(fields) {
   }));
 }
 
+function loadCustomTemplates() {
+  try {
+    const payload = JSON.parse(localStorage.getItem(CUSTOM_TEMPLATES_KEY) || "[]");
+    if (!Array.isArray(payload)) return [];
+    return payload
+      .filter((template) => template?.id && template?.name && Array.isArray(template.fields))
+      .map((template) => ({ ...template, custom: true, fields: cloneSchema(template.fields) }));
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomTemplates(templates) {
+  localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(templates.map((template) => ({
+    ...template,
+    custom: true,
+    fields: cloneSchema(template.fields)
+  }))));
+}
+
+function allSchemaTemplates() {
+  return [...schemaTemplates, ...loadCustomTemplates()];
+}
+
 function templateById(id) {
-  return schemaTemplates.find((template) => template.id === id) || schemaTemplates[0];
+  return allSchemaTemplates().find((template) => template.id === id) || schemaTemplates[0];
 }
 
 function defaultSchema(templateId = "calligraphy-style") {
@@ -221,6 +258,15 @@ function normalizeHistory(row) {
   return [];
 }
 
+function normalizeAnnotations(row) {
+  if (Array.isArray(row.annotations)) return row.annotations;
+  return [];
+}
+
+function annotationLabel(type) {
+  return annotationTypes.find((item) => item.id === type)?.label || type || "其他";
+}
+
 function createInitialHistory(row, importedAt = new Date().toISOString()) {
   return [
     {
@@ -270,6 +316,7 @@ function workspacePayload() {
     exportedAt: new Date().toISOString(),
     schema: ensureSchema(),
     schemaTemplateId: state.schemaTemplateId,
+    customTemplates: loadCustomTemplates(),
     schemaVersion: state.schemaVersion,
     promptVersion: state.promptVersion,
     rows: state.rows,
@@ -296,6 +343,13 @@ function loadWorkspace() {
     state.workspaceId = id;
     state.datasetName = payload.datasetName || "本地隔离工作区";
     state.schemaTemplateId = payload.schemaTemplateId || state.schemaTemplateId || "calligraphy-style";
+    if (Array.isArray(payload.customTemplates)) {
+      const mergedTemplates = [...loadCustomTemplates(), ...payload.customTemplates].reduce((acc, template) => {
+        acc.set(template.id, { ...template, custom: true, fields: cloneSchema(template.fields || []) });
+        return acc;
+      }, new Map());
+      saveCustomTemplates([...mergedTemplates.values()]);
+    }
     state.schema = cloneSchema(payload.schema?.length ? payload.schema : defaultSchema(state.schemaTemplateId));
     state.schemaVersion = payload.schemaVersion || SCHEMA_VERSION;
     state.promptVersion = payload.promptVersion || PROMPT_VERSION;
@@ -346,6 +400,7 @@ function editableSnapshot(row) {
   return {
     fields: { ...(row.fields || {}) },
     history: normalizeHistory(row),
+    annotations: normalizeAnnotations(row),
     aiDraft: { ...(row.aiDraft || {}) },
     status: row.status,
     author: row.author,
@@ -415,6 +470,69 @@ function parseCsv(content) {
   });
 }
 
+const importSystemFields = [
+  { id: "id", label: "材料ID", target: "材料ID", aliases: ["材料ID", "id", "ID", "编号", "record_id"] },
+  { id: "appendix", label: "附表/分类", target: "附表", aliases: ["附表", "分类", "bucket", "appendix"] },
+  { id: "status", label: "状态", target: "二轮状态", aliases: ["二轮状态", "状态", "status", "review_status"] },
+  { id: "hit", label: "原文命中", target: "原文命中", aliases: ["原文命中", "hit", "match", "命中"] }
+];
+
+function csvHeaders(rows) {
+  if (!rows.length) return [];
+  return Object.keys(rows[0]).filter((key) => key !== "__rowNumber");
+}
+
+function normalizeHeader(value = "") {
+  return String(value).trim().toLowerCase().replace(/[\s/_-]+/g, "");
+}
+
+function fieldAliases(field) {
+  const aliases = [field.label, field.id];
+  const known = {
+    author: ["书家", "作者", "人物", "artist", "author"],
+    scriptType: ["书体", "书体/可能书体", "字体", "script"],
+    quote: ["quote", "摘录", "原文", "原文摘录", "片段", "text"],
+    pageNo: ["page_no", "页码", "页序", "page"],
+    sourceFile: ["source_file", "原文文件", "文件", "page_file"],
+    confidence: ["证据等级", "置信度", "confidence"],
+    gate: ["门禁", "进入主表建议", "gate"],
+    issue: ["问题/隐患", "待复核问题", "问题", "issue"],
+    note: ["备注", "note"]
+  };
+  return [...aliases, ...(known[field.id] || [])];
+}
+
+function guessHeader(headers, aliases) {
+  const normalized = headers.map((header) => ({ header, key: normalizeHeader(header) }));
+  for (const alias of aliases) {
+    const exact = normalized.find((item) => item.key === normalizeHeader(alias));
+    if (exact) return exact.header;
+  }
+  for (const alias of aliases) {
+    const needle = normalizeHeader(alias);
+    const partial = normalized.find((item) => item.key.includes(needle) || needle.includes(item.key));
+    if (partial) return partial.header;
+  }
+  return "";
+}
+
+function guessCsvMapping(rows) {
+  const headers = csvHeaders(rows);
+  const system = Object.fromEntries(importSystemFields.map((field) => [field.id, guessHeader(headers, field.aliases)]));
+  const fields = Object.fromEntries(orderedSchema().map((field) => [field.id, guessHeader(headers, fieldAliases(field))]));
+  return { system, fields };
+}
+
+function createPendingCsvImport(name, rows) {
+  state.pendingImport = {
+    type: "csv",
+    name,
+    rows,
+    headers: csvHeaders(rows),
+    mapping: guessCsvMapping(rows)
+  };
+}
+
 function appendixCode(appendix = "") {
   const match = String(appendix).match(/附表([A-Z])/i);
   return match ? match[1].toUpperCase() : "X";
@@ -465,6 +583,7 @@ function makeResult(row, index) {
       fields,
       aiDraft: row.aiDraft || rowDraftFromFields(fields),
       history: normalizeHistory(row).length ? normalizeHistory(row) : createInitialHistory({ ...row, fields, aiDraft: row.aiDraft || rowDraftFromFields(fields) }, importedAt),
+      annotations: normalizeAnnotations(row),
       schemaVersion: row.schemaVersion || state.schemaVersion,
       promptVersion: row.promptVersion || state.promptVersion,
       modelVersion: row.modelVersion || "csv-import",
@@ -482,13 +601,13 @@ function makeResult(row, index) {
   const fields = {
     author: row["书家"] || "",
     scriptType: row["书体/可能书体"] || row["书体"] || "",
-    quote: row["quote"] || row["摘录"] || row["原文"] || "",
+    quote: row["quote"] || row["摘录"] || row["原文"] || row["原文摘录"] || "",
     pageNo: row["page_no"] || row["页码"] || "",
-    sourceFile,
-    hit: row["原文命中"] || "",
-    confidence: row["证据等级"] || "",
-    gate: row["门禁"] || "",
-    issue: row["问题/隐患"] || "",
+    sourceFile: sourceFile || normalizePageFile(row["source_file"] || row["原文文件"] || row["页码"]),
+    hit: row["原文命中"] || row["命中"] || "",
+    confidence: row["证据等级"] || row["置信度"] || "",
+    gate: row["门禁"] || row["进入主表建议"] || "",
+    issue: row["问题/隐患"] || row["待复核问题"] || "",
     note: row["备注"] || ""
   };
   orderedSchema().forEach((field) => {
@@ -507,6 +626,7 @@ function makeResult(row, index) {
     fields,
     aiDraft: rowDraftFromFields(fields),
     history: [],
+    annotations: [],
     schemaVersion: state.schemaVersion,
     promptVersion: state.promptVersion,
     modelVersion: "csv-import",
@@ -555,6 +675,33 @@ function rowValidation(row) {
   };
 }
 
+function fieldQualityStats() {
+  const rows = state.rows || [];
+  return orderedSchema().map((field) => {
+    let filled = 0;
+    let missingRequired = 0;
+    let missingEvidence = 0;
+    rows.forEach((row) => {
+      const value = String(fieldValue(row, field.id) || "").trim();
+      const validation = rowValidation(row);
+      if (value) filled += 1;
+      if (validation.missingRequired.some((item) => item.id === field.id)) missingRequired += 1;
+      if (validation.missingEvidence.some((item) => item.id === field.id)) missingEvidence += 1;
+    });
+    const fillRate = rows.length ? Math.round((filled / rows.length) * 100) : 0;
+    const risk = missingRequired ? "risk" : missingEvidence ? "warn" : fillRate < 60 ? "low" : "ok";
+    return {
+      field,
+      filled,
+      empty: Math.max(0, rows.length - filled),
+      missingRequired,
+      missingEvidence,
+      fillRate,
+      risk
+    };
+  });
+}
+
 function buildManifest(rows, source = state.baseManifest, options = {}) {
   const validations = rows.map(rowValidation);
   const stats = {
@@ -595,13 +742,30 @@ function rowText(row) {
   ].join(" ");
 }
 
+function rowMatchesQualityFocus(row) {
+  if (!state.qualityFocus) return true;
+  const { fieldId, mode } = state.qualityFocus;
+  const value = String(fieldValue(row, fieldId) || "").trim();
+  const validation = rowValidation(row);
+  if (mode === "empty") return !value;
+  if (mode === "evidence") return validation.missingEvidence.some((field) => field.id === fieldId);
+  if (mode === "required") return validation.missingRequired.some((field) => field.id === fieldId);
+  if (mode === "issue") {
+    return !value
+      || validation.missingEvidence.some((field) => field.id === fieldId)
+      || validation.missingRequired.some((field) => field.id === fieldId);
+  }
+  return true;
+}
+
 function visibleRows() {
   const query = state.query.trim().toLowerCase();
   return state.rows.filter((row) => {
     const filterPass = state.filter === "all"
       || (state.filter === "abnormal" ? row.abnormal : state.filter === "invalid" ? !rowValidation(row).ok : row.bucket === state.filter);
+    const focusPass = rowMatchesQualityFocus(row);
     const queryPass = !query || rowText(row).toLowerCase().includes(query);
-    return filterPass && queryPass;
+    return filterPass && focusPass && queryPass;
   });
 }
 
@@ -677,6 +841,7 @@ function workspaceActions() {
   return `
     <div class="workspace-actions">
       <button type="button" data-workspace-export ${state.rows.length ? "" : "disabled"}>导出工作区</button>
+      <button type="button" data-quality-export ${state.rows.length ? "" : "disabled"}>导出字段质量</button>
       <button type="button" data-template-download>下载 CSV 模板</button>
       <button type="button" data-workspace-reset>清空本地工作区</button>
     </div>
@@ -685,6 +850,7 @@ function workspaceActions() {
 
 function templatePanel() {
   const current = templateById(state.schemaTemplateId);
+  const templates = allSchemaTemplates();
   return `
     <section class="schema-panel">
       <div class="schema-head">
@@ -697,9 +863,16 @@ function templatePanel() {
       <label class="schema-select">
         <span>研究任务模板</span>
         <select data-template-select>
-          ${schemaTemplates.map((template) => `<option value="${escapeHtml(template.id)}" ${template.id === state.schemaTemplateId ? "selected" : ""}>${escapeHtml(template.name)}</option>`).join("")}
+          ${templates.map((template) => `<option value="${escapeHtml(template.id)}" ${template.id === state.schemaTemplateId ? "selected" : ""}>${template.custom ? "我的｜" : "内置｜"}${escapeHtml(template.name)}</option>`).join("")}
         </select>
       </label>
+      <div class="schema-tools">
+        <button type="button" data-schema-add>添加字段</button>
+        <button type="button" data-template-save>保存为我的模板</button>
+        <button type="button" data-template-copy>复制当前模板</button>
+        ${current.custom ? `<button type="button" class="danger" data-template-delete>删除我的模板</button>` : ""}
+        <button type="button" data-schema-reset>恢复模板默认字段</button>
+      </div>
       <div class="field-list">
         ${orderedSchema().map((field) => `
           <article class="field-config ${field.visible ? "" : "muted"}">
@@ -707,7 +880,17 @@ function templatePanel() {
               <strong>${escapeHtml(field.label)}</strong>
               <span>${escapeHtml(field.id)} · ${escapeHtml(field.type)}</span>
             </div>
+            <div class="field-toolbar">
+              <button type="button" data-schema-move="${escapeHtml(field.id)}" data-schema-direction="up">上移</button>
+              <button type="button" data-schema-move="${escapeHtml(field.id)}" data-schema-direction="down">下移</button>
+              <button type="button" class="danger" data-schema-delete="${escapeHtml(field.id)}">删除</button>
+            </div>
             <label>字段名<input data-schema-field="${escapeHtml(field.id)}" data-schema-prop="label" value="${escapeHtml(field.label)}" /></label>
+            <label>字段类型
+              <select data-schema-field="${escapeHtml(field.id)}" data-schema-prop="type">
+                ${["text", "longtext", "select", "number", "date"].map((type) => `<option value="${type}" ${field.type === type ? "selected" : ""}>${type}</option>`).join("")}
+              </select>
+            </label>
             <label>抽取 prompt<textarea data-schema-field="${escapeHtml(field.id)}" data-schema-prop="prompt" rows="3">${escapeHtml(field.prompt || "")}</textarea></label>
             <div class="field-switches">
               <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="required" ${field.required ? "checked" : ""} /> 必填</label>
@@ -717,7 +900,6 @@ function templatePanel() {
           </article>
         `).join("")}
       </div>
-      <button type="button" class="schema-add" data-schema-add>添加自定义字段</button>
     </section>
   `;
 }
@@ -736,6 +918,32 @@ function filterChips(rows) {
       <small>${escapeHtml(filter.tone)} · ${counts[filter.id] || 0}</small>
     </button>
   `).join("");
+}
+
+function fieldQualityPanel() {
+  const stats = fieldQualityStats();
+  if (!stats.length) {
+    return `<div class="empty-inline"><strong>暂无字段</strong><p>先选择或创建字段模板。</p></div>`;
+  }
+  return `
+    <div class="field-quality-list">
+      ${stats.map((item) => `
+        <article class="${item.risk}">
+          <div class="quality-head">
+            <strong>${escapeHtml(item.field.label)}</strong>
+            <span>${item.fillRate}%</span>
+          </div>
+          <div class="quality-bar"><i style="width:${item.fillRate}%"></i></div>
+          <p>已填 ${item.filled} · 空 ${item.empty} · 缺必填 ${item.missingRequired} · 缺证据 ${item.missingEvidence}</p>
+          <div class="quality-actions">
+            <button type="button" data-quality-focus="${escapeHtml(item.field.id)}" data-quality-mode="empty" ${item.empty ? "" : "disabled"}>空值</button>
+            <button type="button" data-quality-focus="${escapeHtml(item.field.id)}" data-quality-mode="evidence" ${item.missingEvidence ? "" : "disabled"}>缺证据</button>
+            <button type="button" data-quality-focus="${escapeHtml(item.field.id)}" data-quality-mode="issue" ${item.empty || item.missingEvidence || item.missingRequired ? "" : "disabled"}>问题</button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
 }
 
 function sourceQuality(row, useLoadedText = false) {
@@ -1036,6 +1244,35 @@ function validationPanel(row) {
   `;
 }
 
+function annotationPanel(row) {
+  const annotations = normalizeAnnotations(row).slice().reverse();
+  return `
+    <section class="annotation-card">
+      <div class="annotation-head">
+        <div>
+          <p class="kicker">Review Notes</p>
+          <h2>结构化批注</h2>
+        </div>
+        <span>${annotations.length}</span>
+      </div>
+      ${annotations.length ? `
+        <div class="annotation-list">
+          ${annotations.map((annotation) => `
+            <article>
+              <div>
+                <strong>${escapeHtml(annotationLabel(annotation.type))}</strong>
+                <span>${escapeHtml(annotation.fieldLabel || annotation.fieldId || "整条记录")}</span>
+              </div>
+              <p>${escapeHtml(annotation.body || "")}</p>
+              <small>${escapeHtml(new Date(annotation.at).toLocaleString("zh-CN"))}</small>
+            </article>
+          `).join("")}
+        </div>
+      ` : `<p class="annotation-empty">还没有人工批注。可在“修改字段”里添加。</p>`}
+    </section>
+  `;
+}
+
 function sourceCardContent(row) {
   const quality = sourceQuality(row, true);
   return `
@@ -1068,6 +1305,28 @@ function sourceCard(row) {
   `;
 }
 
+function resultsControlPanel(rows) {
+  return `
+    <div class="controls ${state.filtersCollapsed ? "collapsed" : ""}">
+      <div class="controls-head">
+        <div>
+          <span>筛选标签</span>
+          <small>${escapeHtml(filters.find((item) => item.id === state.filter)?.label || "全部")} · ${rows.length} 条</small>
+        </div>
+        <button type="button" data-filter-toggle aria-expanded="${String(!state.filtersCollapsed)}">${state.filtersCollapsed ? "展开" : "收起"}</button>
+      </div>
+      <div class="collapsible-filters">
+        ${qualityFocusBar(rows)}
+        <div class="filter-row">${filterChips(state.rows)}</div>
+      </div>
+      <label class="search-box">
+        <span>搜索</span>
+        <input id="searchInput" value="${escapeHtml(state.query)}" placeholder="书家、书体、摘录、页码..." />
+      </label>
+    </div>
+  `;
+}
+
 function detailPanel(row) {
   if (!row) {
     return `
@@ -1097,8 +1356,6 @@ function detailPanel(row) {
       </div>
       <div class="detail-dock-body">
         ${detailCard(row)}
-        ${validationPanel(row)}
-        ${historyPanel(row)}
         ${sourceCard(row)}
       </div>
     </aside>
@@ -1123,7 +1380,6 @@ function updateDetailDom(row) {
   }
 
   const detail = panel.querySelector(".detail-card");
-  const validationCard = panel.querySelector(".validation-card");
   const source = panel.querySelector(".source-card");
   if (!detail || !source) {
     render();
@@ -1133,9 +1389,6 @@ function updateDetailDom(row) {
   const dockTitle = panel.querySelector(".detail-dock-head h2");
   if (dockTitle) dockTitle.textContent = `${fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注条目"} · ${row.id}`;
   detail.innerHTML = detailCardContent(row);
-  if (validationCard) validationCard.outerHTML = validationPanel(row);
-  const trace = panel.querySelector(".trace-card");
-  if (trace) trace.outerHTML = historyPanel(row);
   source.innerHTML = sourceCardContent(row);
 }
 
@@ -1260,6 +1513,28 @@ function saveEdit(form) {
     reason: String(data.get("editReason") || "人工修订字段。"),
     changes
   });
+  const annotationBody = String(data.get("annotationBody") || "").trim();
+  if (annotationBody) {
+    const fieldId = String(data.get("annotationField") || "");
+    const field = fieldId ? schemaField(fieldId) : null;
+    const annotation = {
+      id: `anno-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      type: String(data.get("annotationType") || "other"),
+      fieldId,
+      fieldLabel: field?.label || "",
+      body: annotationBody,
+      at: new Date().toISOString(),
+      actor: "human"
+    };
+    row.annotations = normalizeAnnotations(row);
+    row.annotations.push(annotation);
+    addHistory(row, {
+      type: "annotation",
+      actor: "human",
+      reason: `新增批注：${annotationLabel(annotation.type)}`,
+      changes: [{ fieldId: fieldId || "annotation", before: "", after: annotationBody }]
+    });
+  }
   persistRow(row);
   state.manifest = buildManifest(state.rows);
   state.editingId = "";
@@ -1302,13 +1577,116 @@ function updateSchemaField(fieldId, prop, value) {
   const field = schemaField(fieldId);
   if (!field) return;
   field[prop] = value;
-  state.schemaVersion += prop === "label" || prop === "visible" || prop === "required" || prop === "evidenceRequired" ? 1 : 0;
+  state.schemaVersion += prop === "label" || prop === "visible" || prop === "required" || prop === "evidenceRequired" || prop === "type" ? 1 : 0;
   state.promptVersion += prop === "prompt" ? 1 : 0;
   saveWorkspace();
-  if (prop === "label" || prop === "visible") {
+  if (prop === "label" || prop === "visible" || prop === "type") {
     render();
     if (state.view === "detail") loadSelectedSource();
   }
+}
+
+function normalizeSchemaOrder() {
+  state.schema = orderedSchema().map((field, index) => ({ ...field, order: index + 1 }));
+}
+
+function moveSchemaField(fieldId, direction) {
+  normalizeSchemaOrder();
+  const index = state.schema.findIndex((field) => field.id === fieldId);
+  const target = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || target < 0 || target >= state.schema.length) return;
+  const next = state.schema.slice();
+  [next[index], next[target]] = [next[target], next[index]];
+  state.schema = next.map((field, fieldIndex) => ({ ...field, order: fieldIndex + 1 }));
+  state.schemaVersion += 1;
+  saveWorkspace();
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
+function deleteSchemaField(fieldId) {
+  if (ensureSchema().length <= 1) return;
+  const field = schemaField(fieldId);
+  if (!field) return;
+  const hasValues = state.rows.some((row) => String(fieldValue(row, fieldId) || "").trim());
+  if (hasValues && !window.confirm(`删除字段“${field.label}”？已有行里该字段的历史仍保留在导出 JSON 中，但当前表格不再显示它。`)) return;
+  state.schema = ensureSchema().filter((item) => item.id !== fieldId);
+  normalizeSchemaOrder();
+  state.schemaVersion += 1;
+  saveWorkspace();
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
+function resetSchemaToTemplate() {
+  if (!window.confirm("恢复当前模板的默认字段配置？上传的数据和审校历史不会清空。")) return;
+  state.schema = defaultSchema(state.schemaTemplateId);
+  state.schemaVersion += 1;
+  state.promptVersion += 1;
+  state.rows.forEach(syncLegacyFields);
+  state.manifest = buildManifest(state.rows);
+  saveWorkspace();
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
+function saveCurrentAsCustomTemplate() {
+  const name = window.prompt("给这个字段模板起个名字：", `${templateById(state.schemaTemplateId).name} 副本`);
+  if (!name?.trim()) return;
+  const templates = loadCustomTemplates();
+  const id = `custom-template-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const template = {
+    id,
+    name: name.trim(),
+    description: "用户保存的本地字段模板。",
+    custom: true,
+    fields: cloneSchema(orderedSchema())
+  };
+  saveCustomTemplates([...templates, template]);
+  state.schemaTemplateId = id;
+  state.schema = cloneSchema(template.fields);
+  state.schemaVersion += 1;
+  state.promptVersion += 1;
+  state.manifest = buildManifest(state.rows);
+  saveWorkspace();
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
+function copyCurrentTemplate() {
+  const current = templateById(state.schemaTemplateId);
+  const id = `custom-template-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const template = {
+    id,
+    name: `${current.name} 副本`,
+    description: current.description || "复制的字段模板。",
+    custom: true,
+    fields: cloneSchema(orderedSchema())
+  };
+  saveCustomTemplates([...loadCustomTemplates(), template]);
+  state.schemaTemplateId = id;
+  state.schema = cloneSchema(template.fields);
+  state.schemaVersion += 1;
+  state.promptVersion += 1;
+  state.manifest = buildManifest(state.rows);
+  saveWorkspace();
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
+function deleteCurrentCustomTemplate() {
+  const current = templateById(state.schemaTemplateId);
+  if (!current.custom) return;
+  if (!window.confirm(`删除我的模板“${current.name}”？当前行数据不会删除。`)) return;
+  saveCustomTemplates(loadCustomTemplates().filter((template) => template.id !== current.id));
+  state.schemaTemplateId = "calligraphy-style";
+  state.schema = defaultSchema(state.schemaTemplateId);
+  state.schemaVersion += 1;
+  state.promptVersion += 1;
+  state.manifest = buildManifest(state.rows);
+  saveWorkspace();
+  render();
+  if (state.view === "detail") loadSelectedSource();
 }
 
 function addSchemaField() {
@@ -1371,6 +1749,27 @@ function downloadTemplateCsv() {
   downloadBlob("calligraphy-workspace-template.csv", `${headers.join(",")}\n${sample.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")}\n`, "text/csv;charset=utf-8");
 }
 
+function exportFieldQualityCsv() {
+  const headers = ["字段ID", "字段名", "字段类型", "必填", "需证据", "已填", "空值", "填充率", "缺必填行", "缺证据行"];
+  const rows = fieldQualityStats().map((item) => [
+    item.field.id,
+    item.field.label,
+    item.field.type,
+    item.field.required ? "是" : "否",
+    item.field.evidenceRequired ? "是" : "否",
+    item.filled,
+    item.empty,
+    `${item.fillRate}%`,
+    item.missingRequired,
+    item.missingEvidence
+  ]);
+  const csv = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(","))
+    .join("\n");
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadBlob(`${stamp}-field-quality.csv`, `${csv}\n`, "text/csv;charset=utf-8");
+}
+
 function resetWorkspace() {
   if (state.rows.length && !window.confirm("清空当前浏览器里的书论工作区？此操作不会影响其他用户或线上代码。")) return;
   clearWorkspace();
@@ -1383,6 +1782,55 @@ function handleRowAction(action, rowId) {
   if (action === "confirm") confirmRow(rowId);
   if (action === "edit") openEdit(rowId);
   if (action === "delete") deleteRow(rowId);
+}
+
+function setQualityFocus(fieldId, mode) {
+  state.qualityFocus = { fieldId, mode };
+  state.filter = "all";
+  state.selectedId = visibleRows()[0]?.id || "";
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  render();
+  loadSelectedSource();
+}
+
+function clearQualityFocus() {
+  state.qualityFocus = null;
+  state.selectedId = visibleRows()[0]?.id || state.rows[0]?.id || "";
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  render();
+  loadSelectedSource();
+}
+
+function appendIssue(row, note) {
+  const current = String(fieldValue(row, "issue") || row.issue || "").trim();
+  const next = current.includes(note) ? current : [current, note].filter(Boolean).join("；");
+  setFieldValue(row, "issue", next);
+  row.issue = next;
+}
+
+function batchMarkVisibleReview() {
+  const rows = visibleRows();
+  if (!rows.length) return;
+  if (!window.confirm(`将当前队列的 ${rows.length} 行标记为待复核？`)) return;
+  rows.forEach((row) => {
+    row.status = "待复核";
+    row.bucket = "review";
+    row.edited = true;
+    appendIssue(row, "批量队列标记待复核");
+    addHistory(row, {
+      type: "batch-review",
+      actor: "human",
+      reason: "从字段质量队列批量标记为待复核。",
+      changes: [{ fieldId: "issue", before: "", after: row.issue }]
+    });
+    state.reviewState.edits[row.id] = editableSnapshot(row);
+  });
+  state.manifest = buildManifest(state.rows);
+  saveWorkspace();
+  render();
+  loadSelectedSource();
 }
 
 function setDetailDock(collapsed) {
@@ -1400,6 +1848,17 @@ function setDetailDock(collapsed) {
 
 function toggleDetailDock() {
   setDetailDock(!state.detailCollapsed);
+}
+
+function toggleFilters() {
+  state.filtersCollapsed = !state.filtersCollapsed;
+  const controls = document.querySelector(".controls");
+  const button = document.querySelector("[data-filter-toggle]");
+  controls?.classList.toggle("collapsed", state.filtersCollapsed);
+  if (button) {
+    button.textContent = state.filtersCollapsed ? "展开" : "收起";
+    button.setAttribute("aria-expanded", String(!state.filtersCollapsed));
+  }
 }
 
 function reviewStats() {
@@ -1427,10 +1886,35 @@ function reviewToolbar() {
   `;
 }
 
+function qualityFocusBar(rows) {
+  if (!state.qualityFocus) return "";
+  const field = schemaField(state.qualityFocus.fieldId);
+  const modeLabel = {
+    empty: "空值",
+    evidence: "缺证据",
+    required: "缺必填",
+    issue: "全部问题"
+  }[state.qualityFocus.mode] || "问题";
+  return `
+    <div class="queue-bar">
+      <span>当前队列：${escapeHtml(field?.label || state.qualityFocus.fieldId)} · ${escapeHtml(modeLabel)} · ${rows.length} 行</span>
+      <button type="button" data-quality-batch-review ${rows.length ? "" : "disabled"}>批量标记待复核</button>
+      <button type="button" data-quality-clear>清除队列</button>
+    </div>
+  `;
+}
+
 function updateReviewToolbarDom() {
   const toolbar = document.querySelector(".review-toolbar");
   if (toolbar) toolbar.outerHTML = reviewToolbar();
   document.querySelector("[data-review-reset]")?.addEventListener("click", resetReviewState);
+
+  document.querySelectorAll("[data-quality-focus]").forEach((button) => {
+    button.addEventListener("click", () => setQualityFocus(button.dataset.qualityFocus, button.dataset.qualityMode));
+  });
+
+  document.querySelector("[data-quality-clear]")?.addEventListener("click", clearQualityFocus);
+  document.querySelector("[data-quality-batch-review]")?.addEventListener("click", batchMarkVisibleReview);
 }
 
 function updateVisibleCountDom() {
@@ -1502,10 +1986,83 @@ function editModal() {
             <span>修改原因/复核说明</span>
             <textarea name="editReason" rows="3" placeholder="说明为什么修改，方便后续回溯。"></textarea>
           </label>
+          <label>
+            <span>新增批注类型</span>
+            <select name="annotationType">
+              <option value="">不添加批注</option>
+              ${annotationTypes.map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.label)}</option>`).join("")}
+            </select>
+          </label>
+          <label>
+            <span>关联字段</span>
+            <select name="annotationField">
+              <option value="">整条记录</option>
+              ${orderedSchema().map((field) => `<option value="${escapeHtml(field.id)}">${escapeHtml(field.label)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="wide">
+            <span>批注内容</span>
+            <textarea name="annotationBody" rows="3" placeholder="记录页码、归属、摘录、字段映射或专家判断问题。"></textarea>
+          </label>
         </div>
         <div class="modal-actions">
           <button type="button" data-edit-cancel>取消</button>
           <button type="submit">保存修改</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function mappingSelect(name, value, headers) {
+  return `
+    <select name="${escapeHtml(name)}">
+      <option value="">不导入</option>
+      ${headers.map((header) => `<option value="${escapeHtml(header)}" ${value === header ? "selected" : ""}>${escapeHtml(header)}</option>`).join("")}
+    </select>
+  `;
+}
+
+function importMappingModal() {
+  const pending = state.pendingImport;
+  if (!pending) return "";
+  const headers = pending.headers || [];
+  const sample = pending.rows[0] || {};
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="CSV 字段映射">
+      <form class="edit-modal mapping-modal" id="mappingForm">
+        <div class="modal-head">
+          <div>
+            <p class="kicker">CSV Mapping</p>
+            <h2>确认字段映射</h2>
+            <p>${escapeHtml(pending.name)} · ${pending.rows.length} 行 · ${headers.length} 列。左侧是工作台字段，右侧选择 CSV 来源列。</p>
+          </div>
+          <button type="button" data-mapping-cancel>关闭</button>
+        </div>
+        <div class="mapping-preview">
+          <strong>首行预览</strong>
+          <p>${headers.slice(0, 8).map((header) => `${header}: ${clip(sample[header], 28)}`).join(" ｜ ")}</p>
+        </div>
+        <div class="mapping-grid">
+          <h3>系统字段</h3>
+          ${importSystemFields.map((field) => `
+            <label>
+              <span>${escapeHtml(field.label)}</span>
+              ${mappingSelect(`system:${field.id}`, pending.mapping.system?.[field.id] || "", headers)}
+            </label>
+          `).join("")}
+          <h3>模板字段</h3>
+          ${orderedSchema().map((field) => `
+            <label class="${field.required ? "required" : ""}">
+              <span>${escapeHtml(field.label)}${field.required ? " *" : ""}</span>
+              ${mappingSelect(`field:${field.id}`, pending.mapping.fields?.[field.id] || "", headers)}
+              <small>${escapeHtml(field.prompt || "")}</small>
+            </label>
+          `).join("")}
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-mapping-cancel>取消</button>
+          <button type="submit">确认导入</button>
         </div>
       </form>
     </div>
@@ -1529,6 +2086,7 @@ function renderShell(content) {
       ${content}
     </main>
     ${editModal()}
+    ${importMappingModal()}
   `;
   attachGlobalEvents();
 }
@@ -1595,6 +2153,10 @@ function renderDetail() {
           <summary>上传处理</summary>
           ${uploadLog()}
         </details>
+        <details class="rail-section" open>
+          <summary>字段质量</summary>
+          ${fieldQualityPanel()}
+        </details>
         <details class="rail-section">
           <summary>附表分布</summary>
           <div class="bars compact">${appendixBars()}</div>
@@ -1609,13 +2171,7 @@ function renderDetail() {
           </div>
           <div class="visible-count">${rows.length} / ${state.rows.length}</div>
         </div>
-        <div class="controls">
-          <div class="filter-row">${filterChips(state.rows)}</div>
-          <label class="search-box">
-            <span>搜索</span>
-            <input id="searchInput" value="${escapeHtml(state.query)}" placeholder="书家、书体、摘录、页码..." />
-          </label>
-        </div>
+        ${resultsControlPanel(rows)}
         ${resultTable(rows)}
       </section>
       ${detailPanel(row)}
@@ -1656,12 +2212,35 @@ function attachGlobalEvents() {
     saveEdit(event.currentTarget);
   });
 
+  document.querySelector("#mappingForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    if (state.pendingImport) {
+      state.pendingImport.mapping = { system: {}, fields: {} };
+      importSystemFields.forEach((field) => {
+        state.pendingImport.mapping.system[field.id] = String(data.get(`system:${field.id}`) || "");
+      });
+      orderedSchema().forEach((field) => {
+        state.pendingImport.mapping.fields[field.id] = String(data.get(`field:${field.id}`) || "");
+      });
+    }
+    confirmPendingImport();
+  });
+
+  document.querySelectorAll("[data-mapping-cancel]").forEach((button) => {
+    button.addEventListener("click", cancelPendingImport);
+  });
+
   document.querySelectorAll("[data-workspace-export]").forEach((button) => {
     button.addEventListener("click", exportWorkspace);
   });
 
   document.querySelectorAll("[data-template-download]").forEach((button) => {
     button.addEventListener("click", downloadTemplateCsv);
+  });
+
+  document.querySelectorAll("[data-quality-export]").forEach((button) => {
+    button.addEventListener("click", exportFieldQualityCsv);
   });
 
   document.querySelectorAll("[data-workspace-reset]").forEach((button) => {
@@ -1678,10 +2257,20 @@ function attachGlobalEvents() {
       const value = control.type === "checkbox" ? control.checked : control.value;
       updateSchemaField(control.dataset.schemaField, prop, value);
     };
-    control.addEventListener(control.type === "checkbox" ? "change" : "blur", handler);
+    control.addEventListener(control.type === "checkbox" || control.tagName === "SELECT" ? "change" : "blur", handler);
   });
 
   document.querySelector("[data-schema-add]")?.addEventListener("click", addSchemaField);
+  document.querySelector("[data-schema-reset]")?.addEventListener("click", resetSchemaToTemplate);
+  document.querySelector("[data-template-save]")?.addEventListener("click", saveCurrentAsCustomTemplate);
+  document.querySelector("[data-template-copy]")?.addEventListener("click", copyCurrentTemplate);
+  document.querySelector("[data-template-delete]")?.addEventListener("click", deleteCurrentCustomTemplate);
+  document.querySelectorAll("[data-schema-move]").forEach((button) => {
+    button.addEventListener("click", () => moveSchemaField(button.dataset.schemaMove, button.dataset.schemaDirection));
+  });
+  document.querySelectorAll("[data-schema-delete]").forEach((button) => {
+    button.addEventListener("click", () => deleteSchemaField(button.dataset.schemaDelete));
+  });
 }
 
 function attachHomeEvents() {
@@ -1702,6 +2291,7 @@ function attachHomeEvents() {
 
 function attachDetailEvents() {
   document.querySelector("[data-detail-toggle]")?.addEventListener("click", toggleDetailDock);
+  document.querySelector("[data-filter-toggle]")?.addEventListener("click", toggleFilters);
 
   document.querySelectorAll("[data-filter]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1742,12 +2332,68 @@ function attachDetailEvents() {
   });
 
   document.querySelector("[data-review-reset]")?.addEventListener("click", resetReviewState);
+
+  document.querySelectorAll("[data-quality-focus]").forEach((button) => {
+    button.addEventListener("click", () => setQualityFocus(button.dataset.qualityFocus, button.dataset.qualityMode));
+  });
+
+  document.querySelector("[data-quality-clear]")?.addEventListener("click", clearQualityFocus);
+  document.querySelector("[data-quality-batch-review]")?.addEventListener("click", batchMarkVisibleReview);
 }
 
 function isResultTable(rows) {
   if (!rows.length) return false;
   const keys = Object.keys(rows[0]);
   return keys.includes("附表") && (keys.includes("quote") || keys.includes("摘录") || keys.includes("原文"));
+}
+
+function mappedRowsFromPendingImport() {
+  const pending = state.pendingImport;
+  if (!pending?.rows?.length) return [];
+  const mapping = pending.mapping || { system: {}, fields: {} };
+  return pending.rows.map((row) => {
+    const mapped = {};
+    importSystemFields.forEach((field) => {
+      const source = mapping.system?.[field.id];
+      if (source) mapped[field.target] = row[source] || "";
+    });
+    orderedSchema().forEach((field) => {
+      const source = mapping.fields?.[field.id];
+      mapped[field.label] = source ? row[source] || "" : "";
+    });
+    mapped.__rowNumber = row.__rowNumber;
+    return mapped;
+  });
+}
+
+function confirmPendingImport() {
+  const pending = state.pendingImport;
+  if (!pending) return;
+  const nextRows = mappedRowsFromPendingImport().map(makeResult);
+  state.reviewState = reviewDefaults();
+  state.originalRows = nextRows.map(cloneRow);
+  state.rows = nextRows;
+  state.workspaceId = newWorkspaceId();
+  state.datasetName = `上传：${pending.name}`;
+  state.manifest = buildManifest(nextRows);
+  state.selectedId = nextRows[0]?.id || "";
+  state.filter = "all";
+  state.query = "";
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  state.sourceCache = new Map();
+  state.uploadLog = [{ type: "success", title: pending.name, message: `已按字段映射导入 ${nextRows.length} 行。` }];
+  state.pendingImport = null;
+  state.view = "detail";
+  location.hash = "#detail";
+  saveWorkspace();
+  render();
+  loadSelectedSource();
+}
+
+function cancelPendingImport() {
+  state.pendingImport = null;
+  render();
 }
 
 async function processFiles(files) {
@@ -1765,18 +2411,24 @@ async function processFiles(files) {
         nextLog.push({ type: "success", title: name, message: "已作为原文页加入回检缓存。" });
       } else if (lower.endsWith(".csv")) {
         const rows = parseCsv(await file.text());
-        if (!isResultTable(rows)) {
-          nextLog.push({ type: "warn", title: name, message: "已读取，但没有识别为书论结果表。请确认包含“附表”和“quote/摘录/原文”字段。" });
+        if (!rows.length) {
+          nextLog.push({ type: "warn", title: name, message: "CSV 没有可导入的数据行。" });
         } else {
-          nextRows = rows.map(makeResult);
-          state.datasetName = `上传：${name}`;
-          nextLog.push({ type: "success", title: name, message: `已处理 ${nextRows.length} 行结果，自动生成前端数据。` });
+          createPendingCsvImport(name, rows);
+          nextLog.push({ type: "success", title: name, message: `已读取 ${rows.length} 行。请确认 CSV 列与当前模板字段的映射。` });
         }
       } else if (lower.endsWith(".json")) {
         const payload = JSON.parse(await file.text());
         if (payload.type === "calligraphy-workspace" && Array.isArray(payload.rows)) {
           importedWorkspace = payload;
           state.schemaTemplateId = payload.schemaTemplateId || state.schemaTemplateId || "calligraphy-style";
+          if (Array.isArray(payload.customTemplates)) {
+            const mergedTemplates = [...loadCustomTemplates(), ...payload.customTemplates].reduce((acc, template) => {
+              acc.set(template.id, { ...template, custom: true, fields: cloneSchema(template.fields || []) });
+              return acc;
+            }, new Map());
+            saveCustomTemplates([...mergedTemplates.values()]);
+          }
           state.schema = cloneSchema(payload.schema?.length ? payload.schema : defaultSchema(state.schemaTemplateId));
           state.schemaVersion = payload.schemaVersion || SCHEMA_VERSION;
           state.promptVersion = payload.promptVersion || PROMPT_VERSION;
