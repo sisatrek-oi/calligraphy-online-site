@@ -379,18 +379,68 @@ button:disabled {
   border-top: 1px solid rgba(217, 208, 194, 0.88);
 }
 
-.schema-head h3 {
+.schema-panel summary {
+  list-style: none;
+}
+
+.schema-panel summary::-webkit-details-marker,
+.field-config summary::-webkit-details-marker {
+  display: none;
+}
+
+.schema-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.schema-summary h3 {
   margin: 0;
   font-family: var(--serif);
   font-size: 20px;
 }
 
-.schema-head p,
+.schema-summary p,
 .field-config p {
   margin-top: 5px;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.55;
+}
+
+.schema-summary-meta {
+  min-width: 124px;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-align: right;
+}
+
+.schema-summary-meta strong {
+  color: var(--teal);
+  font-size: 11px;
+}
+
+.schema-summary-meta i {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(31, 111, 104, 0.28);
+  background: rgba(31, 111, 104, 0.07);
+  color: var(--teal);
+  padding: 0 7px;
+  font-style: normal;
+}
+
+.schema-panel-body {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
 }
 
 .schema-select,
@@ -443,17 +493,14 @@ button:disabled {
 .field-list {
   display: grid;
   gap: 8px;
-  max-height: 360px;
+  max-height: min(360px, 48vh);
   overflow: auto;
   padding-right: 2px;
 }
 
 .field-config {
-  display: grid;
-  gap: 7px;
   border: 1px solid rgba(217, 208, 194, 0.92);
   background: rgba(244, 241, 234, 0.45);
-  padding: 9px;
 }
 
 .field-config.muted {
@@ -462,8 +509,11 @@ button:disabled {
 
 .field-config-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
+  cursor: pointer;
+  padding: 9px;
 }
 
 .field-config-head strong {
@@ -476,6 +526,12 @@ button:disabled {
   color: var(--muted);
   font-family: var(--mono);
   font-size: 10px;
+}
+
+.field-config-body {
+  display: grid;
+  gap: 7px;
+  padding: 0 9px 9px;
 }
 
 .field-switches {
