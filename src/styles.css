@@ -1504,6 +1504,32 @@ th {
   font-size: 11px;
 }
 
+th.longtext-col,
+td.longtext-cell {
+  width: clamp(210px, 22vw, 320px);
+  max-width: clamp(210px, 22vw, 320px);
+}
+
+td.longtext-cell {
+  overflow: hidden;
+  color: rgba(44, 39, 34, 0.86);
+}
+
+.longtext-clip {
+  display: -webkit-box;
+  max-height: 44px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.review-screen.table-focus th.longtext-col,
+.review-screen.table-focus td.longtext-cell {
+  width: clamp(180px, 18vw, 260px);
+  max-width: clamp(180px, 18vw, 260px);
+}
+
 tbody tr {
   cursor: pointer;
   animation: rowIn 320ms ease both;

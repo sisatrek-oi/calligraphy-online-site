@@ -1115,7 +1115,7 @@ function resultTable(rows) {
             <th>字段</th>
             <th>置信</th>
             <th>附表</th>
-            ${tableFields.map((field) => `<th>${escapeHtml(field.label)}</th>`).join("")}
+            ${tableFields.map((field) => `<th class="${field.type === "longtext" ? "longtext-col" : ""}">${escapeHtml(field.label)}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
@@ -1128,11 +1128,13 @@ function resultTable(rows) {
               <td><span class="appendix">${escapeHtml(row.appendixCode)}</span>${escapeHtml(row.status)}</td>
               ${tableFields.map((field, fieldIndex) => {
                 const value = fieldValue(row, field.id);
-                const cell = field.type === "longtext" ? clip(value, 110) : value;
-                const content = fieldIndex === 0
+                const isLongText = field.type === "longtext";
+                const cell = isLongText ? clip(value, 72) : value;
+                const rawContent = fieldIndex === 0
                   ? `<strong>${escapeHtml(cell || "未标注")}</strong><small>${escapeHtml(row.id)}</small>`
                   : escapeHtml(cell || "未标注");
-                return `<td title="${escapeHtml(value)}">${content}</td>`;
+                const content = isLongText ? `<span class="longtext-clip">${rawContent}</span>` : rawContent;
+                return `<td class="${isLongText ? "longtext-cell" : ""}" title="${escapeHtml(value)}">${content}</td>`;
               }).join("")}
             </tr>
           `).join("")}
