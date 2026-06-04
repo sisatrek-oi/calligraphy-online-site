@@ -1937,7 +1937,7 @@ function applyTableViewState() {
     headButton.setAttribute("aria-pressed", String(state.tableHeaderCollapsed));
   }
   railButtons.forEach((railButton) => {
-    if (!railButton.classList.contains("rail-collapse-control")) {
+    if (!railButton.classList.contains("rail-collapse-control") && !railButton.classList.contains("rail-restore-control")) {
       railButton.textContent = state.railCollapsed ? "显示侧栏" : "隐藏侧栏";
     }
     railButton.classList.toggle("active", state.railCollapsed);
@@ -2281,6 +2281,7 @@ function renderDetail() {
       </aside>
 
       <section class="main-panel workbench-main">
+        <button type="button" class="rail-restore-control ${state.railCollapsed ? "active" : ""}" data-rail-toggle aria-pressed="${String(state.railCollapsed)}" aria-label="显示左侧栏" title="显示左侧栏"></button>
         <div class="panel-head">
           <div>
             <p class="kicker">Results</p>
