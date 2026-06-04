@@ -2178,7 +2178,7 @@ function importMappingModal() {
 
 function renderShell(content) {
   app.innerHTML = `
-    <main class="app-shell ${state.tableFocus ? "table-focus-shell" : ""}">
+    <main class="app-shell ${state.view === "detail" ? "detail-shell" : ""} ${state.tableFocus ? "table-focus-shell" : ""}">
       <header class="topbar compact">
         <div>
           <p class="kicker">Upload Evidence App</p>
@@ -2247,23 +2247,27 @@ function renderDetail() {
   renderShell(`
     <section class="review-screen ${state.detailCollapsed ? "detail-collapsed" : ""} ${state.railCollapsed || state.tableFocus ? "rail-collapsed" : ""} ${state.tableFocus ? "table-focus" : ""} ${state.tableHeaderCollapsed ? "table-head-collapsed" : ""}">
       <aside class="dataset-rail">
-        <div>
+        <div class="rail-identity">
           <p class="kicker">Current Dataset</p>
           <h2>${escapeHtml(state.datasetName)}</h2>
-          <p>当前屏幕只使用你的本地工作区数据；不会读取公开后端文件。</p>
+          ${workspaceStatus()}
         </div>
-        ${workspaceStatus()}
-        ${workspaceActions()}
-        ${templatePanel()}
-        <div class="rail-metrics">${railMetrics()}</div>
-        ${reviewToolbar()}
+        <details class="rail-section rail-review" open>
+          <summary>审校状态</summary>
+          ${reviewToolbar()}
+        </details>
+        <details class="rail-section">
+          <summary>字段质量</summary>
+          ${fieldQualityPanel()}
+        </details>
+        <details class="rail-section">
+          <summary>工作区管理</summary>
+          ${workspaceActions()}
+          ${templatePanel()}
+        </details>
         <details class="rail-section">
           <summary>上传处理</summary>
           ${uploadLog()}
-        </details>
-        <details class="rail-section" open>
-          <summary>字段质量</summary>
-          ${fieldQualityPanel()}
         </details>
         <details class="rail-section">
           <summary>附表分布</summary>
