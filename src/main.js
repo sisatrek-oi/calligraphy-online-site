@@ -1380,7 +1380,6 @@ function tableViewActions() {
   return `
     <div class="table-view-actions" aria-label="表格视图控制">
       <button type="button" class="${state.tableFocus ? "active" : ""}" data-table-focus aria-pressed="${String(state.tableFocus)}">${state.tableFocus ? "退出专注" : "专注表格"}</button>
-      <button type="button" class="${state.railCollapsed ? "active" : ""}" data-rail-toggle aria-pressed="${String(state.railCollapsed)}">${state.railCollapsed ? "显示侧栏" : "隐藏侧栏"}</button>
       <button type="button" class="${state.tableHeaderCollapsed ? "active" : ""}" data-table-head-toggle aria-pressed="${String(state.tableHeaderCollapsed)}">${state.tableHeaderCollapsed ? "显示表头" : "收起表头"}</button>
     </div>
   `;
