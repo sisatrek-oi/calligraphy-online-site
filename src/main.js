@@ -1448,8 +1448,12 @@ function updateDetailDom(row) {
 
   const dockTitle = panel.querySelector(".detail-dock-head h2");
   if (dockTitle) dockTitle.textContent = `${fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注条目"} · ${row.id}`;
+  panel.classList.remove("is-updating");
+  void panel.offsetWidth;
+  panel.classList.add("is-updating");
   detail.innerHTML = detailCardContent(row);
   source.innerHTML = sourceCardContent(row);
+  window.setTimeout(() => panel.classList.remove("is-updating"), 280);
 }
 
 function updateSourceDom(row) {
