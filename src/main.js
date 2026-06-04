@@ -854,12 +854,11 @@ function workspaceActions() {
 
 function templatePanel() {
   const current = templateById(state.schemaTemplateId);
-  const templates = allSchemaTemplates();
   const visibleCount = orderedSchema({ includeHidden: false }).length;
   const totalCount = orderedSchema().length;
   return `
-    <details class="schema-panel" data-template-panel ${state.templatePanelExpanded ? "open" : ""}>
-      <summary class="schema-summary">
+    <section class="schema-panel">
+      <div class="schema-summary">
         <div>
           <p class="kicker">Schema Studio</p>
           <h3>字段模板</h3>
@@ -868,54 +867,89 @@ function templatePanel() {
         <div class="schema-summary-meta">
           <strong>${escapeHtml(current.custom ? "我的模板" : "内置模板")}</strong>
           <span>${visibleCount} / ${totalCount} 字段显示</span>
-          <i>${state.templatePanelExpanded ? "收起" : "展开"}</i>
-        </div>
-      </summary>
-      <div class="schema-panel-body">
-        <label class="schema-select">
-          <span>研究任务模板</span>
-          <select data-template-select>
-            ${templates.map((template) => `<option value="${escapeHtml(template.id)}" ${template.id === state.schemaTemplateId ? "selected" : ""}>${template.custom ? "我的｜" : "内置｜"}${escapeHtml(template.name)}</option>`).join("")}
-          </select>
-        </label>
-        <div class="schema-tools">
-          <button type="button" data-schema-add>添加字段</button>
-          <button type="button" data-template-save>保存为我的模板</button>
-          <button type="button" data-template-copy>复制当前模板</button>
-          ${current.custom ? `<button type="button" class="danger" data-template-delete>删除我的模板</button>` : ""}
-          <button type="button" data-schema-reset>恢复模板默认字段</button>
-        </div>
-        <div class="field-list">
-          ${orderedSchema().map((field) => `
-            <details class="field-config ${field.visible ? "" : "muted"}">
-              <summary class="field-config-head">
-              <strong>${escapeHtml(field.label)}</strong>
-              <span>${escapeHtml(field.id)} · ${escapeHtml(field.type)} · ${field.visible ? "表格显示" : "已隐藏"}</span>
-              </summary>
-              <div class="field-config-body">
-                <div class="field-toolbar">
-                  <button type="button" data-schema-move="${escapeHtml(field.id)}" data-schema-direction="up">上移</button>
-                  <button type="button" data-schema-move="${escapeHtml(field.id)}" data-schema-direction="down">下移</button>
-                  <button type="button" class="danger" data-schema-delete="${escapeHtml(field.id)}">删除</button>
-                </div>
-                <label>字段名<input data-schema-field="${escapeHtml(field.id)}" data-schema-prop="label" value="${escapeHtml(field.label)}" /></label>
-                <label>字段类型
-                  <select data-schema-field="${escapeHtml(field.id)}" data-schema-prop="type">
-                    ${["text", "longtext", "select", "number", "date"].map((type) => `<option value="${type}" ${field.type === type ? "selected" : ""}>${type}</option>`).join("")}
-                  </select>
-                </label>
-                <label>抽取 prompt<textarea data-schema-field="${escapeHtml(field.id)}" data-schema-prop="prompt" rows="3">${escapeHtml(field.prompt || "")}</textarea></label>
-                <div class="field-switches">
-                  <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="required" ${field.required ? "checked" : ""} /> 必填</label>
-                  <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="evidenceRequired" ${field.evidenceRequired ? "checked" : ""} /> 需证据</label>
-                  <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="visible" ${field.visible ? "checked" : ""} /> 表格显示</label>
-                </div>
-              </div>
-            </details>
-          `).join("")}
+          <button type="button" data-template-panel-open>展开详情</button>
         </div>
       </div>
-    </details>
+    </section>
+  `;
+}
+
+function templateEditorContent() {
+  const current = templateById(state.schemaTemplateId);
+  const templates = allSchemaTemplates();
+  return `
+    <div class="schema-panel-body">
+      <label class="schema-select">
+        <span>研究任务模板</span>
+        <select data-template-select>
+          ${templates.map((template) => `<option value="${escapeHtml(template.id)}" ${template.id === state.schemaTemplateId ? "selected" : ""}>${template.custom ? "我的｜" : "内置｜"}${escapeHtml(template.name)}</option>`).join("")}
+        </select>
+      </label>
+      <div class="schema-tools">
+        <button type="button" data-schema-add>添加字段</button>
+        <button type="button" data-template-save>保存为我的模板</button>
+        <button type="button" data-template-copy>复制当前模板</button>
+        ${current.custom ? `<button type="button" class="danger" data-template-delete>删除我的模板</button>` : ""}
+        <button type="button" data-schema-reset>恢复模板默认字段</button>
+      </div>
+      <div class="field-list">
+        ${orderedSchema().map((field) => `
+          <details class="field-config ${field.visible ? "" : "muted"}">
+            <summary class="field-config-head">
+            <strong>${escapeHtml(field.label)}</strong>
+            <span>${escapeHtml(field.id)} · ${escapeHtml(field.type)} · ${field.visible ? "表格显示" : "已隐藏"}</span>
+            </summary>
+            <div class="field-config-body">
+              <div class="field-toolbar">
+                <button type="button" data-schema-move="${escapeHtml(field.id)}" data-schema-direction="up">上移</button>
+                <button type="button" data-schema-move="${escapeHtml(field.id)}" data-schema-direction="down">下移</button>
+                <button type="button" class="danger" data-schema-delete="${escapeHtml(field.id)}">删除</button>
+              </div>
+              <label>字段名<input data-schema-field="${escapeHtml(field.id)}" data-schema-prop="label" value="${escapeHtml(field.label)}" /></label>
+              <label>字段类型
+                <select data-schema-field="${escapeHtml(field.id)}" data-schema-prop="type">
+                  ${["text", "longtext", "select", "number", "date"].map((type) => `<option value="${type}" ${field.type === type ? "selected" : ""}>${type}</option>`).join("")}
+                </select>
+              </label>
+              <label>抽取 prompt<textarea data-schema-field="${escapeHtml(field.id)}" data-schema-prop="prompt" rows="3">${escapeHtml(field.prompt || "")}</textarea></label>
+              <div class="field-switches">
+                <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="required" ${field.required ? "checked" : ""} /> 必填</label>
+                <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="evidenceRequired" ${field.evidenceRequired ? "checked" : ""} /> 需证据</label>
+                <label><input type="checkbox" data-schema-field="${escapeHtml(field.id)}" data-schema-prop="visible" ${field.visible ? "checked" : ""} /> 表格显示</label>
+              </div>
+            </div>
+          </details>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function templateDetailsModal() {
+  if (!state.templatePanelExpanded) return "";
+  const current = templateById(state.schemaTemplateId);
+  const visibleCount = orderedSchema({ includeHidden: false }).length;
+  const totalCount = orderedSchema().length;
+  return `
+    <div class="modal-backdrop template-backdrop" role="dialog" aria-modal="true" aria-label="字段模板详情">
+      <section class="edit-modal template-modal">
+        <div class="modal-head template-modal-head">
+          <div>
+            <p class="kicker">Schema Studio</p>
+            <h2>字段模板详情</h2>
+            <p>${escapeHtml(current.description)}</p>
+          </div>
+          <div class="schema-summary-meta">
+            <strong>${escapeHtml(current.custom ? "我的模板" : "内置模板")}</strong>
+            <span>${visibleCount} / ${totalCount} 字段显示</span>
+            <button type="button" data-template-panel-close>关闭</button>
+          </div>
+        </div>
+        <div class="template-modal-body">
+          ${templateEditorContent()}
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -2160,6 +2194,7 @@ function renderShell(content) {
     </main>
     ${editModal()}
     ${importMappingModal()}
+    ${templateDetailsModal()}
   `;
   attachGlobalEvents();
 }
@@ -2265,6 +2300,18 @@ function render() {
   else renderDetail();
 }
 
+function openTemplatePanel() {
+  state.templatePanelExpanded = true;
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
+function closeTemplatePanel() {
+  state.templatePanelExpanded = false;
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
 function attachGlobalEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -2323,14 +2370,20 @@ function attachGlobalEvents() {
     button.addEventListener("click", resetWorkspace);
   });
 
-  document.querySelector("[data-template-select]")?.addEventListener("change", (event) => {
-    applyTemplate(event.target.value);
+  document.querySelectorAll("[data-template-panel-open]").forEach((button) => {
+    button.addEventListener("click", openTemplatePanel);
   });
 
-  document.querySelector("[data-template-panel]")?.addEventListener("toggle", (event) => {
-    state.templatePanelExpanded = event.currentTarget.open;
-    const toggleText = event.currentTarget.querySelector(".schema-summary-meta i");
-    if (toggleText) toggleText.textContent = state.templatePanelExpanded ? "收起" : "展开";
+  document.querySelectorAll("[data-template-panel-close]").forEach((button) => {
+    button.addEventListener("click", closeTemplatePanel);
+  });
+
+  document.querySelector(".template-backdrop")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeTemplatePanel();
+  });
+
+  document.querySelector("[data-template-select]")?.addEventListener("change", (event) => {
+    applyTemplate(event.target.value);
   });
 
   document.querySelectorAll("[data-schema-field]").forEach((control) => {

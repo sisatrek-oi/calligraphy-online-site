@@ -379,11 +379,6 @@ button:disabled {
   border-top: 1px solid rgba(217, 208, 194, 0.88);
 }
 
-.schema-panel summary {
-  list-style: none;
-}
-
-.schema-panel summary::-webkit-details-marker,
 .field-config summary::-webkit-details-marker {
   display: none;
 }
@@ -393,7 +388,6 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  cursor: pointer;
 }
 
 .schema-summary h3 {
@@ -426,15 +420,16 @@ button:disabled {
   font-size: 11px;
 }
 
-.schema-summary-meta i {
+.schema-summary-meta button {
   min-height: 24px;
   display: inline-flex;
   align-items: center;
   border: 1px solid rgba(31, 111, 104, 0.28);
   background: rgba(31, 111, 104, 0.07);
   color: var(--teal);
+  cursor: pointer;
   padding: 0 7px;
-  font-style: normal;
+  font: inherit;
 }
 
 .schema-panel-body {
@@ -2027,6 +2022,50 @@ mark {
   padding: 18px;
 }
 
+.template-backdrop {
+  z-index: 24;
+  background: rgba(33, 29, 24, 0.38);
+  backdrop-filter: blur(18px) saturate(0.92);
+}
+
+.template-modal {
+  width: min(980px, calc(100vw - 44px));
+  max-height: min(82vh, 860px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  padding: 0;
+}
+
+.template-modal-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+}
+
+.template-modal-head h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(24px, 3vw, 34px);
+}
+
+.template-modal-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 18px;
+}
+
+.template-modal .schema-panel-body {
+  padding-top: 0;
+}
+
+.template-modal .field-list {
+  max-height: none;
+  padding-right: 5px;
+}
+
 .modal-head {
   padding-bottom: 14px;
   border-bottom: 1px solid var(--line);
@@ -2386,6 +2425,26 @@ mark {
   .modal-backdrop {
     padding: 10px;
     align-items: start;
+  }
+
+  .template-modal {
+    width: min(100%, calc(100vw - 20px));
+    max-height: calc(100vh - 20px);
+  }
+
+  .template-modal-head {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .template-modal-head .schema-summary-meta {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .template-modal-body {
+    padding: 12px 14px 14px;
   }
 }
 
