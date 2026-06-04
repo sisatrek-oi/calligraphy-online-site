@@ -1428,6 +1428,15 @@ function updateSelectedRowDom() {
   });
 }
 
+function triggerWorkbenchMotion(name, duration = 520) {
+  const screen = document.querySelector(".review-screen");
+  if (!screen) return;
+  screen.classList.remove(name);
+  void screen.offsetWidth;
+  screen.classList.add(name);
+  window.setTimeout(() => screen.classList.remove(name), duration);
+}
+
 function updateDetailDom(row) {
   const panel = document.querySelector(".detail-panel");
   if (!panel) {
@@ -1482,6 +1491,7 @@ function selectResult(rowId) {
   const requestId = state.sourceRequestId + 1;
   state.sourceRequestId = requestId;
   updateSelectedRowDom();
+  triggerWorkbenchMotion("row-motion", 420);
   const row = selectedRow();
 
   if (!row?.sourceFile) {
@@ -1904,6 +1914,7 @@ function setDetailDock(collapsed) {
   const button = document.querySelector("[data-detail-toggle]");
   screen?.classList.toggle("detail-collapsed", state.detailCollapsed);
   panel?.classList.toggle("collapsed", state.detailCollapsed);
+  triggerWorkbenchMotion(state.detailCollapsed ? "detail-closing" : "detail-opening", 520);
   if (button) {
     button.textContent = state.detailCollapsed ? "展开" : "收起";
     button.setAttribute("aria-expanded", String(!state.detailCollapsed));
@@ -1918,6 +1929,7 @@ function toggleFilters() {
   state.filtersCollapsed = !state.filtersCollapsed;
   const controls = document.querySelector(".controls");
   const button = document.querySelector("[data-filter-toggle]");
+  triggerWorkbenchMotion("filter-motion", 360);
   controls?.classList.toggle("collapsed", state.filtersCollapsed);
   if (button) {
     button.textContent = state.filtersCollapsed ? "展开" : "收起";
@@ -1958,6 +1970,7 @@ function applyTableViewState() {
 }
 
 function toggleRail() {
+  triggerWorkbenchMotion(state.railCollapsed ? "rail-opening" : "rail-closing", 560);
   state.railCollapsed = !state.railCollapsed;
   applyTableViewState();
 }
