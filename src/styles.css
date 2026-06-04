@@ -816,38 +816,54 @@ button:disabled {
 .rail-restore-control {
   position: absolute;
   top: 50%;
-  left: 8px;
+  left: 0;
   z-index: 4;
-  width: 32px;
-  height: 32px;
+  width: 16px;
+  height: 42px;
   display: none;
   place-items: center;
   border: 1px solid rgba(31, 111, 104, 0.32);
-  border-radius: 7px;
+  border-left: 0;
+  border-radius: 0 7px 7px 0;
   background: rgba(255, 253, 246, 0.96);
   color: var(--teal);
   cursor: pointer;
-  box-shadow: 0 8px 22px rgba(33, 29, 24, 0.12);
+  box-shadow: 0 8px 18px rgba(33, 29, 24, 0.08);
   transform: translateY(-50%);
   transition:
+    width 160ms ease,
     transform 160ms ease,
     background 160ms ease,
+    border-color 160ms ease,
     box-shadow 160ms ease;
 }
 
 .rail-restore-control::before {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
-  transform: translateX(-2px) rotate(-45deg);
+  opacity: 0.42;
+  transform: translateX(-4px) rotate(-45deg);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 
-.rail-restore-control:hover {
-  transform: translate(2px, -50%);
+.rail-restore-control:hover,
+.rail-restore-control:focus-visible {
+  width: 32px;
+  transform: translate(1px, -50%);
+  border-color: rgba(31, 111, 104, 0.44);
   background: rgba(31, 111, 104, 0.09);
   box-shadow: 0 10px 24px rgba(33, 29, 24, 0.16);
+}
+
+.rail-restore-control:hover::before,
+.rail-restore-control:focus-visible::before {
+  opacity: 1;
+  transform: translateX(-2px) rotate(-45deg);
 }
 
 .review-screen.rail-collapsed .rail-restore-control {
