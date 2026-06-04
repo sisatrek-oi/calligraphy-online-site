@@ -1392,6 +1392,40 @@ button:disabled {
   color: var(--red);
 }
 
+.review-cell .review-badge {
+  width: 100%;
+  justify-content: center;
+  min-height: 24px;
+  border-radius: 999px;
+  border-style: solid;
+  background: rgba(255, 253, 246, 0.66);
+  font-size: 10px;
+}
+
+.review-cell .review-badge::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.72;
+}
+
+.review-cell .review-badge.confirmed {
+  background: rgba(31, 111, 104, 0.075);
+}
+
+.review-cell .review-badge.edited {
+  background: rgba(165, 120, 36, 0.075);
+}
+
+.review-cell .review-badge.pending {
+  border-color: rgba(51, 75, 92, 0.2);
+  background: rgba(51, 75, 92, 0.045);
+  color: rgba(51, 75, 92, 0.82);
+}
+
 .controls {
   display: grid;
   gap: 10px;
@@ -1597,6 +1631,23 @@ td.longtext-cell {
   max-width: clamp(210px, 22vw, 320px);
 }
 
+th.review-col,
+td.review-cell {
+  width: 118px;
+  min-width: 118px;
+  max-width: 118px;
+}
+
+td.review-cell {
+  padding: 8px;
+}
+
+.review-cell-inner {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+}
+
 td.longtext-cell {
   overflow: hidden;
   color: rgba(44, 39, 34, 0.86);
@@ -1615,6 +1666,13 @@ td.longtext-cell {
 .review-screen.table-focus td.longtext-cell {
   width: clamp(180px, 18vw, 260px);
   max-width: clamp(180px, 18vw, 260px);
+}
+
+.review-screen.table-focus th.review-col,
+.review-screen.table-focus td.review-cell {
+  width: 104px;
+  min-width: 104px;
+  max-width: 104px;
 }
 
 tbody tr {
@@ -1693,13 +1751,13 @@ td button {
 
 .review-screen.table-focus td button,
 .review-screen.table-focus .row-actions button {
-  min-height: 24px;
-  padding: 0 6px;
+  min-height: 22px;
+  padding: 0 5px;
   font-size: 10px;
 }
 
 .review-screen.table-focus .row-actions {
-  margin-top: 4px;
+  gap: 3px;
 }
 
 .review-screen.table-focus .review-badge,
@@ -1718,7 +1776,7 @@ td button {
 }
 
 .row-actions {
-  margin-top: 7px;
+  gap: 4px;
 }
 
 .row-actions button,
@@ -1733,11 +1791,48 @@ td button {
   padding: 0 9px;
 }
 
+.row-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 26px;
+  border-color: rgba(51, 75, 92, 0.18);
+  background: rgba(255, 253, 246, 0.64);
+  color: rgba(51, 75, 92, 0.86);
+  padding: 0 5px;
+  font-size: 11px;
+  transition:
+    transform 140ms var(--ease-out),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.row-actions button:hover {
+  border-color: rgba(31, 111, 104, 0.38);
+  background: rgba(31, 111, 104, 0.1);
+  color: var(--teal);
+  transform: translateY(-1px);
+}
+
+.row-actions button.primary {
+  border-color: rgba(31, 111, 104, 0.24);
+  background: rgba(31, 111, 104, 0.08);
+  color: var(--teal);
+  font-weight: 600;
+}
+
 .row-actions button.danger,
 .review-actions button.danger {
   border-color: rgba(159, 63, 47, 0.34);
   background: rgba(159, 63, 47, 0.08);
   color: var(--red);
+}
+
+.row-actions button.danger {
+  flex: 0 0 28px;
+  padding: 0;
+  border-color: rgba(159, 63, 47, 0.22);
+  background: rgba(159, 63, 47, 0.055);
 }
 
 .review-actions {

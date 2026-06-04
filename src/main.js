@@ -1082,9 +1082,18 @@ function reviewBadge(row) {
 function rowActionButtons(row) {
   return `
     <div class="row-actions">
-      <button type="button" data-row-action="confirm" data-row-id="${escapeHtml(row.id)}">${row.reviewed ? "已确认" : "确认"}</button>
-      <button type="button" data-row-action="edit" data-row-id="${escapeHtml(row.id)}">修改</button>
-      <button type="button" class="danger" data-row-action="delete" data-row-id="${escapeHtml(row.id)}">删除</button>
+      <button type="button" class="primary" data-row-action="confirm" data-row-id="${escapeHtml(row.id)}">${row.reviewed ? "已确认" : "确认"}</button>
+      <button type="button" data-row-action="edit" data-row-id="${escapeHtml(row.id)}">编辑</button>
+      <button type="button" class="danger" data-row-action="delete" data-row-id="${escapeHtml(row.id)}" aria-label="删除 ${escapeHtml(row.id)}" title="删除">删</button>
+    </div>
+  `;
+}
+
+function reviewCell(row) {
+  return `
+    <div class="review-cell-inner">
+      ${reviewBadge(row)}
+      ${rowActionButtons(row)}
     </div>
   `;
 }
@@ -1111,7 +1120,7 @@ function resultTable(rows) {
         <thead>
           <tr>
             <th>回检</th>
-            <th>审校</th>
+            <th class="review-col">审校</th>
             <th>字段</th>
             <th>置信</th>
             <th>附表</th>
@@ -1122,7 +1131,7 @@ function resultTable(rows) {
           ${rows.map((row, index) => `
             <tr class="${row.id === state.selectedId ? "selected" : ""} ${row.abnormal ? "abnormal" : ""} ${!rowValidation(row).ok ? "invalid" : ""}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
               <td><button type="button" data-row-id="${escapeHtml(row.id)}">查看</button></td>
-              <td>${reviewBadge(row)}${rowActionButtons(row)}</td>
+              <td class="review-cell">${reviewCell(row)}</td>
               <td>${validationBadge(row)}</td>
               <td>${confidencePill(row)}</td>
               <td><span class="appendix">${escapeHtml(row.appendixCode)}</span>${escapeHtml(row.status)}</td>
@@ -2056,10 +2065,10 @@ function updateTableRowStatus(row) {
   if (!tableRow) return;
   tableRow.classList.toggle("abnormal", row.abnormal);
   tableRow.classList.toggle("invalid", !rowValidation(row).ok);
-  const reviewCell = tableRow.children[1];
+  const reviewCellEl = tableRow.children[1];
   const validationCell = tableRow.children[2];
   const confidenceCell = tableRow.children[3];
-  if (reviewCell) reviewCell.innerHTML = `${reviewBadge(row)}${rowActionButtons(row)}`;
+  if (reviewCellEl) reviewCellEl.innerHTML = reviewCell(row);
   if (validationCell) validationCell.innerHTML = validationBadge(row);
   if (confidenceCell) confidenceCell.innerHTML = confidencePill(row);
 }
