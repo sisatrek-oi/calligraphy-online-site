@@ -776,32 +776,51 @@ button:disabled {
 }
 
 .rail-collapse-control {
+  width: 28px;
+  height: 28px;
   min-height: 28px;
+  display: grid;
+  place-items: center;
+  align-self: end;
   border: 1px solid rgba(31, 111, 104, 0.28);
+  border-radius: 6px;
   background: rgba(31, 111, 104, 0.07);
   color: var(--teal);
   cursor: pointer;
-  padding: 0 8px;
-  font-family: var(--mono);
-  font-size: 10px;
+  padding: 0;
   transition:
     transform 160ms ease,
     border-color 160ms ease,
-    background 160ms ease;
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.rail-collapse-control::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateX(2px) rotate(135deg);
+  transition: transform 180ms ease;
 }
 
 .rail-collapse-control:hover {
   transform: translateY(-1px);
   border-color: rgba(31, 111, 104, 0.44);
   background: rgba(31, 111, 104, 0.12);
+  box-shadow: 0 8px 18px rgba(31, 111, 104, 0.1);
 }
 
 .rail-collapse-control.active {
   width: 32px;
-  min-height: 124px;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  letter-spacing: 0;
+  height: 44px;
+  min-height: 44px;
+  align-self: center;
+}
+
+.rail-collapse-control.active::before {
+  transform: translateX(-2px) rotate(-45deg);
 }
 
 .rail-identity .workspace-status {

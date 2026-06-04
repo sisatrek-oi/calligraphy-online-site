@@ -1937,10 +1937,13 @@ function applyTableViewState() {
     headButton.setAttribute("aria-pressed", String(state.tableHeaderCollapsed));
   }
   railButtons.forEach((railButton) => {
-    railButton.textContent = state.railCollapsed ? "显示侧栏" : "隐藏侧栏";
+    if (!railButton.classList.contains("rail-collapse-control")) {
+      railButton.textContent = state.railCollapsed ? "显示侧栏" : "隐藏侧栏";
+    }
     railButton.classList.toggle("active", state.railCollapsed);
     railButton.setAttribute("aria-pressed", String(state.railCollapsed));
     railButton.setAttribute("aria-label", state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏");
+    railButton.setAttribute("title", state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏");
   });
   if (focusButton) {
     focusButton.textContent = state.tableFocus ? "退出专注" : "专注表格";
@@ -2248,7 +2251,7 @@ function renderDetail() {
   renderShell(`
     <section class="review-screen ${state.detailCollapsed ? "detail-collapsed" : ""} ${state.railCollapsed || state.tableFocus ? "rail-collapsed" : ""} ${state.tableFocus ? "table-focus" : ""} ${state.tableHeaderCollapsed ? "table-head-collapsed" : ""}">
       <aside class="dataset-rail">
-        <button type="button" class="rail-collapse-control ${state.railCollapsed ? "active" : ""}" data-rail-toggle aria-pressed="${String(state.railCollapsed)}" aria-label="${state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏"}">${state.railCollapsed ? "显示侧栏" : "隐藏侧栏"}</button>
+        <button type="button" class="rail-collapse-control ${state.railCollapsed ? "active" : ""}" data-rail-toggle aria-pressed="${String(state.railCollapsed)}" aria-label="${state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏"}" title="${state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏"}"></button>
         <div class="rail-identity">
           <p class="kicker">Current Dataset</p>
           <h2>${escapeHtml(state.datasetName)}</h2>
@@ -2433,7 +2436,9 @@ function attachHomeEvents() {
 function attachDetailEvents() {
   document.querySelector("[data-detail-toggle]")?.addEventListener("click", toggleDetailDock);
   document.querySelector("[data-filter-toggle]")?.addEventListener("click", toggleFilters);
-  document.querySelector("[data-rail-toggle]")?.addEventListener("click", toggleRail);
+  document.querySelectorAll("[data-rail-toggle]").forEach((button) => {
+    button.addEventListener("click", toggleRail);
+  });
   document.querySelector("[data-table-head-toggle]")?.addEventListener("click", toggleTableHeader);
   document.querySelector("[data-table-focus]")?.addEventListener("click", toggleTableFocus);
 
