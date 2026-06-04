@@ -1101,11 +1101,21 @@ function reviewBadge(row) {
 }
 
 function rowActionButtons(row) {
+  const confirmLabel = row.reviewed ? "已确认" : "确认";
   return `
-    <div class="row-actions">
-      <button type="button" class="primary" data-row-action="confirm" data-row-id="${escapeHtml(row.id)}">${row.reviewed ? "已确认" : "确认"}</button>
-      <button type="button" data-row-action="edit" data-row-id="${escapeHtml(row.id)}">编辑</button>
-      <button type="button" class="danger" data-row-action="delete" data-row-id="${escapeHtml(row.id)}" aria-label="删除 ${escapeHtml(row.id)}" title="删除">删</button>
+    <div class="row-actions ${row.reviewed ? "is-reviewed" : ""}" aria-label="审校操作">
+      <button type="button" class="review-action confirm" data-row-action="confirm" data-row-id="${escapeHtml(row.id)}" aria-pressed="${row.reviewed ? "true" : "false"}">
+        <span class="action-mark" aria-hidden="true">✓</span>
+        <span>${confirmLabel}</span>
+      </button>
+      <button type="button" class="review-action edit" data-row-action="edit" data-row-id="${escapeHtml(row.id)}">
+        <span class="action-mark" aria-hidden="true">改</span>
+        <span>修订</span>
+      </button>
+      <button type="button" class="review-action danger" data-row-action="delete" data-row-id="${escapeHtml(row.id)}" aria-label="移除 ${escapeHtml(row.id)}" title="移除">
+        <span class="action-mark" aria-hidden="true">×</span>
+        <span>移除</span>
+      </button>
     </div>
   `;
 }

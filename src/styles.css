@@ -1633,9 +1633,9 @@ td.longtext-cell {
 
 th.review-col,
 td.review-cell {
-  width: 118px;
-  min-width: 118px;
-  max-width: 118px;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
 }
 
 td.review-cell {
@@ -1803,7 +1803,23 @@ td button {
 }
 
 .row-actions {
-  gap: 4px;
+  --review-action-border: rgba(51, 75, 92, 0.18);
+  --review-action-surface: rgba(255, 253, 246, 0.72);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.78fr);
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--review-action-border);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 246, 0.94), rgba(241, 235, 224, 0.62)),
+    var(--review-action-surface);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.74),
+    0 6px 14px rgba(44, 39, 34, 0.035);
+}
+
+.row-actions.is-reviewed {
+  --review-action-border: rgba(31, 111, 104, 0.26);
 }
 
 .row-actions button,
@@ -1819,33 +1835,58 @@ td button {
 }
 
 .row-actions button {
-  flex: 1 1 0;
   min-width: 0;
-  min-height: 26px;
-  border-color: rgba(51, 75, 92, 0.18);
-  background: rgba(255, 253, 246, 0.64);
+  min-height: 27px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: rgba(51, 75, 92, 0.86);
-  padding: 0 5px;
-  font-size: 11px;
+  padding: 0 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  justify-content: center;
+  white-space: nowrap;
   transition:
     transform 140ms var(--ease-out),
     background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
+    color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .row-actions button:hover {
-  border-color: rgba(31, 111, 104, 0.38);
-  background: rgba(31, 111, 104, 0.1);
+  background: rgba(31, 111, 104, 0.075);
   color: var(--teal);
   transform: translateY(-1px);
 }
 
-.row-actions button.primary {
-  border-color: rgba(31, 111, 104, 0.24);
+.row-actions button:focus-visible {
+  outline: 2px solid rgba(31, 111, 104, 0.38);
+  outline-offset: -2px;
+}
+
+.row-actions .review-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.row-actions .review-action.confirm {
+  grid-row: span 2;
+  min-height: 54px;
+  border-right: 1px solid var(--review-action-border);
   background: rgba(31, 111, 104, 0.08);
   color: var(--teal);
   font-weight: 600;
+}
+
+.row-actions.is-reviewed .review-action.confirm {
+  background:
+    linear-gradient(180deg, rgba(31, 111, 104, 0.16), rgba(31, 111, 104, 0.09));
+  box-shadow: inset 3px 0 0 rgba(31, 111, 104, 0.48);
+}
+
+.row-actions .review-action.edit {
+  border-bottom: 1px solid var(--review-action-border);
 }
 
 .row-actions button.danger,
@@ -1856,10 +1897,33 @@ td button {
 }
 
 .row-actions button.danger {
-  flex: 0 0 28px;
-  padding: 0;
-  border-color: rgba(159, 63, 47, 0.22);
-  background: rgba(159, 63, 47, 0.055);
+  background: rgba(159, 63, 47, 0.045);
+}
+
+.row-actions .action-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 15px;
+  border: 1px solid currentColor;
+  color: currentColor;
+  font-size: 7px;
+  line-height: 1;
+  opacity: 0.58;
+}
+
+.row-actions .review-action.confirm .action-mark {
+  opacity: 0.72;
+}
+
+.row-actions .review-action.danger .action-mark {
+  min-width: 20px;
+}
+
+.row-actions .review-action.edit .action-mark,
+.row-actions .review-action.danger .action-mark {
+  display: none;
 }
 
 .review-actions {
