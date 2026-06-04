@@ -127,6 +127,7 @@ const state = {
   railCollapsed: false,
   tableFocus: false,
   tableHeaderCollapsed: false,
+  confidenceSort: "desc",
   templatePanelExpanded: false
 };
 
@@ -764,13 +765,14 @@ function rowMatchesQualityFocus(row) {
 
 function visibleRows() {
   const query = state.query.trim().toLowerCase();
-  return state.rows.filter((row) => {
+  const rows = state.rows.filter((row) => {
     const filterPass = state.filter === "all"
       || (state.filter === "abnormal" ? row.abnormal : state.filter === "invalid" ? !rowValidation(row).ok : row.bucket === state.filter);
     const focusPass = rowMatchesQualityFocus(row);
     const queryPass = !query || rowText(row).toLowerCase().includes(query);
     return filterPass && focusPass && queryPass;
   });
+  return sortRowsByConfidence(rows);
 }
 
 function selectedRow() {
@@ -1047,14 +1049,33 @@ function sourceQuality(row, useLoadedText = false) {
   }
 
   const normalized = Math.max(0, Math.min(100, Math.round(score)));
-  const tone = normalized >= 82 ? "high" : normalized >= 64 ? "medium" : normalized >= 42 ? "low" : "risk";
-  const label = normalized >= 82 ? "高" : normalized >= 64 ? "中" : normalized >= 42 ? "待复核" : "低";
+  const thresholds = useLoadedText
+    ? { high: 82, medium: 64, low: 42 }
+    : { high: 74, medium: 58, low: 38 };
+  const tone = normalized >= thresholds.high ? "high" : normalized >= thresholds.medium ? "medium" : normalized >= thresholds.low ? "low" : "risk";
+  const label = normalized >= thresholds.high ? "高" : normalized >= thresholds.medium ? "中" : normalized >= thresholds.low ? "待复核" : "低";
   return { score: normalized, tone, label, factors };
 }
 
 function confidencePill(row) {
   const quality = sourceQuality(row, false);
   return `<span class="confidence-chip ${quality.tone}">${quality.score} · ${quality.label}</span>`;
+}
+
+function confidenceSortLabel() {
+  return state.confidenceSort === "desc" ? "高置信优先" : "低置信优先";
+}
+
+function sortRowsByConfidence(rows) {
+  const direction = state.confidenceSort === "asc" ? 1 : -1;
+  return rows
+    .map((row, index) => ({ row, index, quality: sourceQuality(row, false) }))
+    .sort((a, b) => {
+      const scoreDiff = (a.quality.score - b.quality.score) * direction;
+      if (scoreDiff) return scoreDiff;
+      return a.index - b.index;
+    })
+    .map((item) => item.row);
 }
 
 function validationBadge(row) {
@@ -1128,8 +1149,10 @@ function resultTable(rows) {
           </tr>
         </thead>
         <tbody>
-          ${rows.map((row, index) => `
-            <tr class="${row.id === state.selectedId ? "selected" : ""} ${row.abnormal ? "abnormal" : ""} ${!rowValidation(row).ok ? "invalid" : ""}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
+          ${rows.map((row, index) => {
+            const quality = sourceQuality(row, false);
+            return `
+            <tr class="${row.id === state.selectedId ? "selected" : ""} ${row.abnormal ? "abnormal" : ""} ${!rowValidation(row).ok ? "invalid" : ""} confidence-row confidence-${quality.tone}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
               <td><button type="button" data-row-id="${escapeHtml(row.id)}">查看</button></td>
               <td class="review-cell">${reviewCell(row)}</td>
               <td>${validationBadge(row)}</td>
@@ -1146,7 +1169,8 @@ function resultTable(rows) {
                 return `<td class="${isLongText ? "longtext-cell" : ""}" title="${escapeHtml(value)}">${content}</td>`;
               }).join("")}
             </tr>
-          `).join("")}
+          `;
+          }).join("")}
         </tbody>
       </table>
     </div>
@@ -1390,6 +1414,7 @@ function resultsControlPanel(rows) {
 function tableViewActions() {
   return `
     <div class="table-view-actions" aria-label="表格视图控制">
+      <button type="button" class="active" data-confidence-sort aria-pressed="true">${confidenceSortLabel()}</button>
       <button type="button" class="${state.tableFocus ? "active" : ""}" data-table-focus aria-pressed="${String(state.tableFocus)}">${state.tableFocus ? "退出专注" : "专注表格"}</button>
       <button type="button" class="${state.tableHeaderCollapsed ? "active" : ""}" data-table-head-toggle aria-pressed="${String(state.tableHeaderCollapsed)}">${state.tableHeaderCollapsed ? "显示表头" : "收起表头"}</button>
     </div>
@@ -1989,6 +2014,13 @@ function toggleTableHeader() {
   applyTableViewState();
 }
 
+function toggleConfidenceSort() {
+  state.confidenceSort = state.confidenceSort === "desc" ? "asc" : "desc";
+  state.selectedId = visibleRows()[0]?.id || "";
+  render();
+  loadSelectedSource();
+}
+
 function toggleTableFocus() {
   state.tableFocus = !state.tableFocus;
   if (state.tableFocus) {
@@ -2468,6 +2500,7 @@ function attachDetailEvents() {
     button.addEventListener("click", toggleRail);
   });
   document.querySelector("[data-table-head-toggle]")?.addEventListener("click", toggleTableHeader);
+  document.querySelector("[data-confidence-sort]")?.addEventListener("click", toggleConfidenceSort);
   document.querySelector("[data-table-focus]")?.addEventListener("click", toggleTableFocus);
 
   document.querySelectorAll("[data-filter]").forEach((button) => {

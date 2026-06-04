@@ -1677,6 +1677,7 @@ td.longtext-cell {
 
 tbody tr {
   position: relative;
+  --confidence-accent: rgba(31, 111, 104, 0.6);
   cursor: pointer;
   animation: rowIn 320ms ease both;
   animation-delay: var(--row-delay, 0ms);
@@ -1695,7 +1696,7 @@ tbody tr td:first-child::before {
   position: absolute;
   inset: 0 auto 0 0;
   width: 4px;
-  background: var(--teal);
+  background: var(--confidence-accent);
   opacity: 0;
   transform: scaleY(0.28);
   transform-origin: center;
@@ -1706,6 +1707,25 @@ tbody tr td:first-child::before {
 
 tbody tr:nth-child(even) {
   background: rgba(238, 243, 239, 0.45);
+}
+
+tbody tr.confidence-high {
+  --confidence-accent: rgba(31, 111, 104, 0.72);
+  background: linear-gradient(90deg, rgba(31, 111, 104, 0.105), rgba(31, 111, 104, 0.025) 42%, rgba(255, 253, 246, 0) 100%);
+}
+
+tbody tr.confidence-medium {
+  --confidence-accent: rgba(165, 120, 36, 0.58);
+}
+
+tbody tr.confidence-low {
+  --confidence-accent: rgba(165, 120, 36, 0.78);
+  background: linear-gradient(90deg, rgba(165, 120, 36, 0.12), rgba(165, 120, 36, 0.035) 44%, rgba(255, 253, 246, 0) 100%);
+}
+
+tbody tr.confidence-risk {
+  --confidence-accent: rgba(159, 63, 47, 0.78);
+  background: linear-gradient(90deg, rgba(159, 63, 47, 0.13), rgba(159, 63, 47, 0.035) 44%, rgba(255, 253, 246, 0) 100%);
 }
 
 tbody tr:hover,
@@ -1730,6 +1750,13 @@ tbody tr.selected {
 tbody tr.selected td:first-child::before {
   opacity: 1;
   transform: scaleY(1);
+}
+
+tbody tr.confidence-high td:first-child::before,
+tbody tr.confidence-low td:first-child::before,
+tbody tr.confidence-risk td:first-child::before {
+  opacity: 0.62;
+  transform: scaleY(0.72);
 }
 
 tbody tr.abnormal:not(.selected) {
