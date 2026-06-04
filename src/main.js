@@ -1924,7 +1924,7 @@ function applyTableViewState() {
   const screen = document.querySelector(".review-screen");
   const shell = document.querySelector(".app-shell");
   const headButton = document.querySelector("[data-table-head-toggle]");
-  const railButton = document.querySelector("[data-rail-toggle]");
+  const railButtons = document.querySelectorAll("[data-rail-toggle]");
   const focusButton = document.querySelector("[data-table-focus]");
   screen?.classList.toggle("detail-collapsed", state.detailCollapsed);
   screen?.classList.toggle("rail-collapsed", state.railCollapsed || state.tableFocus);
@@ -1936,11 +1936,12 @@ function applyTableViewState() {
     headButton.classList.toggle("active", state.tableHeaderCollapsed);
     headButton.setAttribute("aria-pressed", String(state.tableHeaderCollapsed));
   }
-  if (railButton) {
+  railButtons.forEach((railButton) => {
     railButton.textContent = state.railCollapsed ? "显示侧栏" : "隐藏侧栏";
     railButton.classList.toggle("active", state.railCollapsed);
     railButton.setAttribute("aria-pressed", String(state.railCollapsed));
-  }
+    railButton.setAttribute("aria-label", state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏");
+  });
   if (focusButton) {
     focusButton.textContent = state.tableFocus ? "退出专注" : "专注表格";
     focusButton.classList.toggle("active", state.tableFocus);
@@ -2247,6 +2248,7 @@ function renderDetail() {
   renderShell(`
     <section class="review-screen ${state.detailCollapsed ? "detail-collapsed" : ""} ${state.railCollapsed || state.tableFocus ? "rail-collapsed" : ""} ${state.tableFocus ? "table-focus" : ""} ${state.tableHeaderCollapsed ? "table-head-collapsed" : ""}">
       <aside class="dataset-rail">
+        <button type="button" class="rail-collapse-control ${state.railCollapsed ? "active" : ""}" data-rail-toggle aria-pressed="${String(state.railCollapsed)}" aria-label="${state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏"}">${state.railCollapsed ? "显示侧栏" : "隐藏侧栏"}</button>
         <div class="rail-identity">
           <p class="kicker">Current Dataset</p>
           <h2>${escapeHtml(state.datasetName)}</h2>
