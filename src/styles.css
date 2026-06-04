@@ -430,6 +430,23 @@ button:disabled {
   cursor: pointer;
   padding: 0 7px;
   font: inherit;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.schema-summary-meta button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(31, 111, 104, 0.44);
+  background: rgba(31, 111, 104, 0.12);
+  box-shadow: 0 8px 18px rgba(31, 111, 104, 0.1);
+}
+
+.schema-summary-meta button:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
 }
 
 .schema-panel-body {
@@ -2026,6 +2043,7 @@ mark {
   z-index: 24;
   background: rgba(33, 29, 24, 0.38);
   backdrop-filter: blur(18px) saturate(0.92);
+  animation: templateBackdropIn 220ms ease both;
 }
 
 .template-modal {
@@ -2035,6 +2053,8 @@ mark {
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   padding: 0;
+  transform-origin: 50% 42%;
+  animation: templateModalIn 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .template-modal-head {
@@ -2043,6 +2063,7 @@ mark {
   justify-content: space-between;
   gap: 18px;
   padding: 18px;
+  animation: templateLayerIn 300ms ease 70ms both;
 }
 
 .template-modal-head h2 {
@@ -2055,6 +2076,7 @@ mark {
   min-height: 0;
   overflow: auto;
   padding: 16px 18px 18px;
+  animation: templateLayerIn 320ms ease 120ms both;
 }
 
 .template-modal .schema-panel-body {
@@ -2064,6 +2086,26 @@ mark {
 .template-modal .field-list {
   max-height: none;
   padding-right: 5px;
+}
+
+.template-modal .field-config {
+  animation: templateFieldIn 260ms ease both;
+}
+
+.template-modal .field-config:nth-child(2) {
+  animation-delay: 25ms;
+}
+
+.template-modal .field-config:nth-child(3) {
+  animation-delay: 50ms;
+}
+
+.template-modal .field-config:nth-child(4) {
+  animation-delay: 75ms;
+}
+
+.template-modal .field-config:nth-child(n + 5) {
+  animation-delay: 100ms;
 }
 
 .modal-head {
@@ -2215,6 +2257,50 @@ mark {
   from {
     opacity: 0;
     transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes templateBackdropIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0) saturate(1);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(18px) saturate(0.92);
+  }
+}
+
+@keyframes templateModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes templateLayerIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes templateFieldIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
