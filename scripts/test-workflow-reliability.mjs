@@ -167,6 +167,74 @@ test("local AI configuration remains available without cloud sync", async () => 
   assert.equal(a.get("state.cloud.mode"), "local");
 });
 
+test("project settings separates schema and local model connection without storing the key", async () => {
+  const a = app();
+  a.set("fetch", async (url) => ({
+    ok: url === "/api/model-config",
+    status: url === "/api/model-config" ? 200 : 404,
+    json: async () => ({
+      supported: true,
+      configured: true,
+      source: "local-file",
+      apiUrl: "https://api.example.com/chat",
+      model: "model-a",
+      keyHint: "1234"
+    })
+  }));
+  await a.run("loadModelConfig()");
+  a.run("state.templatePanelExpanded = true; state.settingsTab = 'model'");
+  const markup = a.run("templateDetailsModal()");
+  assert.match(markup, /data-settings-tab="schema"/);
+  assert.match(markup, /data-settings-tab="model"/);
+  assert.match(markup, /已保存 · 尾号 1234/);
+  assert.doesNotMatch(markup, /local-secret|value="[^"]*1234/);
+  assert.equal(a.disk.has("calligraphy-model-config"), false);
+});
+
+test("static deployment disables model persistence without hiding environment AI", async () => {
+  const a = app();
+  a.set("fetch", async () => ({ ok: false, status: 404, json: async () => ({}) }));
+  await a.run("loadModelConfig()");
+  assert.equal(a.get("state.modelSettings.supported"), false);
+  assert.match(a.run("modelSettingsPanel()"), /当前部署不支持网页配置/);
+  assert.match(a.run("modelSettingsPanel()"), /data-model-save disabled/);
+});
+
+test("model configuration requests use the local API without persisting the key in workspace data", async () => {
+  const a = app();
+  const requests = [];
+  a.set("requests", requests);
+  a.set("fetch", async (url, options = {}) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => url.endsWith("/test")
+        ? { ok: true, model: "model-b", elapsedMs: 21 }
+        : options.method === "DELETE"
+          ? { supported: true, configured: true, source: "environment", apiUrl: "https://env.example.com/chat", model: "env-model", keyHint: "iron" }
+          : { supported: true, configured: true, source: "local-file", apiUrl: "https://api.example.com/chat", model: "model-b", keyHint: "cret" }
+    };
+  });
+  a.set("modelForm", {
+    apiUrl: "https://api.example.com/chat",
+    apiKey: "temporary-secret",
+    model: "model-b"
+  });
+  await a.run("testModelConfig(modelForm)");
+  await a.run("saveModelConfig(modelForm)");
+  await a.run("deleteModelConfig()");
+  assert.deepEqual(requests.map((item) => [item.url, item.options.method]), [
+    ["/api/model-config/test", "POST"],
+    ["/api/model-config", "PUT"],
+    ["/api/model-config", "DELETE"]
+  ]);
+  assert.equal(JSON.parse(requests[0].options.body).apiKey, "temporary-secret");
+  assert.equal([...a.disk.values()].some((value) => value.includes("temporary-secret")), false);
+  assert.equal(JSON.stringify(a.get("workspacePayload()")).includes("temporary-secret"), false);
+  assert.equal(JSON.stringify(a.get("state.modelSettings")).includes("temporary-secret"), false);
+});
+
 test("table and review share four summary slots, three toolbar slots and the dock preference", () => {
   const a = app();
   loadSample(a);

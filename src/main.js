@@ -182,6 +182,19 @@ const state = {
   tableHeaderCollapsed: false,
   confidenceSort: "desc",
   templatePanelExpanded: false,
+  settingsTab: "schema",
+  modelSettings: {
+    status: "idle",
+    supported: null,
+    configured: false,
+    source: "none",
+    apiUrl: "",
+    model: "",
+    keyHint: "",
+    draftApiUrl: "",
+    draftModel: "",
+    message: ""
+  },
   researchQuery: "",
   researchStatus: "idle",
   researchResults: [],
@@ -1947,24 +1960,223 @@ function templateEditorContent() {
   `;
 }
 
+function modelSettingsSourceLabel(source) {
+  if (source === "local-file") return "本地配置";
+  if (source === "environment") return "环境变量";
+  return "未配置";
+}
+
+function modelSettingsPanel() {
+  const settings = state.modelSettings;
+  const supported = settings.supported !== false;
+  const busy = ["loading", "testing", "saving", "deleting"].includes(settings.status);
+  const canDelete = supported && !busy && settings.source === "local-file";
+  const sourceLabel = modelSettingsSourceLabel(settings.source);
+  const keyPlaceholder = settings.source === "local-file"
+    ? "留空则沿用已保存密钥"
+    : "请输入 API Key";
+  const message = settings.supported === false
+    ? "当前部署不支持网页配置，请使用服务端环境变量。"
+    : settings.message || (settings.configured ? `当前使用${sourceLabel}` : "填写配置后可先测试连接，再决定是否保存。 ");
+  return `
+    <section class="model-settings-panel" aria-label="模型连接">
+      <div class="model-settings-heading">
+        <div>
+          <p class="kicker">Model Connection</p>
+          <h3>模型连接</h3>
+        </div>
+        <span class="model-config-state ${settings.configured ? "ready" : ""}">${escapeHtml(settings.configured ? `${sourceLabel} · ${settings.model}` : sourceLabel)}</span>
+      </div>
+      <form class="model-settings-form" id="modelSettingsForm">
+        <div class="model-settings-grid">
+          <label class="wide">接口地址
+            <input name="apiUrl" type="url" required autocomplete="url" spellcheck="false" value="${escapeHtml(settings.draftApiUrl)}" placeholder="https://api.example.com/v1/chat/completions" ${supported ? "" : "disabled"} />
+          </label>
+          <label>API Key
+            <input name="apiKey" type="password" autocomplete="off" spellcheck="false" value="" placeholder="${escapeHtml(keyPlaceholder)}" ${supported ? "" : "disabled"} />
+          </label>
+          <label>模型名
+            <input name="model" required autocomplete="off" spellcheck="false" value="${escapeHtml(settings.draftModel)}" placeholder="deepseek-chat" ${supported ? "" : "disabled"} />
+          </label>
+        </div>
+        <div class="model-settings-meta">
+          <span>${escapeHtml(settings.apiUrl || "尚未保存接口地址")}</span>
+          <span>${settings.keyHint ? `已保存 · 尾号 ${escapeHtml(settings.keyHint)}` : "尚未保存密钥"}</span>
+        </div>
+        <p class="model-settings-message ${settings.status === "error" ? "error" : ""}" data-model-message data-status="${escapeHtml(settings.status)}" aria-live="polite">${escapeHtml(message.trim())}</p>
+        <div class="model-settings-actions">
+          <button type="button" data-model-test ${supported && !busy ? "" : "disabled"}>测试连接</button>
+          <button type="submit" data-model-save ${supported && !busy ? "" : "disabled"}>保存配置</button>
+          <button type="button" class="danger" data-model-delete ${canDelete ? "" : "disabled"}>删除配置</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function applyPublicModelConfig(payload, message = "") {
+  const configured = Boolean(payload?.configured);
+  const apiUrl = String(payload?.apiUrl || "");
+  const model = String(payload?.model || "");
+  state.modelSettings = {
+    ...state.modelSettings,
+    status: "ready",
+    supported: payload?.supported !== false,
+    configured,
+    source: ["local-file", "environment"].includes(payload?.source) ? payload.source : "none",
+    apiUrl,
+    model,
+    keyHint: String(payload?.keyHint || "").slice(-4),
+    draftApiUrl: apiUrl,
+    draftModel: model,
+    message
+  };
+  state.cloud.config = { ...(state.cloud.config || { enabled: false }), aiEnabled: configured };
+}
+
+function rerenderModelSettings() {
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
+function setModelSettingsMessage(status, message) {
+  state.modelSettings.status = status;
+  state.modelSettings.message = message;
+  const node = document.querySelector("[data-model-message]");
+  if (node) {
+    node.textContent = message;
+    node.dataset.status = status;
+    node.classList.toggle("error", status === "error");
+  }
+  const busy = ["testing", "saving", "deleting"].includes(status);
+  document.querySelectorAll("[data-model-test], [data-model-save], [data-model-delete]").forEach((button) => {
+    if (button.matches("[data-model-delete]")) {
+      button.disabled = busy || state.modelSettings.source !== "local-file";
+    } else {
+      button.disabled = busy || state.modelSettings.supported === false;
+    }
+  });
+}
+
+async function modelConfigResponse(response) {
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `模型配置服务返回 ${response.status}`);
+  return payload;
+}
+
+async function loadModelConfig() {
+  state.modelSettings.status = "loading";
+  state.modelSettings.message = "正在读取模型配置...";
+  try {
+    const response = await fetch("/api/model-config", { cache: "no-store" });
+    if ([404, 405].includes(response.status)) {
+      state.modelSettings = {
+        ...state.modelSettings,
+        status: "unsupported",
+        supported: false,
+        message: "当前部署不支持网页配置，请使用服务端环境变量。"
+      };
+    } else {
+      applyPublicModelConfig(await modelConfigResponse(response));
+    }
+  } catch (error) {
+    state.modelSettings = {
+      ...state.modelSettings,
+      status: "error",
+      supported: state.modelSettings.supported,
+      message: error?.message || "模型配置读取失败"
+    };
+  }
+  rerenderModelSettings();
+  return state.modelSettings.supported !== false;
+}
+
+function modelConfigPayload(form) {
+  const data = new FormData(form);
+  return {
+    apiUrl: String(data.get("apiUrl") || "").trim(),
+    apiKey: String(data.get("apiKey") || "").trim(),
+    model: String(data.get("model") || "").trim()
+  };
+}
+
+async function testModelConfig(form) {
+  if (!form || state.modelSettings.supported === false) return false;
+  const payload = modelConfigPayload(form);
+  setModelSettingsMessage("testing", "正在测试连接...");
+  try {
+    const response = await fetch("/api/model-config/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await modelConfigResponse(response);
+    setModelSettingsMessage("success", `连接成功 · ${String(result.model || payload.model)} · ${Number(result.elapsedMs) || 0} ms`);
+    return true;
+  } catch (error) {
+    setModelSettingsMessage("error", error?.message || "模型连接测试失败");
+    return false;
+  }
+}
+
+async function saveModelConfig(form) {
+  if (!form || state.modelSettings.supported === false) return false;
+  const payload = modelConfigPayload(form);
+  setModelSettingsMessage("saving", "正在保存配置...");
+  try {
+    const response = await fetch("/api/model-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    applyPublicModelConfig(await modelConfigResponse(response), "配置已保存，后续 AI 请求将使用当前模型。");
+    const keyInput = form.querySelector?.("[name='apiKey']");
+    if (keyInput) keyInput.value = "";
+    rerenderModelSettings();
+    return true;
+  } catch (error) {
+    setModelSettingsMessage("error", error?.message || "模型配置保存失败");
+    return false;
+  }
+}
+
+async function deleteModelConfig() {
+  if (state.modelSettings.source !== "local-file" || !window.confirm("删除本地模型配置并回退到环境变量？")) return false;
+  setModelSettingsMessage("deleting", "正在删除本地配置...");
+  try {
+    const response = await fetch("/api/model-config", { method: "DELETE" });
+    applyPublicModelConfig(await modelConfigResponse(response), "本地配置已删除。 ");
+    rerenderModelSettings();
+    return true;
+  } catch (error) {
+    setModelSettingsMessage("error", error?.message || "模型配置删除失败");
+    return false;
+  }
+}
+
 function templateDetailsModal() {
   if (!state.templatePanelExpanded) return "";
   const current = templateById(state.schemaTemplateId);
   const visibleCount = orderedSchema({ includeHidden: false }).length;
   const totalCount = orderedSchema().length;
+  const modelTab = state.settingsTab === "model";
   return `
-    <div class="modal-backdrop template-backdrop" role="dialog" aria-modal="true" aria-label="字段模板详情">
+    <div class="modal-backdrop template-backdrop" role="dialog" aria-modal="true" aria-label="项目设置">
       <section class="edit-modal template-modal">
         <div class="modal-head template-modal-head">
           <div>
-            <h2>字段模板详情</h2>
-            <p>${escapeHtml(current.description)}</p>
-            <p>${escapeHtml(current.custom ? "我的模板" : "内置模板")} · ${visibleCount} / ${totalCount} 字段显示</p>
+            <h2>项目设置</h2>
+            <p>${escapeHtml(modelTab ? "配置本地模型连接；密钥不会写入浏览器或工作区数据。" : current.description)}</p>
+            <p>${escapeHtml(modelTab ? modelSettingsSourceLabel(state.modelSettings.source) : `${current.custom ? "我的模板" : "内置模板"} · ${visibleCount} / ${totalCount} 字段显示`)}</p>
           </div>
-          <button type="button" data-template-panel-close aria-label="关闭字段模板详情" title="关闭">×</button>
+          <button type="button" data-template-panel-close aria-label="关闭项目设置" title="关闭">×</button>
+        </div>
+        <div class="settings-tabs" role="tablist" aria-label="项目设置">
+          <button type="button" role="tab" data-settings-tab="schema" aria-selected="${String(!modelTab)}">字段模板</button>
+          <button type="button" role="tab" data-settings-tab="model" aria-selected="${String(modelTab)}">模型连接</button>
         </div>
         <div class="template-modal-body">
-          ${templateEditorContent()}
+          ${modelTab ? modelSettingsPanel() : templateEditorContent()}
         </div>
       </section>
     </div>
@@ -5239,9 +5451,12 @@ function openTemplatePanel() {
   state.templatePanelExpanded = true;
   render();
   if (state.view === "detail") loadSelectedSource();
+  if (state.settingsTab === "model" && state.modelSettings.status === "idle") loadModelConfig();
 }
 
 function closeTemplatePanel() {
+  const keyInput = document.querySelector("#modelSettingsForm [name='apiKey']");
+  if (keyInput) keyInput.value = "";
   state.templatePanelExpanded = false;
   render();
   if (state.view === "detail") loadSelectedSource();
@@ -5432,6 +5647,28 @@ function attachGlobalEvents() {
   document.querySelector(".template-backdrop")?.addEventListener("click", (event) => {
     if (event.target === event.currentTarget) closeTemplatePanel();
   });
+
+  document.querySelectorAll("[data-settings-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.settingsTab = button.dataset.settingsTab;
+      render();
+      if (state.settingsTab === "model" && state.modelSettings.status === "idle") loadModelConfig();
+    });
+  });
+
+  const modelSettingsForm = document.querySelector("#modelSettingsForm");
+  modelSettingsForm?.addEventListener("input", (event) => {
+    if (event.target.name === "apiUrl") state.modelSettings.draftApiUrl = event.target.value;
+    if (event.target.name === "model") state.modelSettings.draftModel = event.target.value;
+  });
+  modelSettingsForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveModelConfig(event.currentTarget);
+  });
+  document.querySelector("[data-model-test]")?.addEventListener("click", (event) => {
+    testModelConfig(event.currentTarget.form);
+  });
+  document.querySelector("[data-model-delete]")?.addEventListener("click", deleteModelConfig);
 
   document.querySelector("[data-template-select]")?.addEventListener("change", (event) => {
     applyTemplate(event.target.value);

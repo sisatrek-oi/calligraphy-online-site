@@ -330,7 +330,7 @@ git commit -m "feat: expose local model configuration API"
 - Modify: `src/main.js:5220-5480`
 - Test: `scripts/test-workflow-reliability.mjs`
 
-- [ ] **Step 1: 写入页签、安全状态和静态降级的失败测试**
+- [x] **Step 1: 写入页签、安全状态和静态降级的失败测试**
 
 在 `scripts/test-workflow-reliability.mjs` 增加：
 
@@ -360,13 +360,13 @@ test("static deployment disables model persistence without hiding environment AI
 });
 ```
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run: `node --test --test-name-pattern="project settings|static deployment" scripts/test-workflow-reliability.mjs`
 
 Expected: FAIL，提示 `loadModelConfig` 或 `modelSettingsPanel` 未定义。
 
-- [ ] **Step 3: 增加设置状态、页签和模型表单**
+- [x] **Step 3: 增加设置状态、页签和模型表单**
 
 在 `state` 中增加：
 
@@ -405,7 +405,7 @@ Expected: FAIL，提示 `loadModelConfig` 或 `modelSettingsPanel` 未定义。
 </form>
 ```
 
-- [ ] **Step 4: 实现读取、测试、保存和删除请求**
+- [x] **Step 4: 实现读取、测试、保存和删除请求**
 
 增加 `loadModelConfig()`、`testModelConfig(form)`、`saveModelConfig(form)`、`deleteModelConfig()`。请求体只来自当前表单；成功保存或关闭设置时执行：
 
@@ -419,7 +419,7 @@ function clearModelKeyDraft() {
 
 `closeTemplatePanel()` 同样清空 Key 草稿。所有失败保留用户当前表单值，但错误消息不得拼接请求体或密钥。`DELETE` 前沿用现有 `window.confirm()`。
 
-- [ ] **Step 5: 绑定页签和表单事件**
+- [x] **Step 5: 绑定页签和表单事件**
 
 在 `attachGlobalEvents()` 中绑定：
 
@@ -437,7 +437,7 @@ document.querySelector("#modelSettingsForm")?.addEventListener("submit", (event)
 document.querySelector("[data-model-delete]")?.addEventListener("click", deleteModelConfig);
 ```
 
-- [ ] **Step 6: 增加前端请求与持久化安全测试并提交**
+- [x] **Step 6: 增加前端请求与持久化安全测试并提交**
 
 补充测试，拦截 `fetch`，确认测试使用 `POST`、保存使用 `PUT`、删除使用 `DELETE`；断言 `workspacePayload()`、`localStorage` 和 HTML 均不包含测试 API Key。
 
