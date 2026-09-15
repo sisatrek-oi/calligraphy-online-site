@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import html
 import json
 import os
 import re
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -16,6 +19,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 SEARCH_URL = "https://html.duckduckgo.com/html/"
+MODEL_CONFIG_DIR = ROOT / ".runtime"
+MODEL_CONFIG_PATH = MODEL_CONFIG_DIR / "model-config.json"
+MAX_MODEL_URL_LENGTH = 2048
+MAX_MODEL_NAME_LENGTH = 200
+MAX_MODEL_KEY_LENGTH = 10000
 MAX_AI_SOURCE_LENGTH = 40000
 MAX_AI_FIELDS = 30
 MAX_REASON_LENGTH = 800
@@ -47,6 +55,106 @@ class ApiError(Exception):
     def __init__(self, message: str, status: int = 400) -> None:
         super().__init__(message)
         self.status = status
+
+
+def normalize_model_url(value: object) -> str:
+    url = str(value or "").strip()
+    if not url or len(url) > MAX_MODEL_URL_LENGTH:
+        raise ApiError("接口地址为空或过长")
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = (parsed.hostname or "").lower()
+    except ValueError as exc:
+        raise ApiError("接口地址格式无效") from exc
+    if parsed.username or parsed.password or not host:
+        raise ApiError("接口地址格式无效")
+    local_hosts = {"localhost", "127.0.0.1", "::1"}
+    if parsed.scheme != "https" and not (parsed.scheme == "http" and host in local_hosts):
+        raise ApiError("公网模型接口必须使用 HTTPS")
+    return url
+
+
+def normalize_model_config(payload: dict, existing_key: str = "") -> dict[str, str]:
+    if not isinstance(payload, dict):
+        raise ApiError("模型配置格式无效")
+    model = str(payload.get("model") or "").strip()
+    api_key = str(payload.get("apiKey") or existing_key).strip()
+    if not model or len(model) > MAX_MODEL_NAME_LENGTH:
+        raise ApiError("模型名为空或过长")
+    if not api_key or len(api_key) > MAX_MODEL_KEY_LENGTH:
+        raise ApiError("API Key 为空或过长")
+    return {
+        "apiUrl": normalize_model_url(payload.get("apiUrl")),
+        "apiKey": api_key,
+        "model": model,
+    }
+
+
+def load_local_model_config(path: Path = MODEL_CONFIG_PATH) -> dict[str, str] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        config = normalize_model_config(payload)
+        return {**config, "updatedAt": str(payload.get("updatedAt") or "")}
+    except (OSError, json.JSONDecodeError, ApiError, TypeError):
+        return None
+
+
+def environment_model_config() -> dict[str, str] | None:
+    payload = {
+        "apiUrl": os.environ.get("MODEL_API_URL"),
+        "apiKey": os.environ.get("MODEL_API_KEY"),
+        "model": os.environ.get("MODEL_NAME"),
+    }
+    try:
+        return normalize_model_config(payload)
+    except ApiError:
+        return None
+
+
+def active_model_config(path: Path = MODEL_CONFIG_PATH) -> dict[str, str] | None:
+    return load_local_model_config(path) or environment_model_config()
+
+
+def public_model_config(path: Path = MODEL_CONFIG_PATH) -> dict[str, str | bool]:
+    local = load_local_model_config(path)
+    active = local or environment_model_config()
+    return {
+        "supported": True,
+        "configured": bool(active),
+        "source": "local-file" if local else "environment" if active else "none",
+        "apiUrl": active["apiUrl"] if active else "",
+        "model": active["model"] if active else "",
+        "keyHint": active["apiKey"][-4:] if active else "",
+    }
+
+
+def save_local_model_config(payload: dict, path: Path = MODEL_CONFIG_PATH) -> dict[str, str]:
+    existing = load_local_model_config(path)
+    config = normalize_model_config(payload, existing["apiKey"] if existing else "")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(path.parent, 0o700)
+    stored = {
+        **config,
+        "updatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}-{time.time_ns()}")
+    try:
+        temporary.write_text(json.dumps(stored, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.chmod(temporary, 0o600)
+        temporary.replace(path)
+        os.chmod(path, 0o600)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return stored
+
+
+def delete_local_model_config(path: Path = MODEL_CONFIG_PATH) -> bool:
+    try:
+        path.unlink()
+        return True
+    except FileNotFoundError:
+        return False
 
 
 class WorkspaceHandler(SimpleHTTPRequestHandler):

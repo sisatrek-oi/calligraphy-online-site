@@ -12,6 +12,74 @@ import server
 
 
 class SearchServiceTest(unittest.TestCase):
+    def test_model_url_accepts_https_and_loopback_http_only(self):
+        self.assertEqual(
+            server.normalize_model_url("https://api.example.com/v1/chat/completions"),
+            "https://api.example.com/v1/chat/completions",
+        )
+        self.assertEqual(
+            server.normalize_model_url("http://127.0.0.1:11434/v1/chat/completions"),
+            "http://127.0.0.1:11434/v1/chat/completions",
+        )
+        for value in [
+            "http://example.com/chat",
+            "file:///tmp/key",
+            "https://user:pass@example.com/chat",
+        ]:
+            with self.subTest(value=value), self.assertRaises(server.ApiError):
+                server.normalize_model_url(value)
+
+    def test_local_model_config_overrides_environment_without_exposing_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model-config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "apiUrl": "https://local.example/chat",
+                        "apiKey": "local-secret-1234",
+                        "model": "local-model",
+                        "updatedAt": "2026-09-15T00:00:00Z",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = {
+                "MODEL_API_URL": "https://env.example/chat",
+                "MODEL_API_KEY": "env-secret",
+                "MODEL_NAME": "env-model",
+            }
+            with patch.dict(os.environ, env, clear=True):
+                active = server.active_model_config(path)
+                public = server.public_model_config(path)
+            self.assertEqual(active["model"], "local-model")
+            self.assertEqual(public["keyHint"], "1234")
+            self.assertNotIn("apiKey", public)
+
+    def test_save_model_config_is_atomic_private_and_can_keep_existing_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".runtime" / "model-config.json"
+            saved = server.save_local_model_config(
+                {
+                    "apiUrl": "https://api.example.com/chat",
+                    "apiKey": "first-secret",
+                    "model": "model-a",
+                },
+                path,
+            )
+            self.assertEqual(saved["model"], "model-a")
+            saved = server.save_local_model_config(
+                {
+                    "apiUrl": "https://api.example.com/chat",
+                    "apiKey": "",
+                    "model": "model-b",
+                },
+                path,
+            )
+            self.assertEqual(saved["apiKey"], "first-secret")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            server.delete_local_model_config(path)
+            self.assertFalse(path.exists())
+
     def test_local_env_loader_preserves_shell_values(self):
         with tempfile.TemporaryDirectory() as directory:
             env_path = Path(directory) / ".env.local"

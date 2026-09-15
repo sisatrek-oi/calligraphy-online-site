@@ -28,7 +28,7 @@
 - Modify: `server.py:13-40`
 - Test: `scripts/test_search_service.py`
 
-- [ ] **Step 1: 写入 URL、优先级和密钥隐藏的失败测试**
+- [x] **Step 1: 写入 URL、优先级和密钥隐藏的失败测试**
 
 在 `scripts/test_search_service.py` 增加：
 
@@ -58,13 +58,13 @@
             self.assertNotIn("apiKey", public)
 ```
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run: `python3 -B -m unittest scripts.test_search_service.SearchServiceTest.test_model_url_accepts_https_and_loopback_http_only scripts.test_search_service.SearchServiceTest.test_local_model_config_overrides_environment_without_exposing_key`
 
 Expected: FAIL，提示 `normalize_model_url` 或 `active_model_config` 未定义。
 
-- [ ] **Step 3: 实现配置校验、读取和公开状态**
+- [x] **Step 3: 实现配置校验、读取和公开状态**
 
 在 `server.py` 增加：
 
@@ -134,7 +134,7 @@ def public_model_config(path: Path = MODEL_CONFIG_PATH) -> dict:
     }
 ```
 
-- [ ] **Step 4: 写入保存、沿用密钥、权限和删除的失败测试**
+- [x] **Step 4: 写入保存、沿用密钥、权限和删除的失败测试**
 
 ```python
     def test_save_model_config_is_atomic_private_and_can_keep_existing_key(self):
@@ -157,7 +157,7 @@ def public_model_config(path: Path = MODEL_CONFIG_PATH) -> dict:
             self.assertFalse(path.exists())
 ```
 
-- [ ] **Step 5: 实现原子保存和删除**
+- [x] **Step 5: 实现原子保存和删除**
 
 ```python
 def save_local_model_config(payload: dict, path: Path = MODEL_CONFIG_PATH) -> dict:
@@ -192,7 +192,7 @@ def delete_local_model_config(path: Path = MODEL_CONFIG_PATH) -> bool:
 .runtime/
 ```
 
-- [ ] **Step 6: 运行后端配置测试并提交**
+- [x] **Step 6: 运行后端配置测试并提交**
 
 Run: `python3 -B -m unittest scripts.test_search_service`
 

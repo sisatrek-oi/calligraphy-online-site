@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 cloud-config.json
+.runtime/
 .vercel/
 node_modules/
 .DS_Store
