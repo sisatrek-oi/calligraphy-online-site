@@ -495,14 +495,51 @@ test("AI field judgments are exclusive and preserve proposal state", () => {
   assert.equal(a.run("setAiFieldJudgment('unknown', 'accept')"), false);
 });
 
+test("AI accept-all selects only reasoned fields without applying them", () => {
+  const a = app();
+  loadSample(a);
+  const before = a.get("fieldValue(selectedRow(), 'author')");
+  a.run(`
+    state.aiStatus = "ready";
+    state.aiRowId = state.selectedId;
+    state.aiWorkspaceId = state.workspaceId;
+    state.aiProposal = {
+      proposal: {
+        fields: { author: "模型书家" },
+        evidence: [],
+        reasoning: [
+          { fieldId: "author", decision: "change", reason: "作者证据", evidenceQuote: "王羲之", evidenceVerified: true },
+          { fieldId: "scriptType", decision: "keep", reason: "书体与原文一致", evidenceQuote: "草书", evidenceVerified: true }
+        ],
+        abstentions: []
+      },
+      meta: { model: "test", promptVersion: 1 }
+    };
+    state.aiInputSignature = aiInputSignature(selectedRow());
+    state.aiFieldJudgments = { author: "reject" };
+  `);
+  assert.equal(a.run("acceptAllAiFieldJudgments(selectedRow())"), true);
+  assert.deepEqual(a.get("state.aiFieldJudgments"), { author: "accept", scriptType: "accept" });
+  assert.equal(a.get("fieldValue(selectedRow(), 'author')"), before);
+  assert.match(a.run("aiPanelActions(selectedRow())"), /data-ai-accept-all[^>]*disabled/);
+  assert.equal(a.run("acceptAllAiFieldJudgments(selectedRow())"), false);
+});
+
 test("AI judgment updates in place without replacing the panel or losing focus and scroll", () => {
   const a = app();
   loadSample(a);
   const scroll = { scrollTop: 173 };
-  const footer = { innerHTML: "unchanged" };
+  const acceptAllAction = { disabled: false };
+  const clearAction = { disabled: false };
+  const applyAction = { disabled: true, textContent: "unchanged" };
   let replacements = 0;
   const panel = {
-    querySelector: (selector) => selector === ".ai-panel-actions" ? footer : selector === ".ai-panel-scroll" ? scroll : null,
+    querySelector: (selector) => ({
+      "[data-ai-accept-all]": acceptAllAction,
+      "[data-ai-clear]": clearAction,
+      "[data-ai-apply]": applyAction,
+      ".ai-panel-scroll": scroll
+    })[selector] || null,
     set outerHTML(_value) { replacements += 1; }
   };
   const buttons = ["accept", "reject", "uncertain"].map((judgment) => ({
@@ -529,7 +566,8 @@ test("AI judgment updates in place without replacing the panel or losing focus a
   assert.equal(scroll.scrollTop, 173);
   assert.equal(a.run("document.activeElement === document.querySelectorAll('[data-ai-judgment]')[1]"), true);
   assert.deepEqual(buttons.map((button) => button.attributes["aria-pressed"]), ["false", "true", "false"]);
-  assert.match(footer.innerHTML, /保存核验/);
+  assert.match(applyAction.textContent, /保存核验/);
+  assert.equal(applyAction.disabled, false);
 });
 
 test("mobile AI pane switch changes visibility state without clearing decisions", () => {

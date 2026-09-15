@@ -2631,17 +2631,52 @@ function invalidateAiCandidate(row = selectedRow()) {
   return true;
 }
 
-function updateAiFieldJudgmentDom(fieldId) {
+function aiPanelActionState(row) {
+  const { status, proposal } = aiPresentation(row);
+  const fields = proposal ? aiReviewedFields(row) : [];
+  const decided = fields.filter((item) => item.judgment).length;
+  const accepted = fields.filter((item) => item.judgment === "accept").length;
+  const pending = Math.max(0, fields.length - decided);
+  const reasonedFields = fields.filter((item) => !item.reasoning.missing);
+  return {
+    canAcceptAll: status === "ready" && reasonedFields.some((item) => item.judgment !== "accept"),
+    canClear: status !== "idle" || Boolean(proposal),
+    canApply: status === "ready" && decided > 0,
+    applyLabel: pending ? `保存核验（待处理 ${pending}）` : `保存核验（认可 ${accepted}）`
+  };
+}
+
+function updateAiPanelActionsDom(row = selectedRow()) {
   const panel = document.querySelector("#aiEvidencePanel");
   if (!panel) return false;
+  const { canAcceptAll, canClear, canApply, applyLabel } = aiPanelActionState(row);
+  const acceptAll = panel.querySelector("[data-ai-accept-all]");
+  const clear = panel.querySelector("[data-ai-clear]");
+  const apply = panel.querySelector("[data-ai-apply]");
+  if (acceptAll) acceptAll.disabled = !canAcceptAll;
+  if (clear) clear.disabled = !canClear;
+  if (apply) {
+    apply.disabled = !canApply;
+    apply.textContent = applyLabel;
+  }
+  return Boolean(acceptAll || clear || apply);
+}
+
+function updateAiFieldJudgmentsDom(fieldIds) {
+  const panel = document.querySelector("#aiEvidencePanel");
+  if (!panel) return false;
+  const allowed = new Set(fieldIds);
   const buttons = [...document.querySelectorAll("[data-ai-judgment]")]
-    .filter((button) => button.dataset.fieldId === fieldId);
+    .filter((button) => allowed.has(button.dataset.fieldId));
   buttons.forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.aiJudgment === state.aiFieldJudgments[fieldId]));
+    button.setAttribute("aria-pressed", String(button.dataset.aiJudgment === state.aiFieldJudgments[button.dataset.fieldId]));
   });
-  const actions = panel.querySelector(".ai-panel-actions");
-  if (actions) actions.innerHTML = aiPanelActions(selectedRow());
-  return Boolean(buttons.length || actions);
+  const actionsUpdated = updateAiPanelActionsDom(selectedRow());
+  return Boolean(buttons.length || actionsUpdated);
+}
+
+function updateAiFieldJudgmentDom(fieldId) {
+  return updateAiFieldJudgmentsDom([fieldId]);
 }
 
 function setAiFieldJudgment(fieldId, judgment) {
@@ -2650,6 +2685,25 @@ function setAiFieldJudgment(fieldId, judgment) {
   if (!allowedFields.has(fieldId) || !allowedJudgments.has(judgment)) return false;
   state.aiFieldJudgments = { ...state.aiFieldJudgments, [fieldId]: judgment };
   updateAiFieldJudgmentDom(fieldId);
+  return true;
+}
+
+function acceptAllAiFieldJudgments(row = selectedRow()) {
+  const belongsToCandidate = row
+    && state.aiStatus === "ready"
+    && state.aiProposal
+    && state.aiRowId === row.id
+    && state.aiWorkspaceId === state.workspaceId
+    && state.aiInputSignature
+    && state.aiInputSignature === aiInputSignature(row);
+  if (!belongsToCandidate) return false;
+  const eligible = aiReviewedFields(row).filter((item) => !item.reasoning.missing);
+  if (!eligible.length || eligible.every((item) => state.aiFieldJudgments[item.field.id] === "accept")) return false;
+  state.aiFieldJudgments = {
+    ...state.aiFieldJudgments,
+    ...Object.fromEntries(eligible.map((item) => [item.field.id, "accept"]))
+  };
+  updateAiFieldJudgmentsDom(eligible.map((item) => item.field.id));
   return true;
 }
 
@@ -2733,15 +2787,9 @@ function aiSuggestionContent(row) {
 }
 
 function aiPanelActions(row) {
-  const { status, proposal } = aiPresentation(row);
-  const fields = proposal ? aiReviewedFields(row) : [];
-  const decided = fields.filter((item) => item.judgment).length;
-  const accepted = fields.filter((item) => item.judgment === "accept").length;
-  const pending = Math.max(0, fields.length - decided);
-  const canClear = status !== "idle" || Boolean(proposal);
-  const canApply = status === "ready" && decided > 0;
-  const applyLabel = pending ? `保存核验（待处理 ${pending}）` : `保存核验（认可 ${accepted}）`;
+  const { canAcceptAll, canClear, canApply, applyLabel } = aiPanelActionState(row);
   return `
+    <button type="button" class="icon-control" data-ai-accept-all ${canAcceptAll ? "" : "disabled"} aria-label="认可全部 AI 建议" title="认可全部 AI 建议">✓✓</button>
     <button type="button" data-ai-clear ${canClear ? "" : "disabled"}>清除</button>
     <button type="button" data-ai-apply ${canApply ? "" : "disabled"}>${applyLabel}</button>
   `;
@@ -5543,6 +5591,10 @@ function attachDetailEvents() {
     }
     if (event.target.closest("[data-ai-generate]")) {
       performAiExtraction(state.selectedId);
+      return;
+    }
+    if (event.target.closest("[data-ai-accept-all]")) {
+      acceptAllAiFieldJudgments(selectedRow());
       return;
     }
     if (event.target.closest("[data-ai-clear]")) {

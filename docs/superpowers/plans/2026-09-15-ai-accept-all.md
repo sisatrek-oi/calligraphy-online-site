@@ -13,12 +13,13 @@
 ### Task 1: AI 核验批量认可
 
 **Files:**
+- Modify: `index.html:9-22`
 - Modify: `src/main.js:2630-2760`
 - Modify: `src/main.js:5525-5555`
 - Modify: `src/styles.css:5140-5235`
 - Test: `scripts/test-workflow-reliability.mjs:480-545`
 
-- [ ] **Step 1: 写入失败测试**
+- [x] **Step 1: 写入失败测试**
 
 在 `scripts/test-workflow-reliability.mjs` 增加测试，构造两个有有效理由的字段和其他缺失理由字段：
 
@@ -54,13 +55,13 @@ test("AI accept-all selects only reasoned fields without applying them", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run: `node --test --test-name-pattern="AI accept-all" scripts/test-workflow-reliability.mjs`
 
 Expected: FAIL，提示 `acceptAllAiFieldJudgments is not defined`。
 
-- [ ] **Step 3: 实现批量状态与原地 DOM 更新**
+- [x] **Step 3: 实现批量状态与原地 DOM 更新**
 
 在 `src/main.js` 中将单字段更新抽为可接收字段集合的函数，并增加批量认可函数：
 
@@ -126,7 +127,7 @@ if (event.target.closest("[data-ai-accept-all]")) {
 }
 ```
 
-- [ ] **Step 4: 运行针对性与全量测试**
+- [x] **Step 4: 运行针对性与全量测试**
 
 Run: `node --test --test-name-pattern="AI accept-all|AI judgment updates" scripts/test-workflow-reliability.mjs`
 
@@ -136,7 +137,7 @@ Run: `npm run check && npm test && git diff --check`
 
 Expected: 语法、云端隔离、107 个 Node 测试、10 个 Python 测试以及空白检查全部通过。
 
-- [ ] **Step 5: 浏览器验收**
+- [x] **Step 5: 浏览器验收**
 
 在 `http://127.0.0.1:8765/index.html#detail` 打开 AI 字段理由，生成一次候选并检查：
 
@@ -145,7 +146,7 @@ Expected: 语法、云端隔离、107 个 Node 测试、10 个 Python 测试以�
 3. 主表字段没有立刻改变，保存按钮仍是独立操作。
 4. AI 面板滚动位置不跳动，桌面三栏没有重叠；移动端按钮不溢出。
 
-- [ ] **Step 6: 提交实现**
+- [x] **Step 6: 提交实现**
 
 ```bash
 git add src/main.js src/styles.css scripts/test-workflow-reliability.mjs docs/superpowers/plans/2026-09-15-ai-accept-all.md

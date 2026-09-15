@@ -5231,6 +5231,15 @@ button.ai-panel-trigger:focus-visible {
   opacity: 0.5;
 }
 
+.ai-panel-actions [data-ai-accept-all] {
+  flex: 0 0 34px;
+  inline-size: 34px;
+  min-width: 34px;
+  padding: 0;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
 .ai-review-panel .ai-run-meta {
   display: flex;
   flex-wrap: wrap;
