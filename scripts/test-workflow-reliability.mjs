@@ -13,7 +13,7 @@ const csv = (id, quote = "笔势流畅，气韵生动") =>
   "材料ID,书家,原文摘录,页码,原文文件,原文命中\n" + id + ",王羲之," + quote + ",154,page_154.txt,exact";
 const file = (name, content) => ({ name, text: async () => content });
 
-function app({ width, disk = new Map() } = {}) {
+function app({ width, disk = new Map(), hostname = "127.0.0.1", search = "" } = {}) {
   const alerts = [];
   const mediaQueries = new Map();
   const matchMedia = width === undefined ? undefined : (query) => {
@@ -37,7 +37,7 @@ function app({ width, disk = new Map() } = {}) {
   };
   const root = { innerHTML: "" };
   const context = vm.createContext({
-    console, URL, crypto: { randomUUID }, location: { hash: "#detail" },
+    console, URL, crypto: { randomUUID }, location: { hash: "#detail", hostname, search },
     localStorage: storage,
     document: { querySelector: (selector) => selector === "#app" ? root : null, querySelectorAll: () => [] },
     FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] ?? null; } },
@@ -122,6 +122,24 @@ test("demo entry gate accepts only the configured credentials", () => {
   assert.equal(a.get("verifyDemoCredentials('2552848@tongji.com', '123456')"), true);
   assert.equal(a.get("verifyDemoCredentials('2552848@tongji.com', '1234567')"), false);
   assert.equal(a.get("verifyDemoCredentials('other@tongji.com', '123456')"), false);
+});
+
+test("local test sessions open the workspace without storing credentials", () => {
+  const local = app();
+  assert.equal(local.get("restoreLocalDemoSession()"), true);
+  assert.equal(local.get("state.entryStage"), "workspace");
+  assert.equal(local.disk.get("calligraphy-local-demo-session-v1"), "active");
+  assert.equal(local.disk.has("calligraphy-remembered-email-v1"), false);
+  assert.equal([...local.disk.values()].some((value) => value.includes("2552848@tongji.com") || value.includes("123456")), false);
+
+  const loginPreview = app({ search: "?login=1" });
+  assert.equal(loginPreview.get("restoreLocalDemoSession()"), false);
+  assert.equal(loginPreview.get("state.entryStage"), "welcome");
+
+  const deployed = app({ hostname: "sisatrek-oi.github.io" });
+  deployed.disk.set("calligraphy-local-demo-session-v1", "active");
+  assert.equal(deployed.get("restoreLocalDemoSession()"), false);
+  assert.equal(deployed.get("state.entryStage"), "welcome");
 });
 
 test("entry gate exposes a password-free registration route without pretending local signup succeeded", () => {

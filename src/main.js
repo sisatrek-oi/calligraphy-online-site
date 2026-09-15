@@ -2,6 +2,7 @@ const app = document.querySelector("#app");
 const WORKSPACE_POINTER_KEY = "calligraphy-current-workspace-v2";
 const WORKSPACE_STORAGE_PREFIX = "calligraphy-workspace-v2:";
 const REMEMBERED_EMAIL_KEY = "calligraphy-remembered-email-v1";
+const LOCAL_DEMO_SESSION_KEY = "calligraphy-local-demo-session-v1";
 const ICON_TOOLTIP_SELECTOR = [
   "button.icon-control",
   "button.icon-action",
@@ -5262,6 +5263,29 @@ function verifyDemoCredentials(email, password) {
     && String(password || "") === DEMO_LOGIN.password;
 }
 
+function localDemoSessionAvailable() {
+  if (state.cloud.config?.enabled) return false;
+  const hostname = String(location.hostname || "").toLowerCase();
+  const loopback = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+  const loginPreview = /(?:^|[?&])login=1(?:&|$)/.test(String(location.search || ""));
+  return loopback && !loginPreview;
+}
+
+function restoreLocalDemoSession() {
+  if (!localDemoSessionAvailable()) return false;
+  try { localStorage.setItem(LOCAL_DEMO_SESSION_KEY, "active"); } catch { /* Local preview can still continue without storage. */ }
+  state.entryStage = "workspace";
+  state.entryEmail = "";
+  state.entryRememberEmail = false;
+  state.entryError = "";
+  return true;
+}
+
+function persistLocalDemoSession() {
+  if (!localDemoSessionAvailable()) return;
+  try { localStorage.setItem(LOCAL_DEMO_SESSION_KEY, "active"); } catch { /* Login remains usable when storage is blocked. */ }
+}
+
 function emailMemoryEnabled() {
   return Boolean(state.cloud.config?.enabled && state.cloud.config.rememberEmail !== false);
 }
@@ -5408,6 +5432,7 @@ function renderEntry() {
     state.entryStage = "workspace";
     state.entryError = "";
     persistRememberedEmail(state.entryEmail, state.entryRememberEmail);
+    persistLocalDemoSession();
     state.workspaceEntryMotion = true;
     render();
     if (state.view === "detail") loadSelectedSource();
@@ -6229,6 +6254,7 @@ async function init() {
   initButtonTooltips();
   await initCloudRuntime();
   restoreRememberedEmail();
+  restoreLocalDemoSession();
   const loadedCloudWorkspace = await loadCloudWorkspaceData();
   const loadedWorkspace = loadedCloudWorkspace || loadWorkspace();
   if (!loadedWorkspace) {
