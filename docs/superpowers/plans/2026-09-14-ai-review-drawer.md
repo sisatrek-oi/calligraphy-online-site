@@ -23,7 +23,7 @@
 - Modify: `scripts/test-workflow-reliability.mjs:198-270`
 - Modify: `src/main.js:130-190`
 
-- [ ] **Step 1: Add a failing state-transition test**
+- [x] **Step 1: Add a failing state-transition test**
 
 ```js
 test("AI drawer stays open while row changes clear the prior proposal", () => {
@@ -38,12 +38,12 @@ test("AI drawer stays open while row changes clear the prior proposal", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
 Run: `node --test --test-name-pattern='AI drawer stays open' scripts/test-workflow-reliability.mjs`  
 Expected: FAIL because `aiDrawerOpen` and drawer-preserving selection behavior do not exist.
 
-- [ ] **Step 3: Add the presentation state without changing AI data semantics**
+- [x] **Step 3: Add the presentation state without changing AI data semantics**
 
 ```js
 const state = {
@@ -66,7 +66,7 @@ function closeAiDrawer() {
 
 Keep `resetAiForRow(row)` responsible for clearing row-bound candidate data. Do not reset `aiDrawerOpen` during row selection.
 
-- [ ] **Step 4: Run the focused test and verify success**
+- [x] **Step 4: Run the focused test and verify success**
 
 Run: `node --test --test-name-pattern='AI drawer stays open' scripts/test-workflow-reliability.mjs`  
 Expected: PASS.
@@ -87,7 +87,7 @@ git commit -m "test: lock AI drawer row isolation"
 - Modify: `src/main.js:5260-5290`
 - Test: `scripts/test-workflow-reliability.mjs`
 
-- [ ] **Step 1: Add failing markup assertions**
+- [x] **Step 1: Add failing markup assertions**
 
 ```js
 test("AI uses one icon entry and one non-modal drawer", () => {
@@ -103,12 +103,12 @@ test("AI uses one icon entry and one non-modal drawer", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused markup test and verify failure**
+- [x] **Step 2: Run the focused markup test and verify failure**
 
 Run: `node --test --test-name-pattern='AI uses one icon' scripts/test-workflow-reliability.mjs`  
 Expected: FAIL because the card is still inline and no drawer entry exists.
 
-- [ ] **Step 3: Add the icon entry and semantic drawer shell**
+- [x] **Step 3: Add the icon entry and semantic drawer shell**
 
 Use an icon-only control in `reviewControls(row)`:
 
@@ -134,7 +134,7 @@ function aiReviewDrawer(row) {
 
 Define `aiSuggestionContent(row)` by moving the status header, current excerpt, error, differences, evidence, and abstentions markup from `aiSuggestionCard(row)`. Define `aiDrawerActions(row)` by moving its generate, retry, clear, and apply buttons into the fixed drawer footer. Remove both `${aiSuggestionCard(row)}` insertions from `detailPanel(row)` and render `${aiReviewDrawer(row)}` once from the main detail view.
 
-- [ ] **Step 4: Bind open, close, generate, clear, and apply through existing delegation**
+- [x] **Step 4: Bind open, close, generate, clear, and apply through existing delegation**
 
 ```js
 if (event.target.closest("[data-ai-drawer-open]")) openAiDrawer();
@@ -143,11 +143,11 @@ if (event.target.closest("[data-ai-drawer-close]")) closeAiDrawer();
 
 Make `updateAiDom(row)` replace `.ai-review-drawer` while it is open. Preserve the existing `data-ai-generate`, `data-ai-clear`, and `data-ai-apply` handling.
 
-- [ ] **Step 5: Add focus return and Escape behavior**
+- [x] **Step 5: Add focus return and Escape behavior**
 
 Store the trigger element when opening. On `Escape`, close the drawer and call `trigger.focus()`. Do not trap focus because `aria-modal="false"` and the table remains operable.
 
-- [ ] **Step 6: Run focused AI and shortcut tests**
+- [x] **Step 6: Run focused AI and shortcut tests**
 
 Run: `node --test --test-name-pattern='AI|shortcut' scripts/test-workflow-reliability.mjs`  
 Expected: all matching tests PASS.
@@ -166,7 +166,7 @@ git commit -m "feat: move AI suggestions into review drawer"
 - Modify: `src/styles.css:6020-6110`
 - Modify: `index.html:9,22`
 
-- [ ] **Step 1: Add fixed overlay geometry and stable regions**
+- [x] **Step 1: Add fixed overlay geometry and stable regions**
 
 ```css
 .ai-review-drawer {
@@ -189,7 +189,7 @@ git commit -m "feat: move AI suggestions into review drawer"
 
 Use the current neutral-white and muted-green tokens. Do not add a backdrop, gradient, oversized heading, or nested cards.
 
-- [ ] **Step 2: Add narrow-screen behavior**
+- [x] **Step 2: Add narrow-screen behavior**
 
 ```css
 @media (max-width: 760px) {
@@ -199,15 +199,15 @@ Use the current neutral-white and muted-green tokens. Do not add a backdrop, gra
 
 Verify that long Chinese field values wrap and never force horizontal page scrolling.
 
-- [ ] **Step 3: Remove obsolete inline-card layout rules**
+- [x] **Step 3: Remove obsolete inline-card layout rules**
 
 Delete selectors that only position `.ai-suggestion-card` inside `.detail-dock-body`. Keep reusable typography, evidence chips, diff rows, and action styles by retargeting them under `.ai-review-drawer`.
 
-- [ ] **Step 4: Bump the frontend cache key**
+- [x] **Step 4: Bump the frontend cache key**
 
 Change the `src/main.js` and `src/styles.css` query values in `index.html` to `v=20260914-ai-drawer`.
 
-- [ ] **Step 5: Run syntax and diff checks**
+- [x] **Step 5: Run syntax and diff checks**
 
 Run: `node --check src/main.js && git diff --check`  
 Expected: exit code 0 with no output from `git diff --check`.
@@ -225,25 +225,25 @@ git commit -m "style: add responsive AI review drawer"
 - Test: `scripts/test-workflow-reliability.mjs`
 - Verify: `src/main.js`, `src/styles.css`, `server.py`, `api/ai/extract.js`
 
-- [ ] **Step 1: Run the complete automated suite**
+- [x] **Step 1: Run the complete automated suite**
 
 Run: `npm test`  
 Expected: all Node and Python tests PASS.
 
-- [ ] **Step 2: Start the configured local server**
+- [x] **Step 2: Start the configured local server**
 
 Run: `set -a && source .env.local && set +a && python3 server.py --host 127.0.0.1 --port 8765`  
 Expected: service reports `http://127.0.0.1:8765/index.html`.
 
-- [ ] **Step 3: Verify a real DeepSeek proposal without accepting it**
+- [x] **Step 3: Verify a real DeepSeek proposal without accepting it**
 
 Open `http://127.0.0.1:8765/index.html#detail`, open the AI drawer, generate one suggestion, and confirm the drawer shows model name, prompt version, field differences, evidence status, and clear/apply controls. Do not click apply.
 
-- [ ] **Step 4: Capture desktop and narrow-screen screenshots**
+- [x] **Step 4: Capture desktop and narrow-screen screenshots**
 
 At desktop width, confirm the main table and original-text detail remain visible behind the drawer. At a width below `760px`, confirm the drawer fits the viewport, scrolls internally, and can be closed.
 
-- [ ] **Step 5: Inspect browser errors and server response**
+- [x] **Step 5: Inspect browser errors and server response**
 
 Expected: browser console has no errors and `/api/ai/extract` returns HTTP 200 for the real generation.
 

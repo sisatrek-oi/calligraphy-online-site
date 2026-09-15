@@ -1,0 +1,10 @@
+{
+  "enabled": false,
+  "aiEnabled": false,
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseAnonKey": "your-anon-key",
+  "rememberEmail": true,
+  "defaultTeamName": "书论研究团队",
+  "defaultProjectName": "书论整理项目",
+  "defaultWorkspaceName": "书论统一主表"
+}

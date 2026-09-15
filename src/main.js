@@ -1,9 +1,37 @@
 const app = document.querySelector("#app");
 const WORKSPACE_POINTER_KEY = "calligraphy-current-workspace-v2";
 const WORKSPACE_STORAGE_PREFIX = "calligraphy-workspace-v2:";
+const REMEMBERED_EMAIL_KEY = "calligraphy-remembered-email-v1";
+const ICON_TOOLTIP_SELECTOR = [
+  "button.icon-control",
+  "button.icon-action",
+  "button.nav-action",
+  "button.icon-only",
+  "button.brand-mark-trigger",
+  "button.drawer-close",
+  "button.rail-collapse-control",
+  "button.rail-restore-control",
+  "button.flag-action",
+  ".review-actions button.secondary-action[aria-label]",
+  ".modal-head > button[aria-label]",
+  "button[data-review-undo]"
+].join(",");
+let buttonTooltip = null;
+let buttonTooltipTimer = 0;
+const workspaceSnapshots = new Map();
+let workspaceConflictFocus = null;
+let aiPanelTrigger = null;
+let entryStageTimer = 0;
 const CUSTOM_TEMPLATES_KEY = "calligraphy-custom-schema-templates-v1";
 const SCHEMA_VERSION = 1;
 const PROMPT_VERSION = 1;
+// Local product-demo gate only. Production access must use server-side authentication.
+const DEMO_LOGIN = Object.freeze({ email: "2552848@tongji.com", password: "123456" });
+const SOURCE_PAGE_PATTERN = /^page_\d+(?:__v[a-z0-9-]+)?\.txt$/i;
+const SAMPLE_DATASET = {
+  csv: "./data/sample/main.csv",
+  pages: Array.from({ length: 55 }, (_, index) => `page_${154 + index}.txt`)
+};
 
 const schemaTemplates = [
   {
@@ -83,7 +111,10 @@ const filters = [
   { id: "excluded", label: "非风格/品级", tone: "D" },
   { id: "review", label: "待校验", tone: "E" },
   { id: "abnormal", label: "命中异常", tone: "!" },
-  { id: "invalid", label: "字段待补", tone: "Fix" }
+  { id: "invalid", label: "字段待补", tone: "Fix" },
+  { id: "flagged", label: "人工标注", tone: "Flag" },
+  { id: "problem", label: "问题队列", tone: "Issue" },
+  { id: "resolved", label: "已解决", tone: "Done" }
 ];
 
 const annotationTypes = [
@@ -94,6 +125,9 @@ const annotationTypes = [
   { id: "expert", label: "专家判断" },
   { id: "other", label: "其他" }
 ];
+
+const compactWorkbench = window.matchMedia?.("(max-width: 1160px)");
+const narrowWorkbench = window.matchMedia?.("(max-width: 760px)");
 
 const state = {
   manifest: null,
@@ -109,8 +143,10 @@ const state = {
   schemaVersion: SCHEMA_VERSION,
   promptVersion: PROMPT_VERSION,
   lastSavedAt: "",
-  view: location.hash === "#detail" ? "detail" : "home",
+  view: ["#detail", "#review"].includes(location.hash) ? "detail" : "home",
+  detailMode: location.hash === "#review" ? "review" : "table",
   filter: "all",
+  activeProblemTagFilter: "all",
   qualityFocus: null,
   query: "",
   selectedId: "",
@@ -122,14 +158,107 @@ const state = {
   originalRows: [],
   editingId: "",
   pendingImport: null,
-  detailCollapsed: false,
+  importReports: [],
+  conflictsOpen: false,
+  conflictFilter: "open",
+  conflictSelection: "",
+  conflictMessage: "",
+  trashRows: [],
+  undoAction: null,
+  trashOpen: false,
+  workspaceListOpen: false,
+  exportOpen: false,
+  exportScope: "all",
+  exportMode: "draft",
+  exportVersions: [],
+  exportMessage: "",
+  resolutionRowId: "",
+  saveError: "",
+  workspaceConflict: null,
+  detailCollapsed: Boolean(narrowWorkbench?.matches),
   filtersCollapsed: false,
-  railCollapsed: false,
+  railCollapsed: Boolean(compactWorkbench?.matches),
   tableFocus: false,
   tableHeaderCollapsed: false,
   confidenceSort: "desc",
-  templatePanelExpanded: false
+  templatePanelExpanded: false,
+  researchQuery: "",
+  researchStatus: "idle",
+  researchResults: [],
+  researchError: "",
+  researchRowId: "",
+  researchWorkspaceId: "",
+  researchRequestId: 0,
+  aiPanelOpen: false,
+  aiStatus: "idle",
+  aiProposal: null,
+  aiError: "",
+  aiRowId: "",
+  aiWorkspaceId: "",
+  aiRequestId: 0,
+  aiInputSignature: "",
+  aiFieldJudgments: {},
+  aiMobilePane: "fields",
+  aiRailWasCollapsed: null,
+  aiDetailWasCollapsed: null,
+  aiTableFocusWasActive: null,
+  cloud: {
+    mode: "local",
+    status: "disabled",
+    message: "",
+    config: null,
+    store: null,
+    user: null,
+    team: null,
+    project: null,
+    workspace: null,
+    material: null,
+    members: [],
+    invites: []
+  },
+  entryStage: "welcome",
+  entryEmail: "",
+  entryRememberEmail: false,
+  entryError: "",
+  entryNotice: "",
+  workspaceEntryMotion: false,
+  primaryNavOpen: false,
+  motionName: "",
+  suppressHashMotion: false
 };
+
+function applyRouteFromHash() {
+  state.view = ["#detail", "#review"].includes(location.hash) ? "detail" : "home";
+  state.detailMode = location.hash === "#review" ? "review" : "table";
+}
+
+function viewKey(view = state.view, detailMode = state.detailMode) {
+  if (view === "home") return "home";
+  return detailMode === "review" ? "review" : "table";
+}
+
+function setViewMotion(nextView, nextDetailMode = state.detailMode) {
+  state.motionName = "";
+}
+
+function applyDetailModeDefaults(nextDetailMode) {
+  if (nextDetailMode === "review") {
+    state.filter = "problem";
+    state.tableFocus = false;
+  } else if (nextDetailMode === "table" && ["problem", "review"].includes(state.filter)) {
+    state.filter = "all";
+  }
+}
+
+function navigateToView(nextView, nextDetailMode = state.detailMode) {
+  setViewMotion(nextView, nextDetailMode);
+  state.view = nextView;
+  state.detailMode = nextDetailMode;
+  if (nextView === "detail") applyDetailModeDefaults(nextDetailMode);
+  const nextHash = state.view === "detail" ? (state.detailMode === "review" ? "#review" : "#detail") : "#home";
+  state.suppressHashMotion = location.hash !== nextHash;
+  location.hash = nextHash;
+}
 
 function newWorkspaceId() {
   if (crypto?.randomUUID) return crypto.randomUUID();
@@ -159,7 +288,7 @@ function clip(value = "", length = 96) {
 }
 
 function cloneRow(row) {
-  return { ...row };
+  return JSON.parse(JSON.stringify(row));
 }
 
 function cloneSchema(fields) {
@@ -240,6 +369,7 @@ function setFieldValue(row, fieldId, value) {
 }
 
 function syncLegacyFields(row) {
+  row.problemTags = normalizeProblemTags(row);
   row.author = fieldValue(row, "author");
   row.scriptType = fieldValue(row, "scriptType");
   row.quote = fieldValue(row, "quote");
@@ -326,24 +456,547 @@ function workspacePayload() {
     promptVersion: state.promptVersion,
     rows: state.rows,
     originalRows: state.originalRows,
+    trashRows: state.trashRows,
+    importReports: state.importReports,
+    exportVersions: state.exportVersions,
+    undoAction: state.undoAction,
+    selectedId: state.selectedId,
     uploadedPages: Object.fromEntries(state.uploadedPages),
     uploadLog: state.uploadLog,
     reviewState: state.reviewState
   };
 }
 
-function saveWorkspace() {
-  const id = ensureWorkspaceId();
-  state.lastSavedAt = new Date().toISOString();
-  localStorage.setItem(WORKSPACE_POINTER_KEY, id);
-  localStorage.setItem(storageKey(id), JSON.stringify({ ...workspacePayload(), savedAt: state.lastSavedAt }));
+function workspaceIsCurrent(id) {
+  const expected = workspaceSnapshots.get(id) ?? null;
+  const current = localStorage.getItem(storageKey(id));
+  if (current === expected) return true;
+  state.workspaceConflict = { id, deleted: current === null };
+  state.saveError = "其他页面已更新或移除当前工作区，本次操作未保存。";
+  updateWorkspaceConflictDom();
+  return false;
 }
 
-function loadWorkspace() {
-  const id = localStorage.getItem(WORKSPACE_POINTER_KEY);
+function workspaceConflictModal() {
+  if (!state.workspaceConflict) return "";
+  return `<div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="工作区版本冲突">
+    <section class="edit-modal workflow-modal">
+      <div class="modal-head"><h2>工作区${state.workspaceConflict.deleted ? "已移除" : "已更新"}</h2><button type="button" data-workspace-conflict-close aria-label="关闭版本冲突" title="关闭">×</button></div>
+      <p role="alert">其他页面已更改这份工作区，本次操作未保存。</p>
+      <p>载入最新数据会放弃本页未保存的修改。备份不包含尚未提交的表单输入。</p>
+      <div class="modal-actions"><button type="button" data-workspace-conflict-backup>导出本页备份</button><button type="button" data-workspace-conflict-reload ${state.workspaceConflict.deleted ? "disabled" : ""}>载入最新数据</button></div>
+    </section>
+  </div>`;
+}
+
+function updateWorkspaceConflictDom() {
+  const host = document.querySelector("#workspaceConflictHost");
+  if (!host) return;
+  if (state.workspaceConflict && !host.querySelector('[role="dialog"]')) workspaceConflictFocus = document.activeElement;
+  host.innerHTML = workspaceConflictModal();
+  host.querySelector("[data-workspace-conflict-close]")?.addEventListener("click", () => {
+    state.workspaceConflict = null;
+    updateWorkspaceConflictDom();
+  });
+  host.querySelector("[data-workspace-conflict-backup]")?.addEventListener("click", exportWorkspace);
+  host.querySelector("[data-workspace-conflict-reload]")?.addEventListener("click", reloadLatestWorkspace);
+  host.onkeydown = (event) => {
+    if (!state.workspaceConflict) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      state.workspaceConflict = null;
+      updateWorkspaceConflictDom();
+    } else if (event.key === "Tab") {
+      const buttons = [...host.querySelectorAll("button:not(:disabled)")];
+      const first = buttons[0];
+      const last = buttons.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first?.focus();
+      }
+    }
+  };
+  if (state.workspaceConflict) host.querySelector("[data-workspace-conflict-close]")?.focus();
+  else {
+    if (workspaceConflictFocus?.isConnected) workspaceConflictFocus.focus({ preventScroll: true });
+    workspaceConflictFocus = null;
+  }
+}
+
+function reloadLatestWorkspace() {
+  const id = state.workspaceConflict?.id;
+  if (!id || id !== state.workspaceId) return false;
+  if (!window.confirm("载入最新数据将放弃本页未保存的修改（含表单输入）。继续？")) return false;
+  const before = { ...state };
+  if (!loadWorkspace(id)) {
+    Object.assign(state, before);
+    window.alert("最新工作区无法读取，已保留本页数据。请先导出本页备份。");
+    return false;
+  }
+  state.editingId = "";
+  state.resolutionRowId = "";
+  state.pendingImport = null;
+  state.conflictsOpen = false;
+  state.exportOpen = false;
+  state.trashOpen = false;
+  state.workspaceListOpen = false;
+  state.templatePanelExpanded = false;
+  state.sourceRequestId += 1;
+  state.selectedId = selectedRow()?.id || "";
+  resetResearchForRow(selectedRow());
+  render();
+  loadSelectedSource();
+  return true;
+}
+
+function saveWorkspace() {
+  const id = ensureWorkspaceId();
+  const savedAt = new Date().toISOString();
+  try {
+    if (!workspaceIsCurrent(id)) return false;
+    const pointerChanged = localStorage.getItem(WORKSPACE_POINTER_KEY) !== id;
+    const serialized = JSON.stringify({ ...workspacePayload(), savedAt });
+    // Serialization may take time; recheck the snapshot immediately before writing.
+    if (!workspaceIsCurrent(id)) return false;
+    localStorage.setItem(storageKey(id), serialized);
+    if (pointerChanged) localStorage.setItem(WORKSPACE_POINTER_KEY, id);
+    workspaceSnapshots.set(id, serialized);
+    state.lastSavedAt = savedAt;
+    state.saveError = "";
+    state.workspaceConflict = null;
+    return true;
+  } catch {
+    state.saveError = "保存失败，请导出工作区备份后再刷新。";
+    window.alert(state.saveError);
+    return false;
+  }
+}
+
+function cloudReady() {
+  return state.cloud.status === "ready" && state.cloud.store && state.cloud.workspace;
+}
+
+function cloudLabel() {
+  if (state.cloud.status === "ready") return state.cloud.user?.email || "云端已连接";
+  if (state.cloud.status === "signed-out") return "云端未登录";
+  if (state.cloud.status === "error") return "云端异常";
+  return "本地用户";
+}
+
+function topUserControl() {
+  const label = cloudLabel();
+  if (state.cloud.status === "ready") {
+    return `<button type="button" class="top-user cloud-ready" data-cloud-sync title="${escapeHtml(state.cloud.message || "同步当前工作区")}">${escapeHtml(label)} · 同步</button>`;
+  }
+  if (state.cloud.status === "signed-out") {
+    return `<button type="button" class="top-user cloud-muted" data-cloud-login title="已配置云端，点击登录">${escapeHtml(label)}</button>`;
+  }
+  if (state.cloud.status === "error") {
+    return `<span class="top-user cloud-error" title="${escapeHtml(state.cloud.message || "云端连接异常")}">${escapeHtml(label)}</span>`;
+  }
+  return `<span class="top-user">${escapeHtml(label)}</span>`;
+}
+
+function updateTopUserDom() {
+  const node = document.querySelector(".top-user");
+  if (!node) return;
+  node.outerHTML = topUserControl();
+  attachCloudControls();
+}
+
+function cloudStatusPanel() {
+  const rows = [
+    ["状态", state.cloud.message || cloudLabel()],
+    ["团队", state.cloud.team?.name || "-"],
+    ["项目", state.cloud.project?.name || "-"],
+    ["工作区", state.cloud.workspace?.name || "-"],
+    ["成员", state.cloud.members?.length ? `${state.cloud.members.length} 人` : "-"]
+  ];
+  const actions = [];
+  if (state.cloud.status === "signed-out") {
+    actions.push(`<button type="button" data-cloud-login>登录</button>`);
+  }
+  if (state.cloud.status === "ready") {
+    actions.push(`<button type="button" data-cloud-sync>同步</button>`);
+    actions.push(`<button type="button" data-cloud-invite>邀请</button>`);
+  }
+  if (state.cloud.config) {
+    actions.push(`<button type="button" data-cloud-refresh>刷新</button>`);
+  }
+  return `
+    <section class="dash-panel cloud-panel">
+      <div class="dash-panel-head"><h2>云端协作</h2><span>${escapeHtml(cloudLabel())}</span></div>
+      <dl>
+        ${rows.map((row) => `<div><dt>${escapeHtml(row[0])}</dt><dd>${escapeHtml(row[1])}</dd></div>`).join("")}
+      </dl>
+      <div class="cloud-actions">
+        ${actions.length ? actions.join("") : `<button type="button" disabled>本地模式</button>`}
+      </div>
+    </section>
+  `;
+}
+
+async function loadCloudConfig() {
+  const endpoints = ["/api/config", "./cloud-config.json"];
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, { cache: "no-store" });
+      if (!response.ok) continue;
+      const config = await response.json();
+      if (config?.enabled || config?.aiEnabled) return config;
+    } catch {
+      // Keep local static previews usable when the deployment API is unavailable.
+    }
+  }
+  return null;
+}
+
+async function ensureCloudContext() {
+  const store = state.cloud.store;
+  const config = state.cloud.config || {};
+  let teams = await store.listTeams();
+  if (!teams.length) {
+    const invites = await store.listMyInvites();
+    const teamId = invites.length
+      ? await store.acceptInvite(invites[0].id, "")
+      : await store.createTeam(config.defaultTeamName || "书论研究团队", "");
+    teams = await store.listTeams();
+    state.cloud.team = teams.find((team) => team.id === teamId) || teams[0] || null;
+  } else {
+    state.cloud.team = teams[0];
+  }
+  if (!state.cloud.team) throw new Error("没有可用团队");
+
+  let projects = await store.listProjects(state.cloud.team.id);
+  if (!projects.length) {
+    state.cloud.project = await store.createProject(
+      state.cloud.team.id,
+      config.defaultProjectName || "书论整理项目",
+      "书论材料整理、主表审校与回检协作。"
+    );
+  } else {
+    state.cloud.project = projects[0];
+  }
+
+  let workspaces = await store.listWorkspaces(state.cloud.project.id);
+  if (!workspaces.length) {
+    state.cloud.workspace = await store.createWorkspace(state.cloud.team.id, state.cloud.project.id, {
+      name: config.defaultWorkspaceName || state.datasetName || "书论统一主表",
+      schemaTemplateId: state.schemaTemplateId,
+      schemaVersion: state.schemaVersion,
+      promptVersion: state.promptVersion
+    });
+  } else {
+    state.cloud.workspace = workspaces[0];
+  }
+  state.cloud.members = await store.listTeamMembers(state.cloud.team.id);
+  state.cloud.invites = await store.listMyInvites();
+}
+
+async function initCloudRuntime() {
+  const config = await loadCloudConfig();
+  if (!config) {
+    state.cloud = { ...state.cloud, mode: "local", status: "disabled", message: "未配置云端" };
+    return false;
+  }
+  state.cloud = { ...state.cloud, config };
+  if (!config.enabled) {
+    state.cloud = { ...state.cloud, mode: "local", status: "disabled", message: "本地模式" };
+    return false;
+  }
+  try {
+    const client = window.CalligraphyCloud.createSupabaseClient(config);
+    const store = window.CalligraphyCloud.createCloudStore(client);
+    state.cloud = { ...state.cloud, mode: "cloud", status: "connecting", config, store, message: "正在连接云端" };
+    const user = await store.currentUser();
+    if (!user) {
+      state.cloud = { ...state.cloud, status: "signed-out", user: null, message: "需要登录后同步" };
+      return false;
+    }
+    state.cloud.user = user;
+    await ensureCloudContext();
+    state.cloud.status = "ready";
+    state.cloud.message = "云端隔离已启用";
+    return true;
+  } catch (error) {
+    state.cloud = { ...state.cloud, mode: "local", status: "error", message: error?.message || "云端初始化失败" };
+    return false;
+  }
+}
+
+function cloudReviewRowPayload(row) {
+  const quality = sourceQuality(row, false);
+  return {
+    team_id: state.cloud.team.id,
+    project_id: state.cloud.project.id,
+    workspace_id: state.cloud.workspace.id,
+    material_id: state.cloud.material?.id || null,
+    external_row_id: row.id,
+    row_number: row.rowNumber || null,
+    appendix: row.appendix || "",
+    bucket: row.bucket || "review",
+    triage_status: row.triageStatus || row.status || "",
+    review_status: row.deleted ? "deleted" : row.reviewed ? "confirmed" : row.edited ? "edited" : row.flagged ? "flagged" : "pending",
+    flagged: Boolean(row.flagged),
+    abnormal: Boolean(row.abnormal),
+    fields: {
+      ...(row.fields || {}), problemTags: normalizeProblemTags(row),
+      _workflow: {
+        problemResolution: row.problemResolution || null,
+        importOrigin: row.importOrigin || null,
+        history: normalizeHistory(row),
+        edited: Boolean(row.edited)
+      }
+    },
+    quality: { rank: quality.rank, tone: quality.tone, label: quality.label, match: quality.match, method: "source-text-v1" },
+    source_file: row.sourceFile || "",
+    page_no: row.pageNo || "",
+    quote: row.quote || fieldValue(row, "quote") || "",
+    created_by: state.cloud.user.id
+  };
+}
+
+function cloudMaterialPayload() {
+  return {
+    team_id: state.cloud.team.id,
+    project_id: state.cloud.project.id,
+    workspace_id: state.cloud.workspace.id,
+    name: state.datasetName || "书论工作区导入",
+    material_type: "workspace",
+    row_count: state.rows.length
+  };
+}
+
+function cloudSourcePagePayload(sourceFile, body) {
+  return {
+    team_id: state.cloud.team.id,
+    project_id: state.cloud.project.id,
+    workspace_id: state.cloud.workspace.id,
+    material_id: state.cloud.material?.id || null,
+    source_file: sourceFile,
+    page_no: (sourceFile.match(/\d+/) || [""])[0],
+    body,
+    created_by: state.cloud.user.id
+  };
+}
+
+function cloudAnnotationPayload(annotation, row) {
+  return {
+    team_id: state.cloud.team.id,
+    project_id: state.cloud.project.id,
+    workspace_id: state.cloud.workspace.id,
+    row_id: row.cloudId,
+    external_annotation_id: annotation.id || null,
+    annotation_type: annotation.type || "other",
+    field_id: annotation.fieldId || null,
+    body: annotation.body || "",
+    created_by: state.cloud.user.id
+  };
+}
+
+async function ensureCloudMaterial() {
+  if (!cloudReady() || state.cloud.material) return state.cloud.material;
+  state.cloud.material = await state.cloud.store.createMaterial(cloudMaterialPayload());
+  return state.cloud.material;
+}
+
+function appRowFromCloudRow(record) {
+  const row = makeResult({
+    id: record.external_row_id || record.id,
+    rowNumber: record.row_number || "",
+    appendix: record.appendix || "",
+    appendixCode: appendixCode(record.appendix || ""),
+    bucket: record.bucket || "review",
+    status: record.triage_status || "",
+    triageStatus: record.triage_status || "",
+    fields: record.fields || {},
+    quote: record.quote || record.fields?.quote || "",
+    pageNo: record.page_no || record.fields?.pageNo || "",
+    sourceFile: record.source_file || record.fields?.sourceFile || "",
+    confidence: record.quality?.label || record.fields?.confidence || "",
+    abnormal: Boolean(record.abnormal),
+    flagged: Boolean(record.flagged) || record.review_status === "flagged",
+    reviewed: record.review_status === "confirmed",
+    edited: record.review_status === "edited" || Boolean(record.fields?._workflow?.edited),
+    problemTags: record.fields?.problemTags || [],
+    problemResolution: record.fields?._workflow?.problemResolution || null,
+    importOrigin: record.fields?._workflow?.importOrigin || null,
+    history: record.fields?._workflow?.history || [],
+    deleted: record.review_status === "deleted"
+  });
+  row.cloudId = record.id;
+  return row;
+}
+
+async function loadCloudWorkspaceData() {
+  if (!cloudReady()) return false;
+  const [rows, pages] = await Promise.all([
+    state.cloud.store.loadReviewRows(state.cloud.workspace.id),
+    state.cloud.store.loadSourcePages(state.cloud.workspace.id)
+  ]);
+  if (!rows.length) return false;
+  const loadedRows = rows.map(appRowFromCloudRow);
+  state.rows = loadedRows.filter((row) => !row.deleted);
+  state.trashRows = loadedRows.filter((row) => row.deleted);
+  state.undoAction = null;
+  state.originalRows = state.rows.map(cloneRow);
+  state.uploadedPages = new Map(pages.map((page) => [page.source_file, page.body || ""]));
+  state.workspaceId = state.cloud.workspace.id;
+  try {
+    const localSnapshot = localStorage.getItem(storageKey());
+    workspaceSnapshots.set(state.workspaceId, localSnapshot);
+    state.exportVersions = JSON.parse(localSnapshot || "{}").exportVersions || [];
+  } catch {
+    state.exportVersions = [];
+  }
+  state.datasetName = state.cloud.workspace.name || state.datasetName;
+  state.schemaTemplateId = state.cloud.workspace.schema_template_id || state.schemaTemplateId;
+  state.schemaVersion = state.cloud.workspace.schema_version || SCHEMA_VERSION;
+  state.promptVersion = state.cloud.workspace.prompt_version || PROMPT_VERSION;
+  state.schema = defaultSchema(state.schemaTemplateId);
+  state.reviewState = reviewDefaults();
+  state.manifest = buildManifest(state.rows);
+  state.selectedId = state.rows[0]?.id || "";
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  state.sourceCache = new Map();
+  state.uploadLog = [logEntry("success", "云端工作区", `已载入 ${state.rows.length} 条云端审校数据。`, { rows: state.rows.length, step: "云端载入" })];
+  return true;
+}
+
+async function syncWorkspaceToCloud() {
+  if (!cloudReady()) return false;
+  state.cloud.message = "正在同步云端";
+  updateTopUserDom();
+  await ensureCloudMaterial();
+  const pages = [...state.uploadedPages.entries()].map(([sourceFile, body]) => cloudSourcePagePayload(sourceFile, body));
+  await state.cloud.store.upsertSourcePages(pages);
+  const syncedRows = await state.cloud.store.upsertReviewRows([...state.rows, ...state.trashRows].map(cloudReviewRowPayload));
+  const idByExternalId = new Map(syncedRows.map((row) => [row.external_row_id, row.id]));
+  [...state.rows, ...state.trashRows].forEach((row) => {
+    if (idByExternalId.has(row.id)) row.cloudId = idByExternalId.get(row.id);
+  });
+  const annotations = state.rows.flatMap((row) => normalizeAnnotations(row)
+    .filter((annotation) => annotation.body && row.cloudId)
+    .map((annotation) => cloudAnnotationPayload(annotation, row)));
+  await state.cloud.store.upsertAnnotations(annotations);
+  state.cloud.message = `已同步 ${syncedRows.length} 条`;
+  updateTopUserDom();
+  return true;
+}
+
+async function syncRowChangeToCloud(row, eventType, reason, changes = []) {
+  if (!cloudReady() || !row) return;
+  try {
+    await ensureCloudMaterial();
+    const payload = cloudReviewRowPayload(row);
+    if (row.cloudId) delete payload.created_by;
+    const synced = row.cloudId
+      ? await state.cloud.store.saveReviewRow(row.cloudId, payload)
+      : (await state.cloud.store.upsertReviewRows([payload]))[0];
+    row.cloudId = synced?.id || row.cloudId;
+    if (row.cloudId) {
+      await state.cloud.store.addReviewEvent({
+        team_id: state.cloud.team.id,
+        project_id: state.cloud.project.id,
+        workspace_id: state.cloud.workspace.id,
+        row_id: row.cloudId,
+        event_type: eventType,
+        reason,
+        changes
+      });
+      const annotations = normalizeAnnotations(row)
+        .filter((annotation) => annotation.body)
+        .map((annotation) => cloudAnnotationPayload(annotation, row));
+      await state.cloud.store.upsertAnnotations(annotations);
+    }
+    state.cloud.message = "云端已同步";
+    updateTopUserDom();
+  } catch (error) {
+    state.cloud.status = "error";
+    state.cloud.message = error?.message || "云端同步失败";
+    updateTopUserDom();
+  }
+}
+
+async function handleCloudSync() {
+  try {
+    await syncWorkspaceToCloud();
+  } catch (error) {
+    state.cloud.status = "error";
+    state.cloud.message = error?.message || "云端同步失败";
+    updateTopUserDom();
+  }
+}
+
+async function handleCloudLogin() {
+  const email = window.prompt("输入团队账号邮箱：", "");
+  if (!email?.trim() || !state.cloud.store) return;
+  try {
+    await state.cloud.store.signInWithEmail(email.trim());
+    state.cloud.message = "登录链接已发送";
+    updateTopUserDom();
+    window.alert("登录链接已发送到邮箱。登录完成后刷新页面。");
+  } catch (error) {
+    state.cloud.status = "error";
+    state.cloud.message = error?.message || "登录失败";
+    updateTopUserDom();
+  }
+}
+
+async function handleCloudInvite() {
+  if (!cloudReady()) return;
+  const email = window.prompt("输入协作者邮箱：", "");
+  if (!email?.trim()) return;
+  const role = window.prompt("角色：owner/admin/editor/reviewer/viewer", "reviewer") || "reviewer";
+  if (!["owner", "admin", "editor", "reviewer", "viewer"].includes(role)) {
+    window.alert("角色只能是 owner/admin/editor/reviewer/viewer。");
+    return;
+  }
+  try {
+    await state.cloud.store.inviteMember(state.cloud.team.id, email.trim(), role);
+    state.cloud.members = await state.cloud.store.listTeamMembers(state.cloud.team.id);
+    state.cloud.invites = await state.cloud.store.listMyInvites();
+    state.cloud.message = `已邀请 ${email.trim()}`;
+    render();
+    if (state.view === "detail") loadSelectedSource();
+  } catch (error) {
+    state.cloud.status = "error";
+    state.cloud.message = error?.message || "邀请失败";
+    updateTopUserDom();
+  }
+}
+
+async function handleCloudRefresh() {
+  await initCloudRuntime();
+  const workspaceReloaded = await loadCloudWorkspaceData();
+  if (workspaceReloaded) resetAiForRow(selectedRow());
+  render();
+  if (state.view === "detail") loadSelectedSource();
+}
+
+function attachCloudControls() {
+  document.querySelectorAll("[data-cloud-sync]").forEach((button) => {
+    button.addEventListener("click", handleCloudSync);
+  });
+  document.querySelectorAll("[data-cloud-login]").forEach((button) => {
+    button.addEventListener("click", handleCloudLogin);
+  });
+  document.querySelectorAll("[data-cloud-refresh]").forEach((button) => {
+    button.addEventListener("click", handleCloudRefresh);
+  });
+  document.querySelectorAll("[data-cloud-invite]").forEach((button) => {
+    button.addEventListener("click", handleCloudInvite);
+  });
+}
+
+function loadWorkspace(id = localStorage.getItem(WORKSPACE_POINTER_KEY)) {
   if (!id) return false;
   try {
-    const payload = JSON.parse(localStorage.getItem(storageKey(id)) || "null");
+    const serialized = localStorage.getItem(storageKey(id));
+    const payload = JSON.parse(serialized || "null");
     if (!payload || !Array.isArray(payload.rows)) return false;
     state.workspaceId = id;
     state.datasetName = payload.datasetName || "本地隔离工作区";
@@ -360,14 +1013,29 @@ function loadWorkspace() {
     state.promptVersion = payload.promptVersion || PROMPT_VERSION;
     state.uploadedPages = new Map(Object.entries(payload.uploadedPages || {}));
     state.uploadLog = payload.uploadLog || [];
+    state.importReports = payload.importReports || [];
+    state.exportVersions = Array.isArray(payload.exportVersions) ? payload.exportVersions : [];
+    state.trashRows = (payload.trashRows || []).map(makeResult);
+    state.undoAction = payload.undoAction || null;
     state.reviewState = { ...reviewDefaults(), ...(payload.reviewState || {}) };
     state.originalRows = (payload.originalRows?.length ? payload.originalRows : payload.rows).map(cloneRow);
-    state.rows = payload.rows.map(makeResult);
+    state.rows = payload.rows.filter((row) => !row.deleted).map(makeResult);
+    payload.rows.filter((row) => row.deleted).forEach((row) => {
+      if (!state.trashRows.some((item) => item.id === row.id)) state.trashRows.push(makeResult(row));
+    });
     state.baseRows = [];
     state.baseManifest = null;
+    state.sourceCache = new Map();
+    state.sourceText = "";
+    state.sourceStatus = "idle";
     state.manifest = buildManifest(state.rows);
-    state.selectedId = state.rows[0]?.id || "";
+    const selection = localStorage.getItem(storageKey(id) + ":selection") || payload.selectedId;
+    state.selectedId = state.rows.some((row) => row.id === selection) ? selection : state.rows[0]?.id || "";
     state.lastSavedAt = payload.savedAt || "";
+    workspaceSnapshots.set(id, serialized);
+    state.workspaceConflict = null;
+    state.saveError = "";
+    resetAiForRow(selectedRow());
     return true;
   } catch {
     return false;
@@ -376,8 +1044,12 @@ function loadWorkspace() {
 
 function clearWorkspace() {
   const id = state.workspaceId || localStorage.getItem(WORKSPACE_POINTER_KEY);
-  if (id) localStorage.removeItem(storageKey(id));
-  localStorage.removeItem(WORKSPACE_POINTER_KEY);
+  if (id && !workspaceIsCurrent(id)) return false;
+  if (id) {
+    localStorage.removeItem(storageKey(id));
+    workspaceSnapshots.set(id, null);
+  }
+  if (localStorage.getItem(WORKSPACE_POINTER_KEY) === id) localStorage.removeItem(WORKSPACE_POINTER_KEY);
   localStorage.removeItem("calligraphy-review-state-v1");
   state.workspaceId = newWorkspaceId();
   state.datasetName = "空白隔离工作区";
@@ -387,6 +1059,10 @@ function clearWorkspace() {
   state.promptVersion = PROMPT_VERSION;
   state.uploadedPages = new Map();
   state.uploadLog = [];
+  state.importReports = [];
+  state.exportVersions = [];
+  state.trashRows = [];
+  state.undoAction = null;
   state.reviewState = reviewDefaults();
   state.originalRows = [];
   state.rows = [];
@@ -398,7 +1074,7 @@ function clearWorkspace() {
   state.filter = "all";
   state.query = "";
   state.manifest = buildManifest([]);
-  saveWorkspace();
+  return saveWorkspace();
 }
 
 function editableSnapshot(row) {
@@ -420,7 +1096,10 @@ function editableSnapshot(row) {
     note: row.note,
     reviewed: Boolean(row.reviewed),
     edited: Boolean(row.edited),
-    abnormal: Boolean(row.abnormal)
+    abnormal: Boolean(row.abnormal),
+    flagged: Boolean(row.flagged),
+    problemTags: normalizeProblemTags(row),
+    problemResolution: row.problemResolution || null
   };
 }
 
@@ -484,7 +1163,7 @@ const importSystemFields = [
 
 function csvHeaders(rows) {
   if (!rows.length) return [];
-  return Object.keys(rows[0]).filter((key) => key !== "__rowNumber");
+  return [...new Set(rows.flatMap((row) => Object.keys(row).filter((key) => !key.startsWith("__"))))];
 }
 
 function normalizeHeader(value = "") {
@@ -528,14 +1207,40 @@ function guessCsvMapping(rows) {
   return { system, fields };
 }
 
-function createPendingCsvImport(name, rows) {
+function createPendingCsvImport(name, rows, files = []) {
   state.pendingImport = {
     type: "csv",
     name,
     rows,
     headers: csvHeaders(rows),
+    files,
     mapping: guessCsvMapping(rows)
   };
+}
+
+function logEntry(type, name, message, extra = {}) {
+  return {
+    type,
+    name,
+    title: name,
+    message,
+    at: new Date().toISOString(),
+    ...extra
+  };
+}
+
+function isKnownResultCsv(name, rows) {
+  if (!rows.length) return false;
+  const headers = csvHeaders(rows);
+  const required = ["材料ID", "书家", "quote", "page_no", "source_file"];
+  return isResultTable(rows)
+    || required.every((header) => headers.includes(header))
+    || /综合总表|待人工复核|复核清单/.test(name);
+}
+
+function shouldUseCsvAsPrimary(name, currentRows) {
+  if (!currentRows) return true;
+  return /综合总表|主表/.test(name);
 }
 
 function appendixCode(appendix = "") {
@@ -555,7 +1260,7 @@ function classifyBucket(row) {
 
 function normalizePageFile(value = "") {
   const file = String(value).split(/[\\/]/).filter(Boolean).pop();
-  if (/^page_\d+\.txt$/i.test(file)) return file;
+  if (SOURCE_PAGE_PATTERN.test(file)) return file;
   const page = String(value).match(/\d{2,4}/)?.[0];
   return page ? `page_${page}.txt` : "";
 }
@@ -570,7 +1275,7 @@ function hasAbnormal(row) {
 
 function makeResult(row, index) {
   const importedAt = new Date().toISOString();
-  if (row.appendix && row.id) {
+  if (row.id && (row.fields || Object.prototype.hasOwnProperty.call(row, "appendix"))) {
     const fields = {
       ...(row.fields || {}),
       author: row.author || row.fields?.author || "",
@@ -596,7 +1301,9 @@ function makeResult(row, index) {
       appendixCode: row.appendixCode || appendixCode(row.appendix),
       abnormal: row.abnormal ?? hasAbnormal(row),
       reviewed: Boolean(row.reviewed),
-      edited: Boolean(row.edited)
+      edited: Boolean(row.edited),
+      flagged: Boolean(row.flagged),
+      problemTags: normalizeProblemTags(row)
     };
     return syncLegacyFields(result);
   }
@@ -620,13 +1327,21 @@ function makeResult(row, index) {
       fields[field.id] = row[field.label] || row[field.id] || "";
     }
   });
+  const triageStatus = row["第三轮状态"] || row["二轮状态"] || "";
+  const manualAdvice = row["第三轮人工操作建议"] || row["进入主表建议"] || "";
+  const issueReason = row["第三轮问题归因"] || row["问题/隐患"] || "";
+  const handlingNote = row["第三轮处理说明"] || row["备注"] || "";
   const result = {
     id,
     rowNumber: row.__rowNumber || index + 2,
     appendix: row["附表"] || "",
     appendixCode: appendixCode(row["附表"]),
     bucket: classifyBucket(row),
-    status: row["二轮状态"] || "",
+    status: triageStatus,
+    triageStatus,
+    manualAdvice,
+    issueReason,
+    handlingNote,
     sourceData: row["来源数据"] || "",
     fields,
     aiDraft: rowDraftFromFields(fields),
@@ -636,11 +1351,13 @@ function makeResult(row, index) {
     promptVersion: state.promptVersion,
     modelVersion: "csv-import",
     action: row["第二轮动作"] || "",
-    recommendation: row["进入主表建议"] || "",
+    recommendation: manualAdvice,
     originalRecord: row["对应原高置信记录"] || "",
     abnormal: hasAbnormal(row),
     reviewed: false,
-    edited: false
+    edited: false,
+    flagged: false,
+    problemTags: normalizeProblemTags(row)
   };
   result.history = createInitialHistory(result, importedAt);
   return syncLegacyFields(result);
@@ -663,7 +1380,11 @@ function rowValidation(row) {
     const value = String(fieldValue(row, field.id) || "").trim();
     return value && !hasEvidenceAnchor;
   });
-  const confirmedThenChanged = Boolean(row.reviewed && row.edited);
+  const history = normalizeHistory(row);
+  const lastEdit = history.findLastIndex((event) => event.type === "human-edit");
+  const lastConfirm = history.findLastIndex((event) => ["confirm", "problem-resolved"].includes(event.type));
+  const lastUndo = history.findLastIndex((event) => event.type === "undo");
+  const confirmedThenChanged = Boolean(row.reviewed && lastEdit > Math.max(lastConfirm, lastUndo));
   const issues = [
     ...missingRequired.map((field) => ({ type: "required", field, label: `${field.label}缺失` })),
     ...missingEvidence.map((field) => ({ type: "evidence", field, label: `${field.label}缺证据定位` })),
@@ -712,16 +1433,17 @@ function buildManifest(rows, source = state.baseManifest, options = {}) {
   const stats = {
     total: rows.length,
     sourcePages: state.uploadedPages.size,
-    linkedRows: rows.filter((row) => row.sourceFile).length,
-    exactHits: rows.filter((row) => row.hit === "exact").length,
+    linkedRows: rows.filter((row) => Boolean(cachedSourceText(row.sourceFile))).length,
+    exactHits: rows.filter((row) => sourceQuality(row).match === "exact").length,
     reviewRows: rows.filter((row) => row.bucket === "review").length,
-    abnormalRows: rows.filter((row) => row.abnormal).length,
+    abnormalRows: rows.filter(sourceNeedsReview).length,
     invalidRows: validations.filter((validation) => !validation.ok).length,
     missingRequiredRows: validations.filter((validation) => validation.missingRequired.length).length,
     missingEvidenceRows: validations.filter((validation) => validation.missingEvidence.length).length,
     changedAfterConfirmRows: validations.filter((validation) => validation.confirmedThenChanged).length,
     confirmedRows: rows.filter((row) => row.reviewed).length,
     editedRows: rows.filter((row) => row.edited).length,
+    flaggedRows: rows.filter((row) => row.flagged).length,
     appendix: countBy(rows, "appendix"),
     hit: countBy(rows, "hit"),
     bucket: countBy(rows, "bucket")
@@ -740,15 +1462,38 @@ function rowText(row) {
     row.id,
     row.appendix,
     row.status,
+    ...(row.problemTags || []).map((tag) => window.CalligraphySchema?.tagLabel?.(tag) || tag),
     ...orderedSchema().map((field) => fieldValue(row, field.id)),
     row.hit,
     row.reviewed ? "已确认" : "",
     row.edited ? "已修改" : "",
+    row.flagged ? "人工标注 有问题" : "",
   ].join(" ");
+}
+
+function normalizeProblemTags(row) {
+  const tags = Array.isArray(row.problemTags) ? row.problemTags : [];
+  return window.CalligraphyReviewWorkflow?.uniqueTags?.(tags) || [...new Set(tags.filter(Boolean))];
+}
+
+function rowHasProblem(row) {
+  if (row.deleted || row.problemResolution?.status === "resolved") return false;
+  if (window.CalligraphyReviewWorkflow?.hasProblem) return window.CalligraphyReviewWorkflow.hasProblem(row)
+    || !rowValidation(row).ok || sourceQuality(row).rank === 0;
+  return Boolean(row.flagged || normalizeProblemTags(row).length || row.confidence === "待复核");
+}
+
+function rowProblemStatus(row) {
+  const status = window.CalligraphyReviewWorkflow.problemStatus(row);
+  return status === "none" && rowHasProblem(row) ? "open" : status;
 }
 
 function rowMatchesQualityFocus(row) {
   if (!state.qualityFocus) return true;
+  if (state.qualityFocus.mode === "delivery") return state.qualityFocus.rowIds.includes(row.id);
+  if (state.qualityFocus.mode === "triage") {
+    return String(row.triageStatus || row.status || "") === String(state.qualityFocus.value || "");
+  }
   const { fieldId, mode } = state.qualityFocus;
   const value = String(fieldValue(row, fieldId) || "").trim();
   const validation = rowValidation(row);
@@ -765,10 +1510,22 @@ function rowMatchesQualityFocus(row) {
 
 function visibleRows() {
   const query = state.query.trim().toLowerCase();
+  const dashboardIds = state.qualityFocus?.mode === "dashboard"
+    ? new Set(dashboardQueueIds(state.qualityFocus.key)) : null;
   const rows = state.rows.filter((row) => {
     const filterPass = state.filter === "all"
-      || (state.filter === "abnormal" ? row.abnormal : state.filter === "invalid" ? !rowValidation(row).ok : row.bucket === state.filter);
-    const focusPass = rowMatchesQualityFocus(row);
+      || (state.filter === "abnormal"
+        ? sourceNeedsReview(row)
+        : state.filter === "invalid"
+          ? !rowValidation(row).ok
+          : state.filter === "flagged"
+            ? row.flagged
+            : state.filter === "problem"
+              ? rowHasProblem(row)
+              : state.filter === "resolved"
+                ? row.problemResolution?.status === "resolved"
+              : row.bucket === state.filter);
+    const focusPass = dashboardIds ? dashboardIds.has(row.id) : rowMatchesQualityFocus(row);
     const queryPass = !query || rowText(row).toLowerCase().includes(query);
     return filterPass && focusPass && queryPass;
   });
@@ -776,7 +1533,33 @@ function visibleRows() {
 }
 
 function selectedRow() {
-  return state.rows.find((row) => row.id === state.selectedId) || visibleRows()[0] || state.rows[0] || null;
+  const rows = visibleRows();
+  return rows.find((row) => row.id === state.selectedId) || rows[0] || null;
+}
+
+function selectedRowIndex(rows = visibleRows()) {
+  const current = selectedRow();
+  if (!current) return -1;
+  return rows.findIndex((row) => row.id === current.id);
+}
+
+function moveSelection(step = 1) {
+  const rows = visibleRows();
+  if (!rows.length) return;
+  const currentIndex = selectedRowIndex(rows);
+  const fallback = step > 0 ? 0 : rows.length - 1;
+  const nextIndex = currentIndex < 0
+    ? fallback
+    : Math.min(Math.max(currentIndex + step, 0), rows.length - 1);
+  selectResult(rows[nextIndex].id);
+}
+
+function nextResult() {
+  moveSelection(1);
+}
+
+function previousResult() {
+  moveSelection(-1);
 }
 
 function metricCards() {
@@ -794,6 +1577,238 @@ function metricCards() {
       <p>${escapeHtml(item.note)}</p>
     </article>
   `).join("");
+}
+
+function formatCount(value) {
+  return Number(value || 0).toLocaleString("zh-CN");
+}
+
+function hasWorkspaceData() {
+  return Boolean(state.rows.length || state.uploadLog.length || state.uploadedPages.size);
+}
+
+function uniqueSourceCount() {
+  return new Set(state.rows.map((row) => row.sourceFile).filter(Boolean)).size;
+}
+
+function formatLocalTime(value) {
+  if (!value) return "未保存";
+  return new Date(value).toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function percentage(part, total) {
+  if (!total) return "0%";
+  return `${Math.round((part / total) * 10000) / 100}%`;
+}
+
+function projectDashboardStats() {
+  const stats = state.manifest.stats;
+  return {
+    materials: stats.sourcePages || uniqueSourceCount(),
+    imported: new Set(state.rows.map((row) => row.importFileName || row.sourceData).filter(Boolean)).size || (stats.total ? 1 : 0),
+    chunks: stats.total,
+    located: stats.linkedRows,
+    exactHits: stats.exactHits,
+    tableRows: stats.total,
+    reviewRows: stats.invalidRows,
+    abnormalRows: stats.abnormalRows,
+    confirmedRows: stats.confirmedRows,
+    editedRows: stats.editedRows,
+    missingRequiredRows: stats.missingRequiredRows,
+    missingEvidenceRows: stats.missingEvidenceRows,
+    ...dashboardReadiness()
+  };
+}
+
+function dashboardReadiness() {
+  const facts = deliveryFacts(state.rows);
+  const assessment = window.CalligraphyExportWorkflow.assessRelease(facts);
+  return {
+    assessment,
+    readyRows: assessment.total - assessment.blocked,
+    blockedRows: assessment.blocked,
+    unreviewedRows: facts.filter((row) => !row.reviewed).length,
+    confirmedRows: facts.filter((row) => row.reviewed).length,
+    matchedRows: facts.filter((row) => row.sourceRank >= 2).length,
+    openProblems: facts.filter((row) => row.hasProblem).length
+  };
+}
+
+function dashboardQueueIds(key) {
+  const { assessment } = dashboardReadiness();
+  if (key === "ready") {
+    const blocked = new Set(assessment.issues.map((item) => item.id));
+    return state.rows.filter((row) => !blocked.has(row.id)).map((row) => row.id);
+  }
+  return assessment.issues.filter((item) => key === "blocked" || item.reasons.includes(key)).map((item) => item.id);
+}
+
+function inspectDashboardQueue(key) {
+  const labels = { ready: "可交付条目", blocked: "交付阻塞条目" };
+  const label = labels[key] || window.CalligraphyExportWorkflow.releaseChecks.find((item) => item.key === key)?.label;
+  if (!label) return;
+  navigateToView("detail", key === "ready" ? "table" : "review");
+  state.filter = "all";
+  state.query = "";
+  state.qualityFocus = { mode: "dashboard", key, label };
+  state.selectedId = visibleRows()[0]?.id || "";
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  render();
+  loadSelectedSource();
+}
+
+function dashboardWorkflow() {
+  const stats = projectDashboardStats();
+  const hasData = hasWorkspaceData();
+  const importDone = hasData;
+  const tableDone = stats.tableRows > 0;
+  const locateDone = tableDone && stats.matchedRows === stats.tableRows;
+  const reviewDone = tableDone && !stats.openProblems;
+  const steps = [
+    { index: 1, title: "材料导入", note: "导入 CSV/JSON/page 文本，建立本地材料库", status: importDone ? "已完成" : "待导入", value: stats.imported, unit: "份", detail: importDone ? "已有本地材料" : "等待文件", done: importDone, focus: "file" },
+    { index: 2, title: "整理条目", note: "读取已有整理结果", status: tableDone ? "已入表" : "待导入", value: stats.chunks, unit: "条", detail: tableDone ? "来自导入材料" : "等待数据", done: tableDone, view: "detail", detailMode: "table" },
+    { index: 3, title: "原文定位", note: "比对摘录与原文上下文", status: locateDone ? "已匹配" : tableDone ? "待核对" : "待导入", value: stats.matchedRows, unit: "条", detail: "摘录完整匹配", done: locateDone, queue: "unlocated" },
+    { index: 4, title: "统一主表", note: "结构化入表，形成可检索主表", status: tableDone ? "进行中" : "待入表", value: stats.tableRows, unit: "条", detail: tableDone ? "当前可用" : "等待导入", done: tableDone, view: "detail", detailMode: "table" },
+    { index: 5, title: "回检修订", note: "处理问题并记录复核结论", status: reviewDone ? "问题已清" : stats.openProblems ? "待处理" : "待检查", value: stats.openProblems, unit: "条", detail: stats.openProblems ? "未关闭的问题条目" : "暂无待处理问题", done: reviewDone, queue: "openProblem" },
+    { index: 6, title: "成果导出", note: "检查成果并保存导出版本", status: state.exportVersions.length ? "已有版本" : tableDone ? "可导出草稿" : "待处理", value: state.exportVersions.length, unit: "版", detail: state.exportVersions.length ? "已保存正式成果" : "尚无正式成果", done: state.exportVersions.length > 0, focus: "export" }
+  ];
+  return `
+    <section class="dash-panel workflow-panel">
+      <div class="dash-panel-head">
+        <h2>工作流程</h2>
+        <span>当前工作区</span>
+      </div>
+      <div class="workflow-list">
+        ${steps.map((step) => `
+        <article class="workflow-row">
+          <div class="step-index">${step.index}</div>
+          <div class="step-main"><strong>${escapeHtml(step.title)}</strong><span>${escapeHtml(step.note)}</span></div>
+          <div class="step-status ${step.done ? "done" : "pending"}"><i></i>${escapeHtml(step.status)}</div>
+          <div class="step-count"><strong>${formatCount(step.value)} <em>${escapeHtml(step.unit)}</em></strong><span>${escapeHtml(step.detail)}</span></div>
+          <button type="button" class="icon-control" ${step.queue ? `data-dashboard-queue="${step.queue}"` : ""} ${step.view ? `data-view="${step.view}"` : ""} ${step.detailMode ? `data-detail-mode="${step.detailMode}"` : ""} ${step.focus ? `data-home-focus="${step.focus}"` : ""} aria-label="进入${escapeHtml(step.title)}" title="进入${escapeHtml(step.title)}">›</button>
+          <span class="step-more">⌄</span>
+        </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function dashboardProjectCard() {
+  const stats = projectDashboardStats();
+  const progress = stats.tableRows ? Math.floor((stats.readyRows / stats.tableRows) * 100) : 0;
+  const workspaceShortId = ensureWorkspaceId().slice(0, 8);
+  const recentItems = state.uploadLog.slice(-4).reverse();
+  return `
+    <section class="dash-card current-project">
+      <div class="side-card-head"><h2>当前项目</h2><button type="button" class="icon-control" data-workspace-list aria-label="切换工作区" title="切换工作区">⇄</button></div>
+      <div class="project-title-row"><h3>${escapeHtml(state.datasetName || "空白隔离工作区")}</h3><span>${hasWorkspaceData() ? "进行中" : "待导入"}</span></div>
+      <dl class="project-meta">
+        <div><dt>工作区</dt><dd>${escapeHtml(workspaceShortId)}</dd></div>
+        <div><dt>保存时间</dt><dd>${escapeHtml(formatLocalTime(state.lastSavedAt))}</dd></div>
+        <div><dt>处理方式</dt><dd>浏览器本地隔离</dd></div>
+        <div><dt>字段模板</dt><dd>${escapeHtml(templateById(state.schemaTemplateId)?.name || "书论字段模板")}</dd></div>
+        <div><dt>项目描述</dt><dd>${escapeHtml(hasWorkspaceData() ? "当前数据来自本地导入文件，可继续定位、回检、修订与导出。" : "还没有导入材料。请先导入 CSV/JSON 或工作区 JSON。")}</dd></div>
+      </dl>
+      <div class="progress-block">
+        <div><strong>交付就绪</strong><span>当前主表</span></div>
+        <b>${progress}%</b><i><span style="width:${progress}%"></span></i>
+        <p>可交付 ${formatCount(stats.readyRows)} 条 / 共 ${formatCount(stats.tableRows)} 条</p>
+      </div>
+      <div class="data-overview">
+        <h3>数据概览</h3>
+        <dl>
+          <div><dt>原文页</dt><dd>${formatCount(stats.materials)} 页</dd></div>
+          <div><dt>导入文件</dt><dd>${formatCount(stats.imported)} 份</dd></div>
+          <div><dt>原文已关联</dt><dd>${formatCount(stats.located)} 条</dd></div>
+          <div><dt>摘录已匹配</dt><dd>${formatCount(stats.matchedRows)} 条</dd></div>
+          <div><dt>人工已确认</dt><dd>${formatCount(stats.confirmedRows)} 条</dd></div>
+          <div><dt>问题未关闭</dt><dd>${formatCount(stats.openProblems)} 条</dd></div>
+        </dl>
+      </div>
+      <div class="quick-actions">
+        <h3>快捷操作</h3>
+        <div>
+          <button type="button" data-home-focus="file">材料导入</button>
+          <button type="button" data-home-focus="schema">字段模板</button>
+          <button type="button" data-view="detail" data-detail-mode="table">原文定位</button>
+          <button type="button" data-view="detail" data-detail-mode="table">打开统一主表</button>
+          <button type="button" data-view="detail" data-detail-mode="review">回检队列</button>
+          <button type="button" data-home-focus="export" ${state.rows.length || state.exportVersions.length ? "" : "disabled"}>成果导出</button>
+        </div>
+      </div>
+    </section>
+    <section class="dash-card recent-visits">
+      <h2>最近导入</h2>
+      ${recentItems.length ? `
+        <ol>
+          ${recentItems.map((item) => `<li><span>${escapeHtml(item.name || item.type || "导入文件")}</span><time>${escapeHtml(formatLocalTime(item.at || item.time))}</time></li>`).join("")}
+        </ol>
+      ` : `<p class="dash-empty">暂无导入记录</p>`}
+    </section>
+  `;
+}
+
+function dashboardLogTable() {
+  const logs = state.uploadLog.slice(-8).reverse().map((item) => [
+    formatLocalTime(item.at || item.time),
+    item.step || "材料导入",
+    item.name || item.message || "导入本地文件",
+    "本地用户",
+    item.error || item.type === "error" ? "失败" : item.type === "warn" ? "待处理" : "成功",
+    item.message || item.detail || (item.rows ? `${formatCount(item.rows)} 行` : item.count ? `${formatCount(item.count)} 条` : "-")
+  ]);
+  return `
+    <section class="dash-panel log-panel">
+      <div class="dash-panel-head"><h2>流程日志</h2><div class="log-filters"><button type="button" disabled>全部步骤⌄</button><button type="button" disabled>全部状态⌄</button></div><button type="button" class="icon-control" disabled aria-label="更多日志" title="更多日志">…</button></div>
+      ${logs.length ? `
+        <table class="log-table">
+          <thead><tr><th>时间</th><th>步骤</th><th>操作</th><th>操作人</th><th>状态</th><th>详情</th></tr></thead>
+          <tbody>${logs.map((log) => `<tr>${log.map((cell, index) => `<td class="${index === 4 && cell === "成功" ? "success" : ""}">${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+        </table>
+      ` : `<div class="dash-empty-panel"><strong>暂无流程日志</strong><span>导入文件、回检或导出后会在这里记录。</span></div>`}
+    </section>
+  `;
+}
+
+function dashboardRightColumn() {
+  const stats = projectDashboardStats();
+  const count = (key) => stats.assessment.checks.find((item) => item.key === key)?.count || 0;
+  const queue = [
+    ["待人工确认", stats.unreviewedRows, "审校状态", "unreviewed"],
+    ["定位待核对", count("unlocated"), "原文比对", "unlocated"],
+    ["问题未关闭", stats.openProblems, "问题记录", "openProblem"]
+  ];
+  const risks = stats.assessment.checks.filter((item) => item.count);
+  const quality = [
+    ["原文关联率", percentage(stats.located, stats.tableRows)],
+    ["精确命中率", percentage(stats.exactHits, stats.tableRows)],
+    ["审校确认率", percentage(stats.confirmedRows, stats.tableRows)],
+    ["字段完整率", percentage(Math.max(0, stats.tableRows - stats.missingRequiredRows), stats.tableRows)]
+  ];
+  const activity = state.uploadLog.slice(-3).reverse().map((item) => [item.message || item.name || "导入本地文件", formatLocalTime(item.at || item.time)]);
+  return `
+    ${cloudStatusPanel()}
+    <section class="dash-panel queue-panel-home">
+      <div class="dash-panel-head"><h2>当前队列</h2><button type="button" class="icon-control" data-dashboard-queue="blocked" aria-label="查看待办" title="查看待办">›</button></div>
+      <div class="queue-tabs"><button type="button" data-dashboard-queue="ready">可交付（${formatCount(stats.readyRows)}）</button><button type="button" data-dashboard-queue="unreviewed">待确认（${formatCount(stats.unreviewedRows)}）</button><button type="button" data-dashboard-queue="blocked" title="按条目去重，包含未确认及其他阻塞原因">阻塞（${formatCount(stats.blockedRows)}）</button></div>
+      <table class="queue-table"><thead><tr><th>任务类型</th><th>数量</th><th>依据</th><th>操作</th></tr></thead><tbody>${queue.map((row) => `<tr><td>${escapeHtml(row[0])}</td><td>${formatCount(row[1])}</td><td>${escapeHtml(row[2])}</td><td><button type="button" class="icon-control" data-dashboard-queue="${row[3]}" ${row[1] ? "" : "disabled"} aria-label="处理${escapeHtml(row[0])}" title="处理${escapeHtml(row[0])}">›</button></td></tr>`).join("")}</tbody></table>
+    </section>
+    <section class="dash-panel side-list risk-list"><div class="dash-panel-head"><h2 title="同一条目可能有多项阻塞原因，各项数量不可相加">交付阻塞原因</h2><button type="button" class="icon-control" data-home-focus="export" aria-label="检查成果" title="检查成果">›</button></div>${risks.length ? `<ul>${risks.map((item, index) => `<li><span><i>${index + 1}</i>${escapeHtml(item.label)}</span><button type="button" data-dashboard-queue="${item.key}" aria-label="查看${escapeHtml(item.label)}">${formatCount(item.count)} 条</button></li>`).join("")}</ul>` : `<p class="dash-empty">${stats.tableRows ? "当前主表无交付阻塞" : "尚无条目可检查"}</p>`}</section>
+    <section class="dash-panel side-list quality-list"><div class="dash-panel-head"><h2>数据质量</h2><button type="button" class="icon-control" data-quality-export ${stats.tableRows ? "" : "disabled"} aria-label="查看报告" title="查看报告">›</button></div><ul>${quality.map((item) => `<li><span>${escapeHtml(item[0])}</span><b>${escapeHtml(item[1])}</b></li>`).join("")}</ul></section>
+    <section class="dash-panel side-list activity-list"><div class="dash-panel-head"><h2>操作动态</h2><button type="button" class="icon-control" disabled aria-label="查看全部" title="查看全部">›</button></div>${activity.length ? `<ul>${activity.map((item) => `<li><span>${escapeHtml(item[0])}</span><b>${escapeHtml(item[1])}</b></li>`).join("")}</ul>` : `<p class="dash-empty">暂无操作动态</p>`}</section>
+  `;
+}
+
+function dashboardImportSink() {
+  return `<label class="hidden-import-sink"><input id="fileInput" type="file" multiple accept=".csv,.json,.txt,.xlsx,application/json,text/csv,text/plain" /></label>`;
 }
 
 function railMetrics() {
@@ -846,7 +1861,12 @@ function workspaceStatus() {
 function workspaceActions() {
   return `
     <div class="workspace-actions">
-      <button type="button" data-workspace-export ${state.rows.length ? "" : "disabled"}>导出工作区</button>
+      <button type="button" data-workspace-export>导出工作区</button>
+      <button type="button" data-main-table-export ${state.rows.length || state.exportVersions.length ? "" : "disabled"}>成果导出</button>
+      <button type="button" data-problem-export ${state.rows.length ? "" : "disabled"}>导出问题条目</button>
+      <button type="button" data-review-log-export ${state.rows.length || state.trashRows.length ? "" : "disabled"}>导出审校日志</button>
+      <button type="button" data-import-report-export ${state.importReports.length ? "" : "disabled"}>导出导入报告</button>
+      <button type="button" data-import-conflicts ${state.importReports.some((report) => report.issues?.length) ? "" : "disabled"}>处理导入冲突（${importIssueEntries().filter((entry) => !entry.issue.resolution).length}）</button>
       <button type="button" data-quality-export ${state.rows.length ? "" : "disabled"}>导出字段质量</button>
       <button type="button" data-template-download>下载 CSV 模板</button>
       <button type="button" data-workspace-reset>清空本地工作区</button>
@@ -937,15 +1957,11 @@ function templateDetailsModal() {
       <section class="edit-modal template-modal">
         <div class="modal-head template-modal-head">
           <div>
-            <p class="kicker">Schema Studio</p>
             <h2>字段模板详情</h2>
             <p>${escapeHtml(current.description)}</p>
+            <p>${escapeHtml(current.custom ? "我的模板" : "内置模板")} · ${visibleCount} / ${totalCount} 字段显示</p>
           </div>
-          <div class="schema-summary-meta">
-            <strong>${escapeHtml(current.custom ? "我的模板" : "内置模板")}</strong>
-            <span>${visibleCount} / ${totalCount} 字段显示</span>
-            <button type="button" data-template-panel-close>关闭</button>
-          </div>
+          <button type="button" data-template-panel-close aria-label="关闭字段模板详情" title="关闭">×</button>
         </div>
         <div class="template-modal-body">
           ${templateEditorContent()}
@@ -960,8 +1976,11 @@ function filterChips(rows) {
   rows.forEach((row) => {
     counts.all += 1;
     counts[row.bucket] = (counts[row.bucket] || 0) + 1;
-    if (row.abnormal) counts.abnormal += 1;
+    if (sourceNeedsReview(row)) counts.abnormal += 1;
     if (!rowValidation(row).ok) counts.invalid += 1;
+    if (row.flagged) counts.flagged += 1;
+    if (rowHasProblem(row)) counts.problem += 1;
+    if (row.problemResolution?.status === "resolved") counts.resolved += 1;
   });
   return filters.map((filter) => `
     <button class="${state.filter === filter.id ? "active" : ""}" type="button" data-filter="${filter.id}">
@@ -997,73 +2016,64 @@ function fieldQualityPanel() {
   `;
 }
 
-function sourceQuality(row, useLoadedText = false) {
-  const factors = [];
-  let score = 0;
+const sourceQualityCache = new Map();
 
-  if (row.sourceFile) {
-    score += 18;
-    factors.push({ ok: true, label: "原文页已关联" });
-  } else {
-    factors.push({ ok: false, label: "缺原文页" });
-  }
-
-  if (row.pageNo) {
-    score += 12;
-    factors.push({ ok: true, label: "页码存在" });
-  } else {
-    factors.push({ ok: false, label: "缺页码" });
-  }
-
-  if (String(row.quote || "").trim().length >= 4) {
-    score += 18;
-    factors.push({ ok: true, label: "摘录可比对" });
-  } else {
-    factors.push({ ok: false, label: "摘录不足" });
-  }
-
-  const hitScore = { exact: 28, compact: 23, partial: 12, miss: 0 }[row.hit] ?? 6;
-  score += hitScore;
-  factors.push({ ok: hitScore >= 20, label: `命中：${row.hit || "none"}` });
-
-  if (useLoadedText) {
-    if (state.sourceStatus === "ready" && state.sourceText) {
-      const range = findApproxRange(state.sourceText, row.quote);
-      if (range) {
-        score += 24;
-        factors.push({ ok: true, label: "原文高亮命中" });
-      } else {
-        score += 4;
-        factors.push({ ok: false, label: "高亮未定位" });
-      }
-    } else if (state.sourceStatus === "loading") {
-      factors.push({ ok: true, label: "原文读取中" });
-    } else if (state.sourceStatus === "error") {
-      factors.push({ ok: false, label: "原文读取失败" });
+function sourceQuality(row) {
+  const text = cachedSourceText(row.sourceFile)
+    || (state.selectedId === row.id && state.sourceStatus === "ready" ? state.sourceText : "") || "";
+  const quote = String(row.quote || "").trim();
+  const signature = JSON.stringify([row.sourceFile, row.pageNo, quote]);
+  const cached = sourceQualityCache.get(row.id);
+  if (cached?.text === text && cached.signature === signature) return cached.quality;
+  const factors = [
+    { ok: Boolean(text), label: text ? "原文已读取" : row.sourceFile ? "仅有文件名，未读取原文" : "缺原文页" },
+    { ok: Boolean(row.pageNo), label: row.pageNo ? "页码已记录" : "缺页码" }
+  ];
+  let rank = 0;
+  let match = "unverified";
+  if (text && quote.length >= 4) {
+    const direct = text.indexOf(quote);
+    const compactText = text.replace(/\s+/g, "");
+    const compactQuote = quote.replace(/\s+/g, "");
+    if (direct >= 0) {
+      const unique = text.indexOf(quote, direct + 1) < 0;
+      rank = unique && row.pageNo ? 3 : 2;
+      match = "exact";
+      factors.push({ ok: true, label: unique ? "完整摘录逐字命中" : "完整摘录多处命中" });
+    } else if (compactQuote.length >= 4 && compactText.includes(compactQuote)) {
+      rank = 2;
+      match = "compact";
+      factors.push({ ok: true, label: "去除空白后完整命中" });
+    } else if (findApproxRange(text, quote)) {
+      rank = 1;
+      match = "partial";
+      factors.push({ ok: false, label: "仅部分片段命中" });
+    } else {
+      match = "miss";
+      factors.push({ ok: false, label: "摘录未在原文中定位" });
     }
+  } else {
+    factors.push({ ok: false, label: quote.length < 4 ? "摘录不足，待人工核对" : "尚未比对原文" });
   }
-
-  if (row.abnormal) {
-    score -= 10;
-    factors.push({ ok: false, label: "异常队列" });
-  }
-
-  const normalized = Math.max(0, Math.min(100, Math.round(score)));
-  const thresholds = useLoadedText
-    ? { high: 82, medium: 64, low: 42 }
-    : { high: 74, medium: 58, low: 38 };
-  const tone = normalized >= thresholds.high ? "high" : normalized >= thresholds.medium ? "medium" : normalized >= thresholds.low ? "low" : "risk";
-  const label = normalized >= thresholds.high ? "高" : normalized >= thresholds.medium ? "中" : normalized >= thresholds.low ? "待复核" : "低";
-  return { score: normalized, tone, label, factors };
+  const tone = ["risk", "low", "medium", "high"][rank];
+  const label = ["待复核", "低", "中", "高"][rank];
+  const quality = { rank, tone, label, factors, match };
+  if (sourceQualityCache.size > 5000) sourceQualityCache.clear();
+  sourceQualityCache.set(row.id, { text, signature, quality });
+  return quality;
 }
 
 function confidencePill(row) {
   const quality = sourceQuality(row, false);
-  return `<span class="confidence-chip ${quality.tone}">${quality.score} · ${quality.label}</span>`;
+  return `<span class="confidence-chip ${quality.tone}" title="原文定位等级，不代表学术结论的准确率">${quality.label}</span>`;
+}
+
+function sourceNeedsReview(row) {
+  return sourceQuality(row).rank < 2;
 }
 
 function confidenceSortLabel() {
-  return state.confidenceSort === "desc" ? "高置信优先" : "低置信优先";
+  return state.confidenceSort === "desc" ? "高等级优先" : "低等级优先";
 }
 
 function sortRowsByConfidence(rows) {
@@ -1071,7 +2081,7 @@ function sortRowsByConfidence(rows) {
   return rows
     .map((row, index) => ({ row, index, quality: sourceQuality(row, false) }))
     .sort((a, b) => {
-      const scoreDiff = (a.quality.score - b.quality.score) * direction;
+      const scoreDiff = (a.quality.rank - b.quality.rank) * direction;
       if (scoreDiff) return scoreDiff;
       return a.index - b.index;
     })
@@ -1090,6 +2100,8 @@ function validationBadge(row) {
 }
 
 function reviewLabel(row) {
+  if (row.problemResolution?.status === "resolved") return { label: "已解决", tone: "confirmed" };
+  if (row.problemResolution?.status === "pending_review") return { label: "待复核", tone: "edited" };
   if (row.reviewed) return { label: "已确认", tone: "confirmed" };
   if (row.edited) return { label: "已修改", tone: "edited" };
   return { label: "未确认", tone: "pending" };
@@ -1101,20 +2113,19 @@ function reviewBadge(row) {
 }
 
 function rowActionButtons(row) {
-  const confirmLabel = row.reviewed ? "已确认" : "确认";
   return `
-    <div class="row-actions ${row.reviewed ? "is-reviewed" : ""}" aria-label="审校操作">
-      <button type="button" class="review-action confirm" data-row-action="confirm" data-row-id="${escapeHtml(row.id)}" aria-pressed="${row.reviewed ? "true" : "false"}">
+    <div class="row-actions ${row.reviewed ? "is-reviewed" : ""} ${row.flagged ? "is-flagged" : ""}" aria-label="审校操作">
+      <button type="button" class="review-action icon-action confirm" data-row-action="confirm-next" data-row-id="${escapeHtml(row.id)}" aria-pressed="${row.reviewed ? "true" : "false"}" aria-label="${row.reviewed ? "已确认，进入下一条" : "确认并进入下一条"}" title="${row.reviewed ? "已确认，进入下一条" : "确认并进入下一条"}">
         <span class="action-mark" aria-hidden="true">✓</span>
-        <span>${confirmLabel}</span>
       </button>
-      <button type="button" class="review-action edit" data-row-action="edit" data-row-id="${escapeHtml(row.id)}">
+      <button type="button" class="review-action icon-action flag" data-row-action="flag" data-row-id="${escapeHtml(row.id)}" aria-pressed="${row.flagged ? "true" : "false"}" aria-label="${row.flagged ? "取消人工标注" : "人工标注为有问题"}" title="${row.flagged ? "取消人工标注" : "人工标注为有问题"}">
+        <span class="action-mark" aria-hidden="true">!</span>
+      </button>
+      <button type="button" class="review-action icon-action edit" data-row-action="edit" data-row-id="${escapeHtml(row.id)}" aria-label="修改字段" title="修改字段">
         <span class="action-mark" aria-hidden="true">改</span>
-        <span>修订</span>
       </button>
-      <button type="button" class="review-action danger" data-row-action="delete" data-row-id="${escapeHtml(row.id)}" aria-label="移除 ${escapeHtml(row.id)}" title="移除">
+      <button type="button" class="review-action icon-action danger" data-row-action="delete" data-row-id="${escapeHtml(row.id)}" aria-label="移除 ${escapeHtml(row.id)}" title="移除">
         <span class="action-mark" aria-hidden="true">×</span>
-        <span>移除</span>
       </button>
     </div>
   `;
@@ -1130,16 +2141,27 @@ function reviewCell(row) {
 }
 
 function visibleTableFields() {
+  if (state.detailMode === "review") {
+    const preferred = ["issue", "quote", "pageNo", "sourceFile", "author", "scriptType"]
+      .map((id) => schemaField(id))
+      .filter(Boolean);
+    return preferred.length ? preferred.slice(0, 6) : orderedSchema().slice(0, 6);
+  }
   const fields = orderedSchema({ includeHidden: false });
   return fields.length ? fields.slice(0, 6) : orderedSchema().slice(0, 6);
 }
 
+function fieldColumnClass(field) {
+  return `field-col field-${String(field?.id || "").replace(/[^a-z0-9_-]/gi, "-")}`;
+}
+
 function resultTable(rows) {
   if (!rows.length) {
+    const readyQueue = state.qualityFocus?.mode === "dashboard" && state.qualityFocus.key === "ready";
     return `
       <div class="empty-state">
-        <strong>没有匹配结果</strong>
-        <p>调整筛选或搜索词后再查看。</p>
+        <strong>${readyQueue ? "暂无可交付条目" : "没有匹配结果"}</strong>
+        <p>${readyQueue ? `当前筛选 0 条 · 主表共 ${formatCount(state.rows.length)} 条` : "调整筛选或搜索词后再查看。"}</p>
       </div>
     `;
   }
@@ -1153,17 +2175,17 @@ function resultTable(rows) {
             <th>回检</th>
             <th class="review-col">审校</th>
             <th>字段</th>
-            <th>置信</th>
+            <th>等级</th>
             <th>附表</th>
-            ${tableFields.map((field) => `<th class="${field.type === "longtext" ? "longtext-col" : ""}">${escapeHtml(field.label)}</th>`).join("")}
+            ${tableFields.map((field) => `<th class="${fieldColumnClass(field)} ${field.type === "longtext" ? "longtext-col" : ""}">${escapeHtml(field.label)}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
           ${rows.map((row, index) => {
             const quality = sourceQuality(row, false);
             return `
-            <tr class="${row.id === state.selectedId ? "selected" : ""} ${row.abnormal ? "abnormal" : ""} ${!rowValidation(row).ok ? "invalid" : ""} confidence-row confidence-${quality.tone}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
-              <td><button type="button" data-row-id="${escapeHtml(row.id)}">查看</button></td>
+            <tr class="${row.id === state.selectedId ? "selected" : ""} ${sourceNeedsReview(row) ? "abnormal" : ""} ${row.flagged ? "flagged" : ""} ${!rowValidation(row).ok ? "invalid" : ""} confidence-row confidence-${quality.tone}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
+              <td><button type="button" class="icon-control" data-row-id="${escapeHtml(row.id)}" aria-label="查看 ${escapeHtml(row.id)}" title="查看条目">›</button></td>
               <td class="review-cell">${reviewCell(row)}</td>
               <td>${validationBadge(row)}</td>
               <td>${confidencePill(row)}</td>
@@ -1176,7 +2198,7 @@ function resultTable(rows) {
                   ? `<strong>${escapeHtml(cell || "未标注")}</strong><small>${escapeHtml(row.id)}</small>`
                   : escapeHtml(cell || "未标注");
                 const content = isLongText ? `<span class="longtext-clip">${rawContent}</span>` : rawContent;
-                return `<td class="${isLongText ? "longtext-cell" : ""}" title="${escapeHtml(value)}">${content}</td>`;
+                return `<td class="${fieldColumnClass(field)} ${isLongText ? "longtext-cell" : ""}" title="${escapeHtml(value)}">${content}</td>`;
               }).join("")}
             </tr>
           `;
@@ -1228,8 +2250,13 @@ function highlightedSource(row) {
   const range = findApproxRange(state.sourceText, row?.quote);
   if (!range) return `<pre>${escapeHtml(state.sourceText)}</pre>`;
   const [start, end] = range;
+  const margin = 60;
+  const contextStart = Math.max(0, start - margin);
+  const contextEnd = Math.min(state.sourceText.length, end + margin);
+  const prefix = contextStart > 0 ? "..." : "";
+  const suffix = contextEnd < state.sourceText.length ? "..." : "";
   return `
-    <pre>${escapeHtml(state.sourceText.slice(0, start))}<mark>${escapeHtml(state.sourceText.slice(start, end))}</mark>${escapeHtml(state.sourceText.slice(end))}</pre>
+    <pre>${escapeHtml(prefix + state.sourceText.slice(contextStart, start))}<mark>${escapeHtml(state.sourceText.slice(start, end))}</mark>${escapeHtml(state.sourceText.slice(end, contextEnd) + suffix)}</pre>
   `;
 }
 
@@ -1237,6 +2264,7 @@ function detailCardContent(row) {
   const titleField = schemaField("author") || orderedSchema({ includeHidden: false })[0];
   const title = titleField ? fieldValue(row, titleField.id) : row.author;
   const quote = fieldValue(row, "quote") || row.quote;
+  const reviewMode = state.detailMode === "review";
   return `
       <p class="kicker">Source Trace</p>
       <div class="detail-title-row">
@@ -1248,12 +2276,7 @@ function detailCardContent(row) {
         <span>${escapeHtml(row.pageNo || "无页码")}</span>
         <span>${escapeHtml(row.sourceFile || "无原文文件")}</span>
       </div>
-      <blockquote>${escapeHtml(quote || "无摘录")}</blockquote>
-      <div class="review-actions">
-        <button type="button" data-row-action="confirm" data-row-id="${escapeHtml(row.id)}">${row.reviewed ? "已确认" : "确认此条"}</button>
-        <button type="button" data-row-action="edit" data-row-id="${escapeHtml(row.id)}">修改字段</button>
-        <button type="button" class="danger" data-row-action="delete" data-row-id="${escapeHtml(row.id)}">删除条目</button>
-      </div>
+      ${reviewMode ? `<blockquote>${escapeHtml(quote || "无摘录")}</blockquote>${reviewControls(row)}` : ""}
       <dl>
         ${orderedSchema().map((field) => `
           <dt>${escapeHtml(field.label)}</dt>
@@ -1262,8 +2285,71 @@ function detailCardContent(row) {
             ${field.evidenceRequired ? "<small>需证据</small>" : ""}
           </dd>
         `).join("")}
+        <dt>第三轮状态</dt><dd>${escapeHtml(row.triageStatus || row.status || "未标注")}</dd>
+        <dt>操作建议</dt><dd>${escapeHtml(row.manualAdvice || row.recommendation || "未标注")}</dd>
+        <dt>问题归因</dt><dd>${escapeHtml(row.issueReason || "未标注")}</dd>
+        <dt>处理说明</dt><dd>${escapeHtml(row.handlingNote || "未标注")}</dd>
         <dt>命中</dt><dd>${escapeHtml(row.hit || "none")}</dd>
       </dl>
+  `;
+}
+
+function reviewControls(row) {
+  return `
+    <div class="review-actions">
+      <button type="button" class="nav-action" data-row-action="previous" data-row-id="${escapeHtml(row.id)}" aria-label="上一条" title="上一条">‹</button>
+      <button type="button" class="primary-action" data-row-action="confirm-next" data-row-id="${escapeHtml(row.id)}" aria-label="${row.reviewed ? "已确认并进入下一条" : "确认并进入下一条"}" title="${row.reviewed ? "已确认并进入下一条" : "确认并进入下一条"}">
+        <span aria-hidden="true">✓</span>
+        <strong>${row.reviewed ? "下一条" : "确认并下一条"}</strong>
+      </button>
+      <button type="button" class="nav-action" data-row-action="next" data-row-id="${escapeHtml(row.id)}" aria-label="下一条" title="下一条">›</button>
+      <button type="button" class="flag-action ${row.flagged ? "active" : ""}" data-row-action="flag" data-row-id="${escapeHtml(row.id)}" aria-pressed="${row.flagged ? "true" : "false"}" aria-label="${row.flagged ? "取消人工标注" : "人工标注为有问题"}" title="${row.flagged ? "取消人工标注" : "人工标注为有问题"}">!</button>
+      <button type="button" class="icon-control ai-panel-trigger" data-ai-panel-open aria-expanded="${String(state.aiPanelOpen)}" aria-controls="aiEvidencePanel" aria-label="打开 AI 字段理由" title="打开 AI 字段理由">✦</button>
+      <button type="button" class="secondary-action" data-row-action="edit" data-row-id="${escapeHtml(row.id)}" aria-label="修改字段" title="修改字段">改</button>
+      <button type="button" class="danger icon-only" data-row-action="delete" data-row-id="${escapeHtml(row.id)}" aria-label="删除条目" title="删除条目">×</button>
+    </div>
+    ${problemTagControls(row)}
+    ${problemStatusControls(row)}
+  `;
+}
+
+function reviewFocusCard(row) {
+  const quote = fieldValue(row, "quote") || row.quote;
+  const issue = row.issueReason || fieldValue(row, "issue") || row.triageStatus || row.status || "待人工判断";
+  const advice = row.manualAdvice || row.recommendation || "核对原文、页码、摘录和字段后确认。";
+  const quality = sourceQuality(row, false);
+  return `
+    <section class="review-focus-card ${quality.tone}">
+      <div class="review-focus-head">
+        <div>
+          <span>审核焦点</span>
+          <h2>${escapeHtml(issue)}</h2>
+        </div>
+        ${confidencePill(row)}
+      </div>
+      <p class="review-focus-advice">${escapeHtml(advice)}</p>
+      <blockquote>${escapeHtml(quote || "无摘录")}</blockquote>
+      <div class="review-focus-meta">
+        <span>${escapeHtml(row.sourceFile || "无原文文件")}</span>
+        <span>${escapeHtml(row.pageNo || "无页码")}</span>
+        <span>${quality.rank >= 2 ? "摘录已匹配" : "定位待核对"}</span>
+      </div>
+    </section>
+  `;
+}
+
+function problemTagControls(row) {
+  const tags = window.CalligraphySchema?.problemTags || [];
+  if (!tags.length) return "";
+  const current = normalizeProblemTags(row);
+  return `
+    <div class="problem-tags" aria-label="问题标签">
+      ${tags.map((tag) => `
+        <button type="button" class="${current.includes(tag.key) ? "active" : ""}" data-problem-tag="${escapeHtml(tag.key)}" data-row-id="${escapeHtml(row.id)}" title="${escapeHtml(tag.label)}">
+          ${escapeHtml(tag.label)}
+        </button>
+      `).join("")}
+    </div>
   `;
 }
 
@@ -1369,20 +2455,52 @@ function annotationPanel(row) {
 
 function sourceCardContent(row) {
   const quality = sourceQuality(row, true);
+  const quote = fieldValue(row, "quote") || row.quote;
+  if (state.detailMode === "table") {
+    const author = fieldValue(row, "author") || row.author || "未标注书家";
+    const scriptType = fieldValue(row, "scriptType") || row.scriptType;
+    return `
+      <div class="master-evidence-head">
+        <div>
+          <span class="master-evidence-label">待审摘录</span>
+          <h2>${escapeHtml(author)}${scriptType ? ` · ${escapeHtml(scriptType)}` : ""}</h2>
+        </div>
+        <div class="master-evidence-status">
+          ${reviewBadge(row)}
+          ${confidencePill(row)}
+        </div>
+      </div>
+      <blockquote class="master-evidence-quote">${escapeHtml(quote || "无摘录")}</blockquote>
+      <div class="master-evidence-meta">
+        <span>${escapeHtml(row.sourceFile || "未关联原文")}</span>
+        <span>${escapeHtml(row.pageNo || "无页码")}</span>
+        <span>${quality.rank >= 2 ? "摘录已匹配" : "定位待核对"}</span>
+      </div>
+      <div class="master-source-label">
+        <strong>原文上下文</strong>
+        <span>${quality.rank >= 2 ? "高亮处为摘录位置" : "请核对摘录与原文"}</span>
+      </div>
+      <div class="master-source-context">${highlightedSource(row)}</div>
+      <div class="master-evidence-factors">
+        ${quality.factors.map((factor) => `<span class="${factor.ok ? "ok" : "warn"}">${escapeHtml(factor.label)}</span>`).join("")}
+      </div>
+      ${reviewControls(row)}
+    `;
+  }
   return `
       <div class="source-head">
         <div>
           <p class="kicker">Original Page</p>
           <h2>${escapeHtml(row.sourceFile || "未关联原文")}</h2>
         </div>
-        <span>${row.abnormal ? "需复核" : "可回检"}</span>
+        <span>${sourceNeedsReview(row) ? "需复核" : "已定位"}</span>
       </div>
       <div class="confidence-panel ${quality.tone}">
         <div class="confidence-head">
-          <strong>原文置信度</strong>
-          <span>${quality.score} · ${quality.label}</span>
+          <strong>证据等级</strong>
+          <span>${quality.label}</span>
         </div>
-        <div class="confidence-bar"><i style="width:${quality.score}%"></i></div>
+        <p class="confidence-rule">依据实际原文比对，仅表示定位可靠性。</p>
         <div class="confidence-factors">
           ${quality.factors.map((factor) => `<span class="${factor.ok ? "ok" : "warn"}">${escapeHtml(factor.label)}</span>`).join("")}
         </div>
@@ -1393,10 +2511,486 @@ function sourceCardContent(row) {
 
 function sourceCard(row) {
   return `
-    <section class="source-card" aria-live="polite">
+    <section class="source-card ${state.detailMode === "table" ? "master-evidence-card" : ""}" aria-live="polite">
       ${sourceCardContent(row)}
     </section>
   `;
+}
+
+function defaultResearchQuery(row) {
+  if (!row) return "";
+  const titleField = schemaField("author") || orderedSchema({ includeHidden: false })[0];
+  const author = titleField ? fieldValue(row, titleField.id) : row.author;
+  const scriptType = fieldValue(row, "scriptType") || row.scriptType;
+  const quote = fieldValue(row, "quote") || row.quote;
+  return [author, scriptType, clip(quote, 22), "书论 书法"].filter(Boolean).join(" ");
+}
+
+function activeResearchQuery(row) {
+  return state.researchRowId === row?.id ? state.researchQuery : defaultResearchQuery(row);
+}
+
+function fallbackSearchUrl(query) {
+  return `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+}
+
+function researchCardContent(row) {
+  const query = activeResearchQuery(row);
+  const belongsToRow = state.researchRowId === row?.id;
+  const status = belongsToRow ? state.researchStatus : "idle";
+  const results = belongsToRow ? state.researchResults : [];
+  const error = belongsToRow ? state.researchError : "";
+  return `
+    <div class="research-head">
+      <div>
+        <p class="kicker">Web Search</p>
+        <h2>资料检索</h2>
+      </div>
+      <span>${status === "loading" ? "检索中" : results.length ? `${results.length} 条` : status === "ready" ? "未取得结果" : status === "error" ? "检索失败" : "待检索"}</span>
+    </div>
+    <form class="research-form" data-research-form>
+      <input name="researchQuery" value="${escapeHtml(query)}" placeholder="输入书家、摘录、版本线索..." autocomplete="off" />
+      <button type="submit" class="icon-control" aria-label="检索资料" title="检索资料">${status === "loading" ? "..." : "⌕"}</button>
+    </form>
+    <div class="research-presets">
+      <button type="button" data-research-preset="author">书家</button>
+      <button type="button" data-research-preset="quote">摘录</button>
+      <button type="button" data-research-preset="balanced">综合</button>
+    </div>
+    <div class="research-results" aria-live="polite">
+      ${status === "loading" ? `<p class="research-empty">正在联网检索...</p>` : ""}
+      ${status === "error" ? `
+        <div class="research-empty">
+          <strong>检索暂不可用</strong>
+          <span>${escapeHtml(error || "本地搜索代理没有返回结果。")}</span>
+          <a href="${fallbackSearchUrl(query)}" target="_blank" rel="noreferrer">打开搜索页</a>
+        </div>
+      ` : ""}
+      ${status === "idle" ? `<p class="research-empty">待检索</p>` : ""}
+      ${status === "ready" && !results.length ? `<div class="research-empty"><strong>未取得检索结果</strong><a href="${fallbackSearchUrl(query)}" target="_blank" rel="noreferrer">打开搜索页</a></div>` : ""}
+      ${results.map((item) => `
+        <article class="research-result">
+          <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+          <p>${escapeHtml(item.snippet || "无摘要")}</p>
+          <small>${escapeHtml(item.url)}</small>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function researchCard(row) {
+  return `
+    <section class="research-card">
+      ${researchCardContent(row)}
+    </section>
+  `;
+}
+
+function resetAiForRow(row) {
+  state.aiRequestId += 1;
+  state.aiWorkspaceId = state.workspaceId;
+  state.aiRowId = row?.id || "";
+  state.aiStatus = "idle";
+  state.aiProposal = null;
+  state.aiError = "";
+  state.aiInputSignature = "";
+  state.aiFieldJudgments = {};
+  state.aiMobilePane = "fields";
+}
+
+function aiSourceForRow(row) {
+  if (!row?.sourceFile) return "";
+  if (row.id === state.selectedId && state.sourceText) return state.sourceText;
+  return cachedSourceText(row.sourceFile) || "";
+}
+
+function aiInputSignature(row) {
+  if (!row) return "";
+  const schema = orderedSchema();
+  return JSON.stringify({
+    workspaceId: state.workspaceId,
+    rowId: row.id,
+    sourceText: aiSourceForRow(row),
+    sourceFile: String(row.sourceFile || ""),
+    pageNo: String(row.pageNo || ""),
+    schemaTemplateId: state.schemaTemplateId,
+    schemaVersion: state.schemaVersion,
+    promptVersion: state.promptVersion,
+    currentFields: Object.fromEntries(schema.map((field) => [field.id, String(fieldValue(row, field.id) || "")])),
+    schema: schema.map(({ id, label, type, prompt, required, evidenceRequired, visible, order }) => ({
+      id, label, type, prompt, required, evidenceRequired, visible, order
+    }))
+  });
+}
+
+function invalidateAiCandidate(row = selectedRow()) {
+  const belongsToRow = row && state.aiRowId === row.id && state.aiWorkspaceId === state.workspaceId;
+  if (!belongsToRow || !state.aiInputSignature || state.aiInputSignature === aiInputSignature(row)) return false;
+  resetAiForRow(row);
+  return true;
+}
+
+function updateAiFieldJudgmentDom(fieldId) {
+  const panel = document.querySelector("#aiEvidencePanel");
+  if (!panel) return false;
+  const buttons = [...document.querySelectorAll("[data-ai-judgment]")]
+    .filter((button) => button.dataset.fieldId === fieldId);
+  buttons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.aiJudgment === state.aiFieldJudgments[fieldId]));
+  });
+  const actions = panel.querySelector(".ai-panel-actions");
+  if (actions) actions.innerHTML = aiPanelActions(selectedRow());
+  return Boolean(buttons.length || actions);
+}
+
+function setAiFieldJudgment(fieldId, judgment) {
+  const allowedFields = new Set(orderedSchema().map((field) => field.id));
+  const allowedJudgments = new Set(["accept", "reject", "uncertain"]);
+  if (!allowedFields.has(fieldId) || !allowedJudgments.has(judgment)) return false;
+  state.aiFieldJudgments = { ...state.aiFieldJudgments, [fieldId]: judgment };
+  updateAiFieldJudgmentDom(fieldId);
+  return true;
+}
+
+function aiReviewedFields(row) {
+  const proposals = state.aiProposal?.proposal?.fields || {};
+  const reasoningByField = new Map((state.aiProposal?.proposal?.reasoning || []).map((item) => [item.fieldId, item]));
+  return orderedSchema({ includeHidden: false }).map((field) => {
+    const reasoning = reasoningByField.get(field.id) || {
+      fieldId: field.id,
+      decision: "abstain",
+      reason: "模型未提供该字段的判断理由。",
+      evidenceQuote: "",
+      evidenceVerified: false,
+      missing: true
+    };
+    const before = String(fieldValue(row, field.id) || "");
+    const proposedAfter = Object.prototype.hasOwnProperty.call(proposals, field.id) ? String(proposals[field.id] || "") : before;
+    const after = reasoning.decision === "change" ? proposedAfter : before;
+    return { field, before, after, reasoning, judgment: state.aiFieldJudgments[field.id] || "" };
+  });
+}
+
+function aiPresentation(row) {
+  const configured = Boolean(state.cloud.config?.aiEnabled);
+  const belongsToRow = state.aiRowId === row?.id && state.aiWorkspaceId === state.workspaceId;
+  const status = belongsToRow ? state.aiStatus : "idle";
+  const proposal = belongsToRow ? state.aiProposal : null;
+  const error = belongsToRow ? state.aiError : "";
+  const reviewedFields = proposal ? aiReviewedFields(row) : [];
+  const evidence = Array.isArray(proposal?.proposal?.evidence) ? proposal.proposal.evidence : [];
+  const abstentions = Array.isArray(proposal?.proposal?.abstentions) ? proposal.proposal.abstentions : [];
+  const sourceReady = Boolean(aiSourceForRow(row));
+  const statusLabel = !configured ? "未配置" : status === "loading" ? "生成中" : status === "ready" ? "待核验" : status === "applied" ? "已保存" : status === "error" ? "失败" : "就绪";
+  return { configured, status, proposal, error, reviewedFields, evidence, abstentions, sourceReady, statusLabel };
+}
+
+function aiFieldReviewCard(item) {
+  const { field, before, after, reasoning, judgment } = item;
+  const evidenceState = reasoning.evidenceQuote ? (reasoning.evidenceVerified ? "证据充分" : "需人工判断") : "无证据";
+  const evidenceClass = reasoning.evidenceQuote && reasoning.evidenceVerified ? "verified" : reasoning.evidenceQuote ? "unverified" : "missing";
+  const suggestion = reasoning.decision === "keep" ? "建议保留" : reasoning.decision === "change" ? (after || "空") : "模型弃答";
+  const labels = { accept: "认可", reject: "驳回", uncertain: "存疑" };
+  const symbols = { accept: "✓", reject: "×", uncertain: "?" };
+  return `
+    <article class="ai-field-review">
+      <div class="ai-field-head"><strong>${escapeHtml(field.label)}</strong><span class="${evidenceClass}">${evidenceState}</span></div>
+      <dl class="ai-field-values">
+        <dt>当前</dt><dd>${escapeHtml(before || "空")}</dd>
+        <dt>建议</dt><dd>${escapeHtml(suggestion)}</dd>
+      </dl>
+      <p class="ai-field-reason"><strong>判断理由</strong>${escapeHtml(reasoning.reason)}</p>
+      <p class="ai-field-evidence"><strong>原文证据</strong><span class="${evidenceClass}">${reasoning.evidenceQuote ? (reasoning.evidenceVerified ? "原文命中" : "待人工核对") : "未提供"}</span>${reasoning.evidenceQuote ? `<q>${escapeHtml(reasoning.evidenceQuote)}</q>` : "未提供原文证据"}</p>
+      <div class="ai-judgment" role="group" aria-label="${escapeHtml(field.label)}人工裁定">
+        ${["accept", "reject", "uncertain"].map((value) => `<button type="button" data-ai-judgment="${value}" data-field-id="${escapeHtml(field.id)}" aria-pressed="${String(judgment === value)}" aria-label="${labels[value]}${escapeHtml(field.label)}建议" title="${labels[value]}${escapeHtml(field.label)}建议">${symbols[value]}</button>`).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function aiSuggestionContent(row) {
+  const { configured, status, proposal, error, reviewedFields, abstentions, sourceReady } = aiPresentation(row);
+  return `
+    <section class="ai-suggestion-content ${status}" aria-live="polite" aria-busy="${String(status === "loading")}">
+      ${status === "ready" && proposal ? `
+        <div class="ai-run-meta"><span>${escapeHtml(proposal.meta?.model || "未记录模型")}</span><span>提示词 v${escapeHtml(proposal.meta?.promptVersion || state.promptVersion)}</span></div>
+        <div class="ai-field-list">${reviewedFields.map(aiFieldReviewCard).join("")}</div>
+        ${abstentions.length ? `<details class="ai-abstentions"><summary>弃答 ${abstentions.length} 项</summary><ul>${abstentions.map((item) => `<li><strong>${escapeHtml(schemaField(item.fieldId)?.label || item.fieldId)}</strong>${escapeHtml(item.reason)}</li>`).join("")}</ul></details>` : ""}
+      ` : !configured ? `
+        <div class="ai-empty"><p>模型服务尚未配置，人工审校功能不受影响。</p></div>
+      ` : status === "loading" ? `
+        <div class="ai-empty"><p>正在依据当前原文和字段规则生成候选。</p></div>
+      ` : status === "error" ? `
+        <div class="ai-empty error"><p>${escapeHtml(error || "模型调用失败")}</p></div>
+      ` : status === "applied" ? `
+        <div class="ai-empty success"><p>建议已作为人工采纳记录写入，本条仍需确认。</p></div>
+      ` : `
+        <div class="ai-empty"><p>${sourceReady ? "基于当前原文生成结构化候选，不会自动覆盖主表。" : state.sourceStatus === "loading" ? "正在读取原文..." : "当前条目没有可供模型分析的原文。"}</p></div>
+      `}
+    </section>
+  `;
+}
+
+function aiPanelActions(row) {
+  const { status, proposal } = aiPresentation(row);
+  const fields = proposal ? aiReviewedFields(row) : [];
+  const decided = fields.filter((item) => item.judgment).length;
+  const accepted = fields.filter((item) => item.judgment === "accept").length;
+  const pending = Math.max(0, fields.length - decided);
+  const canClear = status !== "idle" || Boolean(proposal);
+  const canApply = status === "ready" && decided > 0;
+  const applyLabel = pending ? `保存核验（待处理 ${pending}）` : `保存核验（认可 ${accepted}）`;
+  return `
+    <button type="button" data-ai-clear ${canClear ? "" : "disabled"}>清除</button>
+    <button type="button" data-ai-apply ${canApply ? "" : "disabled"}>${applyLabel}</button>
+  `;
+}
+
+function aiReviewPanel(row) {
+  if (!state.aiPanelOpen || !row) return "";
+  const { configured, status, sourceReady, statusLabel } = aiPresentation(row);
+  const title = `${fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注条目"} · ${row.id}`;
+  const canGenerate = configured && sourceReady && status !== "loading";
+  const generateLabel = status === "idle" ? "生成 AI 理由" : "重新生成 AI 理由";
+  return `
+    <aside id="aiEvidencePanel" class="ai-review-panel ${status}" aria-labelledby="aiPanelTitle" data-row-id="${escapeHtml(row.id)}">
+      <header class="ai-panel-head">
+        <div><p class="kicker">AI Evidence</p><h2 id="aiPanelTitle" tabindex="-1">${escapeHtml(title)}</h2></div>
+        <span class="ai-panel-status">${escapeHtml(statusLabel)}</span>
+        <button type="button" class="icon-control" data-ai-generate ${canGenerate ? "" : "disabled"} aria-label="${generateLabel}" title="${generateLabel}">${status === "idle" ? "✦" : "↻"}</button>
+        <button type="button" class="icon-control" data-ai-panel-close aria-label="关闭 AI 字段理由" title="关闭 AI 字段理由">×</button>
+      </header>
+      <div class="ai-panel-scroll">${aiSuggestionContent(row)}</div>
+      <footer class="ai-panel-actions">${aiPanelActions(row)}</footer>
+    </aside>
+  `;
+}
+
+function renderAiPanel(row = selectedRow(), { focus = false } = {}) {
+  const panel = document.querySelector("#aiEvidencePanel");
+  const markup = aiReviewPanel(row);
+  if (!markup) {
+    panel?.remove();
+    return;
+  }
+  if (panel) panel.outerHTML = markup;
+  else document.querySelector(".review-screen")?.insertAdjacentHTML("beforeend", markup);
+  if (focus) document.querySelector("#aiPanelTitle")?.focus({ preventScroll: true });
+}
+
+function openAiPanel(trigger) {
+  const row = selectedRow();
+  if (!row) return false;
+  if (state.aiRowId !== row.id || state.aiWorkspaceId !== state.workspaceId) resetAiForRow(row);
+  aiPanelTrigger = trigger || document.activeElement || null;
+  if (!state.aiPanelOpen) {
+    state.aiRailWasCollapsed = state.railCollapsed;
+    state.aiDetailWasCollapsed = state.detailCollapsed;
+    state.aiTableFocusWasActive = state.tableFocus;
+  }
+  state.aiPanelOpen = true;
+  state.railCollapsed = true;
+  state.detailCollapsed = false;
+  state.tableFocus = false;
+  aiPanelTrigger?.setAttribute?.("aria-expanded", "true");
+  renderDetail();
+  document.querySelector("#aiPanelTitle")?.focus({ preventScroll: true });
+  return true;
+}
+
+function closeAiPanel({ restoreFocus = true } = {}) {
+  if (!state.aiPanelOpen) return false;
+  state.aiPanelOpen = false;
+  if (state.aiRailWasCollapsed !== null) state.railCollapsed = state.aiRailWasCollapsed;
+  if (state.aiDetailWasCollapsed !== null) state.detailCollapsed = state.aiDetailWasCollapsed;
+  if (state.aiTableFocusWasActive !== null) state.tableFocus = state.aiTableFocusWasActive;
+  state.aiRailWasCollapsed = null;
+  state.aiDetailWasCollapsed = null;
+  state.aiTableFocusWasActive = null;
+  aiPanelTrigger = null;
+  renderDetail();
+  const trigger = document.querySelector("[data-ai-panel-open]");
+  trigger?.setAttribute?.("aria-expanded", "false");
+  if (restoreFocus) trigger?.focus({ preventScroll: true });
+  return true;
+}
+
+function updateAiDom(row = selectedRow()) {
+  invalidateAiCandidate(row);
+  if (!state.aiPanelOpen) return;
+  renderAiPanel(row);
+}
+
+function setAiMobilePane(pane) {
+  if (!state.aiPanelOpen || !["fields", "reasoning"].includes(pane)) return false;
+  state.aiMobilePane = pane;
+  render();
+  return true;
+}
+
+function normalizedAiResponse(payload) {
+  const fields = payload?.proposal?.fields && typeof payload.proposal.fields === "object" ? payload.proposal.fields : {};
+  const allowed = new Set(orderedSchema().map((field) => field.id));
+  const decisions = new Set(["keep", "change", "abstain"]);
+  const reasoning = Array.isArray(payload?.proposal?.reasoning)
+    ? payload.proposal.reasoning.flatMap((item) => {
+        const fieldId = String(item?.fieldId || "");
+        const decision = String(item?.decision || "");
+        const reason = String(item?.reason || "").trim().slice(0, 800);
+        const evidenceQuote = String(item?.evidenceQuote || "").trim().slice(0, 500);
+        if (!allowed.has(fieldId) || !decisions.has(decision) || !reason) return [];
+        return [{ fieldId, decision, reason, evidenceQuote, evidenceVerified: Boolean(item?.evidenceVerified) }];
+      }).slice(0, 30)
+    : [];
+  return {
+    proposal: {
+      fields: Object.fromEntries(Object.entries(fields).filter(([fieldId, value]) => allowed.has(fieldId) && typeof value === "string")),
+      evidence: Array.isArray(payload?.proposal?.evidence) ? payload.proposal.evidence.filter((item) => allowed.has(item?.fieldId)).slice(0, 60) : [],
+      reasoning,
+      abstentions: Array.isArray(payload?.proposal?.abstentions) ? payload.proposal.abstentions.filter((item) => allowed.has(item?.fieldId)).slice(0, 30) : []
+    },
+    meta: {
+      model: String(payload?.meta?.model || "unrecorded"),
+      promptVersion: Number(payload?.meta?.promptVersion) || state.promptVersion,
+      generatedAt: String(payload?.meta?.generatedAt || new Date().toISOString())
+    }
+  };
+}
+
+async function performAiExtraction(rowId) {
+  const row = state.rows.find((item) => item.id === rowId);
+  if (!row || !state.cloud.config?.aiEnabled) return false;
+  const sourceText = aiSourceForRow(row);
+  if (!sourceText) {
+    state.aiStatus = "error";
+    state.aiError = "当前条目没有可用原文";
+    updateAiDom(row);
+    return false;
+  }
+  const requestId = state.aiRequestId + 1;
+  const workspaceId = state.workspaceId;
+  const inputSignature = aiInputSignature(row);
+  state.aiRequestId = requestId;
+  state.aiWorkspaceId = workspaceId;
+  state.aiRowId = row.id;
+  state.aiStatus = "loading";
+  state.aiProposal = null;
+  state.aiError = "";
+  state.aiInputSignature = inputSignature;
+  state.aiFieldJudgments = {};
+  updateAiDom(row);
+  const isCurrent = () => requestId === state.aiRequestId
+    && workspaceId === state.workspaceId
+    && state.aiWorkspaceId === workspaceId
+    && state.selectedId === row.id
+    && state.aiInputSignature === inputSignature
+    && aiInputSignature(row) === inputSignature;
+  const discardChangedInputs = () => {
+    if (requestId !== state.aiRequestId || workspaceId !== state.workspaceId || state.selectedId !== row.id || state.aiInputSignature !== inputSignature) return;
+    if (aiInputSignature(row) !== inputSignature) {
+      resetAiForRow(row);
+      updateAiDom(row);
+    }
+  };
+  try {
+    const response = await fetch("./api/ai/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: state.workspaceId,
+        rowId: row.id,
+        sourceText,
+        sourceFile: row.sourceFile,
+        pageNo: row.pageNo,
+        promptVersion: state.promptVersion,
+        currentFields: Object.fromEntries(orderedSchema().map((field) => [field.id, String(fieldValue(row, field.id) || "")])),
+        schema: orderedSchema().map(({ id, label, prompt, required, evidenceRequired }) => ({ id, label, prompt, required, evidenceRequired }))
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `模型服务返回 ${response.status}`);
+    if (!isCurrent()) {
+      discardChangedInputs();
+      return false;
+    }
+    state.aiProposal = normalizedAiResponse(payload);
+    state.aiStatus = "ready";
+    updateAiDom(row);
+    return true;
+  } catch (error) {
+    if (!isCurrent()) {
+      discardChangedInputs();
+      return false;
+    }
+    state.aiStatus = "error";
+    state.aiError = error?.message || "模型调用失败";
+    updateAiDom(row);
+    return false;
+  }
+}
+
+function clearAiProposal(row = selectedRow()) {
+  if (!row) return;
+  resetAiForRow(row);
+  updateAiDom(row);
+}
+
+function applyAiProposal(rowId) {
+  const row = state.rows.find((item) => item.id === rowId);
+  if (!row || state.aiStatus !== "ready" || state.aiRowId !== row.id || state.aiWorkspaceId !== state.workspaceId || !state.aiProposal) return false;
+  if (!state.aiInputSignature || state.aiInputSignature !== aiInputSignature(row)) {
+    resetAiForRow(row);
+    updateAiDom(row);
+    return false;
+  }
+  const reviewedFields = aiReviewedFields(row);
+  const acceptedChanges = reviewedFields
+    .filter((item) => item.judgment === "accept" && item.reasoning.decision === "change" && item.before !== item.after)
+    .map(({ field, before, after }) => ({ fieldId: field.id, before, after }));
+  const decisions = Object.fromEntries(reviewedFields
+    .filter((item) => item.judgment)
+    .map((item) => [item.field.id, item.judgment]));
+  const uncertain = reviewedFields.filter((item) => item.judgment === "uncertain");
+  const rejected = reviewedFields.filter((item) => item.judgment === "reject");
+  if (!Object.keys(decisions).length) return false;
+  const checkpoint = rememberUndo(row, "核验 AI 字段建议");
+  acceptedChanges.forEach((change) => setFieldValue(row, change.fieldId, change.after));
+  row.aiDraft = {
+    ...(row.aiDraft || {}),
+    ...Object.fromEntries(acceptedChanges.map((change) => [change.fieldId, change.after]))
+  };
+  row.modelVersion = state.aiProposal.meta.model;
+  row.promptVersion = state.aiProposal.meta.promptVersion;
+  row.edited = true;
+  row.reviewed = false;
+  if (uncertain.length) {
+    row.problemResolution = {
+      status: "pending_review",
+      at: new Date().toISOString(),
+      reason: `AI 字段存疑：${uncertain.map((item) => item.field.label).join("、")}`
+    };
+  } else if (acceptedChanges.length && row.problemResolution?.status === "resolved") {
+    row.problemResolution = { status: "pending_review", at: new Date().toISOString(), reason: "采纳 AI 建议后待人工复核。" };
+  }
+  syncLegacyFields(row);
+  addHistory(row, {
+    type: "ai-field-review",
+    actor: "human",
+    reason: `人工核验 AI 字段建议：认可 ${acceptedChanges.length} 项，驳回 ${rejected.length} 项，存疑 ${uncertain.length} 项。`,
+    promptVersion: state.aiProposal.meta.promptVersion,
+    modelVersion: state.aiProposal.meta.model,
+    evidence: state.aiProposal.proposal.evidence,
+    reasoning: state.aiProposal.proposal.reasoning,
+    decisions,
+    changes: acceptedChanges
+  });
+  state.aiStatus = "applied";
+  if (!finishReviewChange(row, "ai-field-review", "人工核验 AI 字段建议。", acceptedChanges, checkpoint)) {
+    state.aiStatus = "ready";
+    return false;
+  }
+  return true;
 }
 
 function resultsControlPanel(rows) {
@@ -1407,7 +3001,7 @@ function resultsControlPanel(rows) {
           <span>筛选标签</span>
           <small>${escapeHtml(filters.find((item) => item.id === state.filter)?.label || "全部")} · ${rows.length} 条</small>
         </div>
-        <button type="button" data-filter-toggle aria-expanded="${String(!state.filtersCollapsed)}">${state.filtersCollapsed ? "展开" : "收起"}</button>
+        <button type="button" class="icon-control" data-filter-toggle aria-expanded="${String(!state.filtersCollapsed)}" aria-label="${state.filtersCollapsed ? "展开筛选" : "收起筛选"}" title="${state.filtersCollapsed ? "展开筛选" : "收起筛选"}">${state.filtersCollapsed ? "⌄" : "⌃"}</button>
       </div>
       <div class="collapsible-filters">
         ${qualityFocusBar(rows)}
@@ -1421,46 +3015,107 @@ function resultsControlPanel(rows) {
   `;
 }
 
+function problemTagCounts() {
+  const counts = Object.fromEntries((window.CalligraphySchema?.problemTags || []).map((tag) => [tag.key, 0]));
+  state.rows.forEach((row) => {
+    normalizeProblemTags(row).forEach((tag) => {
+      counts[tag] = (counts[tag] || 0) + 1;
+    });
+  });
+  return counts;
+}
+
+function modeSummaryPanel(rows) {
+  const stats = state.manifest.stats;
+  if (state.detailMode !== "review") {
+    const items = [
+      ["全量行", state.rows.length],
+      ["当前视图", rows.length],
+      ["字段待补", stats.invalidRows],
+      ["精确命中", stats.exactHits],
+    ];
+    return `
+      <div class="mode-summary table-summary" aria-label="统一主表摘要">
+        ${items.map(([label, value]) => `<span><b>${escapeHtml(value)}</b>${escapeHtml(label)}</span>`).join("")}
+      </div>
+    `;
+  }
+
+  const issueItems = [
+    ["当前队列", rows.length],
+    ["人工标注", state.rows.filter((row) => row.flagged).length],
+    ["命中异常", state.rows.filter(sourceNeedsReview).length],
+    ["字段待补", state.manifest.stats.invalidRows],
+  ];
+  return `
+    <div class="mode-summary review-summary" aria-label="回检修订摘要">
+      ${issueItems.map(([label, value]) => `<span><b>${escapeHtml(value)}</b>${escapeHtml(label)}</span>`).join("")}
+    </div>
+  `;
+}
+
 function tableViewActions() {
+  if (state.detailMode === "review") {
+    return `
+      <div class="table-view-actions review-view-actions" aria-label="回检视图控制">
+        <button type="button" class="active icon-control" data-confidence-sort aria-pressed="true" aria-label="${confidenceSortLabel()}" title="${confidenceSortLabel()}">${state.confidenceSort === "desc" ? "⇣" : "⇡"}</button>
+        <button type="button" data-quality-batch-review title="将当前筛选条目标记为待复核" ${visibleRows().length ? "" : "disabled"}>批量复核</button>
+        <button type="button" data-problem-export ${state.rows.length ? "" : "disabled"}>导出问题</button>
+      </div>
+    `;
+  }
+  const focusLabel = state.aiPanelOpen ? "AI 字段理由打开时保持并排审校" : state.tableFocus ? "退出表格专注" : "进入表格专注";
   return `
     <div class="table-view-actions" aria-label="表格视图控制">
-      <button type="button" class="active" data-confidence-sort aria-pressed="true">${confidenceSortLabel()}</button>
-      <button type="button" class="${state.tableFocus ? "active" : ""}" data-table-focus aria-pressed="${String(state.tableFocus)}">${state.tableFocus ? "退出专注" : "专注表格"}</button>
-      <button type="button" class="${state.tableHeaderCollapsed ? "active" : ""}" data-table-head-toggle aria-pressed="${String(state.tableHeaderCollapsed)}">${state.tableHeaderCollapsed ? "显示表头" : "收起表头"}</button>
+      <button type="button" class="active icon-control" data-confidence-sort aria-pressed="true" aria-label="${confidenceSortLabel()}" title="${confidenceSortLabel()}">${state.confidenceSort === "desc" ? "⇣" : "⇡"}</button>
+      <button type="button" class="icon-control ${state.tableFocus ? "active" : ""}" data-table-focus aria-pressed="${String(state.tableFocus)}" aria-label="${focusLabel}" title="${focusLabel}" ${state.aiPanelOpen ? "disabled" : ""}>⛶</button>
+      <button type="button" class="icon-control ${state.tableHeaderCollapsed ? "active" : ""}" data-table-head-toggle aria-pressed="${String(state.tableHeaderCollapsed)}" aria-label="${state.tableHeaderCollapsed ? "显示表头" : "收起表头"}" title="${state.tableHeaderCollapsed ? "显示表头" : "收起表头"}">▤</button>
     </div>
   `;
 }
 
 function detailPanel(row) {
+  const dockLabel = state.detailMode === "review" ? "处理面板" : "条目详情";
+  const detailToggleLabel = state.aiPanelOpen ? "AI 字段理由打开时保持条目详情展开" : state.detailCollapsed ? "展开条目详情" : "收起条目详情";
   if (!row) {
+    const readyQueue = state.qualityFocus?.mode === "dashboard" && state.qualityFocus.key === "ready";
+    const emptyTitle = readyQueue ? "暂无可交付条目" : state.detailMode === "review" ? "暂无待处理条目" : "暂无数据";
     return `
-      <aside class="detail-panel ${state.detailCollapsed ? "collapsed" : ""}">
+      <aside class="detail-panel ${state.detailCollapsed ? "collapsed" : ""}" data-dock-mode="${escapeHtml(state.detailMode)}">
         <div class="dock-grip"></div>
         <div class="detail-dock-head">
           <div>
-            <p class="kicker">Inspection Dock</p>
-            <h2>暂无数据</h2>
+            <p class="kicker">${escapeHtml(dockLabel)}</p>
+            <h2>${emptyTitle}</h2>
           </div>
-          <button type="button" data-detail-toggle aria-expanded="${String(!state.detailCollapsed)}">${state.detailCollapsed ? "展开" : "收起"}</button>
+          <button type="button" class="icon-control" data-detail-toggle aria-expanded="${String(!state.detailCollapsed)}" aria-label="${detailToggleLabel}" title="${detailToggleLabel}" ${state.aiPanelOpen ? "disabled" : ""}>${state.detailCollapsed ? "‹" : "›"}</button>
         </div>
-        <div class="detail-dock-body"><div class="empty-state"><strong>暂无数据</strong></div></div>
+        <div class="detail-dock-body"><div class="empty-state"><strong>${emptyTitle}</strong></div></div>
       </aside>
     `;
   }
 
   return `
-    <aside class="detail-panel ${state.detailCollapsed ? "collapsed" : ""}">
+    <aside class="detail-panel ${state.detailCollapsed ? "collapsed" : ""}" data-dock-mode="${escapeHtml(state.detailMode)}" data-selected-id="${escapeHtml(row.id)}">
       <div class="dock-grip"></div>
       <div class="detail-dock-head">
         <div>
-          <p class="kicker">Inspection Dock</p>
+          <p class="kicker">${escapeHtml(dockLabel)}</p>
           <h2>${escapeHtml(fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注条目")} · ${escapeHtml(row.id)}</h2>
         </div>
-        <button type="button" data-detail-toggle aria-expanded="${String(!state.detailCollapsed)}">${state.detailCollapsed ? "展开" : "收起"}</button>
+        <button type="button" class="icon-control" data-detail-toggle aria-expanded="${String(!state.detailCollapsed)}" aria-label="${detailToggleLabel}" title="${detailToggleLabel}" ${state.aiPanelOpen ? "disabled" : ""}>${state.detailCollapsed ? "‹" : "›"}</button>
       </div>
       <div class="detail-dock-body">
-        ${detailCard(row)}
-        ${sourceCard(row)}
+        ${state.detailMode === "review" ? `
+          ${reviewFocusCard(row)}
+          ${sourceCard(row)}
+          ${detailCard(row)}
+          ${researchCard(row)}
+        ` : `
+          ${sourceCard(row)}
+          ${detailCard(row)}
+          ${researchCard(row)}
+        `}
       </div>
     </aside>
   `;
@@ -1488,34 +3143,114 @@ function updateDetailDom(row) {
     return;
   }
   if (!row) {
-    panel.innerHTML = "<div class='empty-state'><strong>暂无数据</strong></div>";
+    if (panel.dataset.selectedId) render();
     return;
   }
 
   const detail = panel.querySelector(".detail-card");
+  const focus = panel.querySelector(".review-focus-card");
+  const research = panel.querySelector(".research-card");
   const source = panel.querySelector(".source-card");
-  if (!detail || !source) {
+  if (!detail || !research || !source) {
     render();
     return;
   }
 
   const dockTitle = panel.querySelector(".detail-dock-head h2");
+  panel.dataset.selectedId = row.id;
   if (dockTitle) dockTitle.textContent = `${fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注条目"} · ${row.id}`;
-  panel.classList.remove("is-updating");
-  void panel.offsetWidth;
-  panel.classList.add("is-updating");
+  if (focus) focus.outerHTML = reviewFocusCard(row);
   detail.innerHTML = detailCardContent(row);
+  research.innerHTML = researchCardContent(row);
   source.innerHTML = sourceCardContent(row);
-  window.setTimeout(() => panel.classList.remove("is-updating"), 280);
+  updateAiDom(row);
+}
+
+function updateResearchDom(row = selectedRow()) {
+  const card = document.querySelector(".research-card");
+  if (!card || !row) {
+    updateDetailDom(row);
+    return;
+  }
+  card.innerHTML = researchCardContent(row);
+}
+
+function researchPresetQuery(row, preset) {
+  const author = fieldValue(row, "author") || row.author;
+  const scriptType = fieldValue(row, "scriptType") || row.scriptType;
+  const quote = fieldValue(row, "quote") || row.quote;
+  if (preset === "author") return [author, scriptType, "书论 书法"].filter(Boolean).join(" ");
+  if (preset === "quote") return [clip(quote, 32), "书论"].filter(Boolean).join(" ");
+  return defaultResearchQuery(row);
+}
+
+async function performResearchSearch(query, rowId = state.selectedId) {
+  const trimmed = String(query || "").trim();
+  if (!trimmed || selectedRow()?.id !== rowId) return;
+  const workspaceId = state.workspaceId;
+  const requestId = state.researchRequestId + 1;
+  const isCurrent = () => requestId === state.researchRequestId
+    && workspaceId === state.workspaceId && selectedRow()?.id === rowId && state.view === "detail";
+  state.researchRequestId = requestId;
+  state.researchRowId = rowId;
+  state.researchQuery = trimmed;
+  state.researchStatus = "loading";
+  state.researchError = "";
+  state.researchResults = [];
+  updateResearchDom(state.rows.find((row) => row.id === rowId));
+
+  try {
+    const response = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
+    const payload = await response.json();
+    if (!isCurrent()) return;
+    if (!response.ok || payload.error) {
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    state.researchResults = normalizeResearchResults(payload.results);
+    state.researchStatus = "ready";
+    state.researchError = "";
+  } catch (error) {
+    if (!isCurrent()) return;
+    state.researchResults = [];
+    state.researchStatus = "error";
+    state.researchError = error?.message || "search failed";
+  }
+  updateResearchDom(state.rows.find((row) => row.id === rowId));
+}
+
+function normalizeResearchResults(results) {
+  if (!Array.isArray(results)) return [];
+  return results.flatMap((item) => {
+    if (!item || typeof item.title !== "string" || !item.title.trim()) return [];
+    try {
+      const url = new URL(item.url);
+      if (!["http:", "https:"].includes(url.protocol)) return [];
+      return [{ title: item.title, url: url.href, snippet: String(item.snippet || "") }];
+    } catch {
+      return [];
+    }
+  }).slice(0, 8);
+}
+
+function resetResearchForRow(row) {
+  state.researchRequestId += 1;
+  state.researchWorkspaceId = state.workspaceId;
+  state.researchRowId = row?.id || "";
+  state.researchQuery = defaultResearchQuery(row);
+  state.researchStatus = "idle";
+  state.researchResults = [];
+  state.researchError = "";
 }
 
 function updateSourceDom(row) {
+  if (!row) return;
   const card = document.querySelector(".source-card");
   if (!card) {
     updateDetailDom(row);
     return;
   }
   card.innerHTML = sourceCardContent(row);
+  updateAiDom(row);
 }
 
 function cachedSourceText(sourceFile) {
@@ -1525,18 +3260,24 @@ function cachedSourceText(sourceFile) {
 }
 
 function selectResult(rowId) {
-  if (!rowId) return;
+  if (!rowId || !visibleRows().some((row) => row.id === rowId)) return false;
   if (rowId === state.selectedId) {
     setDetailDock(false);
     return;
   }
   state.selectedId = rowId;
+  try {
+    localStorage.setItem(storageKey() + ":selection", rowId);
+  } catch {
+    state.saveError = "当前位置未保存";
+  }
   setDetailDock(false);
   const requestId = state.sourceRequestId + 1;
   state.sourceRequestId = requestId;
   updateSelectedRowDom();
-  triggerWorkbenchMotion("row-motion", 420);
   const row = selectedRow();
+  resetResearchForRow(row);
+  resetAiForRow(row);
 
   if (!row?.sourceFile) {
     state.sourceText = "";
@@ -1548,58 +3289,220 @@ function selectResult(rowId) {
   }
 
   updateDetailDom(row);
+  const detailBody = document.querySelector(".detail-dock-body");
+  if (detailBody) detailBody.scrollTop = 0;
+  revealSelectedRow();
   if (row?.sourceFile && state.sourceStatus === "loading") {
     loadSelectedSource({ loadingRendered: true, requestId });
   }
 }
 
-function persistRow(row) {
-  if (row.reviewed && !state.reviewState.confirmedIds.includes(row.id)) {
-    state.reviewState.confirmedIds.push(row.id);
+function revealSelectedRow() {
+  const shell = document.querySelector(".table-shell");
+  const row = [...document.querySelectorAll("tbody tr[data-row-id]")].find((item) => item.dataset.rowId === state.selectedId);
+  if (!shell || !row) return;
+  const bounds = shell.getBoundingClientRect();
+  const item = row.getBoundingClientRect();
+  const headerHeight = shell.querySelector("thead")?.getBoundingClientRect().height || 0;
+  if (item.top < bounds.top + headerHeight) shell.scrollTop -= bounds.top + headerHeight - item.top;
+  else if (item.bottom > bounds.bottom) shell.scrollTop += item.bottom - bounds.bottom;
+}
+
+function reviewChangeCheckpoint(rows = []) {
+  return {
+    rowSnapshots: (Array.isArray(rows) ? rows : [rows]).map((row) => ({ row, before: cloneRow(row) })),
+    rows: [...state.rows], trashRows: [...state.trashRows],
+    reviewState: JSON.parse(JSON.stringify(state.reviewState)), undoAction: state.undoAction,
+    manifest: state.manifest, selectedId: state.selectedId, editingId: state.editingId,
+    resolutionRowId: state.resolutionRowId, queueIds: visibleRows().map((item) => item.id)
+  };
+}
+
+function restoreReviewCheckpoint(checkpoint) {
+  // Preserve original objects as well as membership: callers may still hold them.
+  checkpoint.rowSnapshots.forEach(({ row, before }) => {
+    Object.keys(row).forEach((key) => delete row[key]);
+    Object.assign(row, before);
+  });
+  for (const key of ["rows", "trashRows", "reviewState", "undoAction", "manifest", "selectedId", "editingId", "resolutionRowId"]) {
+    state[key] = checkpoint[key];
   }
-  if (row.edited) {
-    state.reviewState.edits[row.id] = editableSnapshot(row);
+}
+
+function rememberUndo(row, label) {
+  const checkpoint = reviewChangeCheckpoint(row);
+  state.undoAction = { row: cloneRow(row), label, workspaceId: state.workspaceId };
+  return checkpoint;
+}
+
+function finishReviewChange(row, type, reason, changes = [], checkpoint) {
+  state.reviewState.confirmedIds = state.reviewState.confirmedIds.filter((id) => id !== row.id);
+  if (row.reviewed && !row.deleted) state.reviewState.confirmedIds.push(row.id);
+  state.reviewState.edits[row.id] = editableSnapshot(row);
+  state.manifest = buildManifest(state.rows);
+  const rows = visibleRows();
+  if (!rows.some((item) => item.id === state.selectedId)) {
+    const index = Math.max(0, checkpoint.queueIds.indexOf(checkpoint.selectedId));
+    state.selectedId = rows[Math.min(index, rows.length - 1)]?.id || "";
   }
-  saveReviewState();
+  if (!saveWorkspace()) {
+    restoreReviewCheckpoint(checkpoint);
+    return false;
+  }
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  if (state.researchRowId !== state.selectedId) resetResearchForRow(selectedRow());
+  syncRowChangeToCloud(row, type, reason, changes);
+  render();
+  loadSelectedSource();
+  revealSelectedRow();
+  return true;
+}
+
+function undoLastAction() {
+  const undo = state.undoAction;
+  if (!undo || undo.workspaceId !== state.workspaceId) return;
+  const current = [...state.rows, ...state.trashRows].find((row) => row.id === undo.row.id);
+  if (!current) return;
+  const checkpoint = reviewChangeCheckpoint(current);
+  const restored = cloneRow(undo.row);
+  restored.cloudId = current.cloudId || restored.cloudId;
+  restored.history = normalizeHistory(current).map((event) => ({ ...event }));
+  restored.deleted = false;
+  addHistory(restored, { type: "undo", actor: "human", reason: "撤销最近一次" + undo.label + "。", changes: [] });
+  const index = state.rows.findIndex((row) => row.id === restored.id);
+  if (index < 0) state.rows.push(restored);
+  else state.rows[index] = restored;
+  state.trashRows = state.trashRows.filter((row) => row.id !== restored.id);
+  state.reviewState.deletedIds = state.reviewState.deletedIds.filter((id) => id !== restored.id);
+  state.undoAction = null;
+  state.selectedId = restored.id;
+  return finishReviewChange(restored, "undo", "撤销最近一次" + undo.label + "。", [], checkpoint);
+}
+
+function restoreTrashRow(rowId) {
+  const row = state.trashRows.find((item) => item.id === rowId);
+  if (!row || state.rows.some((item) => item.id === rowId)) return;
+  const checkpoint = reviewChangeCheckpoint(row);
+  row.deleted = false;
+  delete row.deletedAt;
+  addHistory(row, { type: "restore", actor: "human", reason: "从回收站恢复。", changes: [] });
+  state.trashRows = state.trashRows.filter((item) => item.id !== rowId);
+  state.rows.push(row);
+  state.reviewState.deletedIds = state.reviewState.deletedIds.filter((id) => id !== rowId);
+  state.undoAction = null;
+  state.selectedId = row.id;
+  return finishReviewChange(row, "restore", "从回收站恢复。", [], checkpoint);
+}
+
+function setProblemStatus(rowId, status, reason) {
+  const row = state.rows.find((item) => item.id === rowId);
+  if (!row || !["open", "pending_review", "resolved"].includes(status)) return;
+  if (status === "resolved" && !String(reason || "").trim()) return;
+  const checkpoint = rememberUndo(row, "问题状态变更");
+  const before = rowProblemStatus(row);
+  row.problemResolution = { status, reason: String(reason || "").trim(), at: new Date().toISOString() };
+  row.reviewed = status === "resolved";
+  row.reviewedAt = row.reviewed ? new Date().toISOString() : "";
+  const changes = [{ fieldId: "problemStatus", before, after: status }];
+  addHistory(row, { type: "problem-" + status, actor: "human", reason, changes });
+  state.resolutionRowId = "";
+  return finishReviewChange(row, "problem-" + status, reason, changes, checkpoint);
+}
+
+function problemStatusControls(row) {
+  const status = rowProblemStatus(row);
+  if (status === "none") return "";
+  const labels = { open: "待处理", pending_review: "待复核", resolved: "已解决" };
+  return `
+    <div class="problem-lifecycle" aria-label="问题处理状态">
+      <strong>${labels[status]}</strong>
+      ${status === "resolved" ? `<button type="button" data-row-action="reopen" data-row-id="${escapeHtml(row.id)}">重新打开</button>`
+        : `${status === "open" ? `<button type="button" data-row-action="submit-review" data-row-id="${escapeHtml(row.id)}">提交复核</button>` : ""}
+          <button type="button" data-row-action="resolve" data-row-id="${escapeHtml(row.id)}">解决问题</button>`}
+      ${row.problemResolution?.reason ? `<p>${escapeHtml(row.problemResolution.reason)}</p>` : ""}
+    </div>`;
 }
 
 function confirmRow(rowId) {
   const row = state.rows.find((item) => item.id === rowId);
   if (!row) return;
+  const checkpoint = rememberUndo(row, "确认");
   row.reviewed = true;
   row.reviewedAt = new Date().toISOString();
+  const changes = [];
   addHistory(row, {
     type: "confirm",
     actor: "human",
     reason: "人工确认当前条目。",
-    changes: []
+    changes
   });
-  persistRow(row);
-  state.manifest = buildManifest(state.rows);
-  updateSelectedRowDom();
-  if (state.selectedId === row.id) updateDetailDom(row);
-  updateReviewToolbarDom();
-  updateVisibleCountDom();
-  updateTableRowStatus(row);
+  return finishReviewChange(row, "confirm", "人工确认当前条目。", changes, checkpoint);
+}
+
+function confirmAndNext(rowId) {
+  const rows = visibleRows();
+  const current = rows.find((item) => item.id === rowId);
+  if (!current) return false;
+  const currentIndex = current ? rows.findIndex((row) => row.id === current.id) : -1;
+  if (!current.reviewed && !confirmRow(current.id)) return false;
+  if (!rows.length) return;
+  const nextIndex = currentIndex >= 0 ? Math.min(currentIndex + 1, rows.length - 1) : 0;
+  const next = rows[nextIndex];
+  if (next && next.id !== current?.id) selectResult(next.id);
+}
+
+function toggleFlagRow(rowId) {
+  const row = state.rows.find((item) => item.id === rowId);
+  if (!row) return;
+  const checkpoint = rememberUndo(row, "问题标注");
+  row.flagged = !row.flagged;
+  if (row.flagged) row.problemResolution = { status: "open", at: new Date().toISOString() };
+  const changes = [{ fieldId: "flagged", before: !row.flagged, after: row.flagged }];
+  addHistory(row, {
+    type: row.flagged ? "flag" : "unflag",
+    actor: "human",
+    reason: row.flagged ? "人工标注为有问题。" : "取消人工问题标注。",
+    changes
+  });
+  return finishReviewChange(row, row.flagged ? "flag" : "unflag", row.flagged ? "人工标注为有问题。" : "取消人工问题标注。", changes, checkpoint);
+}
+
+function toggleProblemTag(rowId, tagKey) {
+  const row = state.rows.find((item) => item.id === rowId);
+  if (!row || !tagKey) return;
+  const checkpoint = rememberUndo(row, "问题标签");
+  const before = normalizeProblemTags(row);
+  const nextRow = before.includes(tagKey)
+    ? window.CalligraphyReviewWorkflow.removeProblemTag(row, tagKey)
+    : window.CalligraphyReviewWorkflow.addProblemTag(row, tagKey);
+  row.problemTags = normalizeProblemTags(nextRow);
+  row.problemResolution = { status: "open", at: new Date().toISOString() };
+  row.edited = true;
+  const after = normalizeProblemTags(row);
+  const changes = [{ fieldId: "problemTags", before: before.join(";"), after: after.join(";") }];
+  addHistory(row, {
+    type: "tag",
+    actor: "human",
+    reason: `更新问题标签：${after.map((tag) => window.CalligraphySchema?.tagLabel?.(tag) || tag).join("、") || "无"}`,
+    changes
+  });
+  return finishReviewChange(row, "tag", "人工更新问题标签。", changes, checkpoint);
 }
 
 function deleteRow(rowId) {
   const row = state.rows.find((item) => item.id === rowId);
   if (!row) return;
+  const checkpoint = rememberUndo(row, "删除");
   if (!state.reviewState.deletedIds.includes(row.id)) {
     state.reviewState.deletedIds.push(row.id);
   }
-  saveReviewState();
-  const currentRows = visibleRows();
-  const currentIndex = Math.max(0, currentRows.findIndex((item) => item.id === row.id));
+  row.deleted = true;
+  row.deletedAt = new Date().toISOString();
+  addHistory(row, { type: "delete", actor: "human", reason: "移入回收站。", changes: [] });
+  state.trashRows.push(row);
   state.rows = state.rows.filter((item) => item.id !== row.id);
-  state.manifest = buildManifest(state.rows);
-  const nextRows = visibleRows();
-  state.selectedId = nextRows[Math.min(currentIndex, nextRows.length - 1)]?.id || state.rows[0]?.id || "";
-  state.sourceText = "";
-  state.sourceStatus = "idle";
-  render();
-  loadSelectedSource();
+  return finishReviewChange(row, "delete", "人工删除当前条目。", [], checkpoint);
 }
 
 function openEdit(rowId) {
@@ -1611,6 +3514,7 @@ function openEdit(rowId) {
 function saveEdit(form) {
   const row = state.rows.find((item) => item.id === state.editingId);
   if (!row) return;
+  const checkpoint = rememberUndo(row, "修订");
   const data = new FormData(form);
   const changes = [];
   orderedSchema().forEach((field) => {
@@ -1625,6 +3529,11 @@ function saveEdit(form) {
   syncLegacyFields(row);
   row.abnormal = hasAbnormal(row);
   row.edited = true;
+  row.reviewed = false;
+  state.reviewState.confirmedIds = state.reviewState.confirmedIds.filter((id) => id !== row.id);
+  if (rowHasProblem(row) || row.problemResolution) {
+    row.problemResolution = { status: "pending_review", at: new Date().toISOString(), reason: "字段已修改，待复核。" };
+  }
   addHistory(row, {
     type: "human-edit",
     actor: "human",
@@ -1653,25 +3562,32 @@ function saveEdit(form) {
       changes: [{ fieldId: fieldId || "annotation", before: "", after: annotationBody }]
     });
   }
-  persistRow(row);
-  state.manifest = buildManifest(state.rows);
   state.editingId = "";
-  state.sourceText = "";
-  state.sourceStatus = "idle";
-  render();
-  loadSelectedSource();
+  return finishReviewChange(row, "human-edit", String(data.get("editReason") || "人工修订字段。"), changes, checkpoint);
 }
 
 function resetReviewState() {
+  if (!window.confirm("将恢复全部条目的导入初稿。请先导出工作区备份。继续重置？")) return false;
+  if (!saveWorkspace()) return false;
+  const checkpoint = reviewChangeCheckpoint();
   state.reviewState = reviewDefaults();
+  state.trashRows = [];
+  state.undoAction = null;
   state.rows = state.originalRows.map(cloneRow);
   state.manifest = buildManifest(state.rows);
-  state.selectedId = state.rows[0]?.id || "";
+  state.selectedId = visibleRows()[0]?.id || "";
+  state.editingId = "";
+  state.resolutionRowId = "";
+  if (!saveWorkspace()) {
+    restoreReviewCheckpoint(checkpoint);
+    return false;
+  }
   state.sourceText = "";
   state.sourceStatus = "idle";
-  saveWorkspace();
+  resetResearchForRow(selectedRow());
   render();
   loadSelectedSource();
+  return true;
 }
 
 function applyTemplate(templateId) {
@@ -1701,6 +3617,8 @@ function updateSchemaField(fieldId, prop, value) {
   if (prop === "label" || prop === "visible" || prop === "type") {
     render();
     if (state.view === "detail") loadSelectedSource();
+  } else if (state.view === "detail") {
+    updateAiDom(selectedRow());
   }
 }
 
@@ -1839,12 +3757,10 @@ function downloadBlob(filename, content, type = "application/json") {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
 function exportWorkspace() {
-  if (!state.rows.length) return;
-  saveWorkspace();
   const stamp = new Date().toISOString().slice(0, 10);
   const safeName = state.datasetName.replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/-+/g, "-").slice(0, 48) || "calligraphy-workspace";
   downloadBlob(`${stamp}-${safeName}.json`, JSON.stringify(workspacePayload(), null, 2));
@@ -1888,18 +3804,224 @@ function exportFieldQualityCsv() {
   downloadBlob(`${stamp}-field-quality.csv`, `${csv}\n`, "text/csv;charset=utf-8");
 }
 
+function exportFields() {
+  return [
+    { key: "id", label: "材料ID" },
+    { key: "importFileName", label: "导入文件" },
+    { key: "appendix", label: "附表" },
+    { key: "bucket", label: "队列" },
+    { key: "status", label: "状态" },
+    ...orderedSchema().map((field) => ({ key: field.id, label: field.label })),
+    { key: "hit", label: "原文命中" },
+    { key: "problemTags", label: "问题标签" },
+    { key: "problemStatus", label: "问题状态" },
+    { key: "resolutionReason", label: "处理结论" },
+    { key: "flagged", label: "人工标注" },
+    { key: "reviewed", label: "已确认" },
+    { key: "edited", label: "已修改" },
+  ];
+}
+
+function exportableRows(rows = state.rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    importFileName: row.importFileName || "",
+    appendix: row.appendix || "",
+    bucket: filters.find((item) => item.id === row.bucket)?.label || row.bucket || "",
+    status: row.triageStatus || row.status || "",
+    ...Object.fromEntries(orderedSchema().map((field) => [field.id, fieldValue(row, field.id)])),
+    confidence: sourceQuality(row).label,
+    hit: row.hit || "",
+    problemTags: normalizeProblemTags(row).map((tag) => window.CalligraphySchema?.tagLabel?.(tag) || tag),
+    problemStatus: ({ open: "待处理", pending_review: "待复核", resolved: "已解决", none: "" })[rowProblemStatus(row)],
+    resolutionReason: row.problemResolution?.reason || "",
+    flagged: row.flagged ? "是" : "否",
+    reviewed: row.reviewed ? "是" : "否",
+    edited: row.edited ? "是" : "否",
+  }));
+}
+
+function reviewLogRows() {
+  return [...state.rows, ...state.trashRows].flatMap((row) => normalizeHistory(row).map((event) => ({
+    createdAt: event.at || "",
+    rowId: row.id,
+    action: event.type || "",
+    actor: event.actor || "",
+    detail: [event.reason || "", ...(event.changes || []).map((change) =>
+      (schemaField(change.fieldId)?.label || change.fieldId) + ": " + String(change.before ?? "") + " → " + String(change.after ?? ""))].join("；"),
+  })));
+}
+
+function exportMainTableCsv() {
+  openExportPanel();
+}
+
+function openExportPanel() {
+  state.exportOpen = true;
+  state.exportScope = "all";
+  state.exportMode = "draft";
+  state.exportMessage = "";
+  render();
+}
+
+function deliveryRows() {
+  return state.exportScope === "view" ? visibleRows() : state.rows;
+}
+
+function deliveryFacts(rows) {
+  return rows.map((row) => ({
+    id: row.id, reviewed: Boolean(row.reviewed) && !rowValidation(row).confirmedThenChanged,
+    hasProblem: rowHasProblem(row),
+    missingRequired: rowValidation(row).missingRequired.length > 0,
+    sourceRank: sourceQuality(row).rank
+  }));
+}
+
+function releaseFields() {
+  const fields = orderedSchema().filter((field) =>
+    (field.visible || ["sourceFile", "pageNo"].includes(field.id)) && !["gate", "issue"].includes(field.id));
+  return [{ key: "id", label: "材料ID" }, ...fields.map((field) => ({ key: field.id, label: field.label }))];
+}
+
+function createFormalRelease() {
+  const rows = deliveryRows();
+  const facts = deliveryFacts(rows);
+  if (!window.CalligraphyExportWorkflow.assessRelease(facts).ready) {
+    state.exportMessage = "请先处理所选范围的阻塞条目。";
+    render();
+    return false;
+  }
+  const version = Math.max(0, ...state.exportVersions.map((item) => Number(item.version) || 0)) + 1;
+  const id = newWorkspaceId();
+  const snapshot = window.CalligraphyExportWorkflow.createRelease({
+    metadata: {
+      id, version, workspaceId: state.workspaceId, datasetName: state.datasetName,
+      createdAt: new Date().toISOString(), actor: state.cloud.user?.email || "本地用户",
+      scope: state.exportScope, scopeLabel: state.exportScope === "view" ? "当前筛选" : "全部主表",
+      selection: { filter: state.filter, query: state.query, qualityFocus: state.qualityFocus },
+      schemaVersion: state.schemaVersion, rulesVersion: "delivery-v1",
+      filename: "书论成果-v" + String(version).padStart(3, "0") + "-" + id.slice(0, 8)
+    },
+    facts, rows: exportableRows(rows), fields: releaseFields(),
+    sourcePages: Object.fromEntries([...new Set(rows.map((row) => row.sourceFile).filter(Boolean))]
+      .map((name) => [name, cachedSourceText(name) || ""])),
+    auditRows: rows
+  });
+  const previous = state.exportVersions;
+  const previousLog = state.uploadLog;
+  state.exportVersions = [...previous, snapshot];
+  state.uploadLog = [...previousLog, logEntry("success", "正式成果 v" + version, "已保存 " + rows.length + " 条成果快照", { step: "成果导出", rows: rows.length })];
+  if (!saveWorkspace()) {
+    state.exportVersions = previous;
+    state.uploadLog = previousLog;
+    state.exportMessage = "版本未保存，未生成正式成果。可先下载工作草稿或工作区备份。";
+    render();
+    return false;
+  }
+  state.exportMessage = "已保存 v" + version + " · " + rows.length + " 条";
+  render();
+  downloadRelease(id, "csv");
+  return true;
+}
+
+function downloadRelease(id, format = "csv") {
+  const snapshot = state.exportVersions.find((item) => item.id === id);
+  if (!snapshot) return;
+  if (format === "json") {
+    downloadBlob(snapshot.filename + ".json", JSON.stringify(snapshot, null, 2));
+  } else {
+    downloadBlob(snapshot.filename + ".csv", snapshot.csv, "text/csv;charset=utf-8");
+  }
+}
+
+function downloadWorkingDraft() {
+  const rows = deliveryRows();
+  if (!rows.length) return;
+  const csv = window.CalligraphyExportWorkflow.buildMainExport(exportableRows(rows), exportFields());
+  const scope = state.exportScope === "view" ? "当前筛选" : "全部主表";
+  downloadBlob("工作草稿-" + scope + "-" + new Date().toISOString().slice(0, 10) + ".csv", "\uFEFF" + csv + "\r\n", "text/csv;charset=utf-8");
+}
+
+function inspectDeliveryBlockers(key) {
+  const assessment = window.CalligraphyExportWorkflow.assessRelease(deliveryFacts(deliveryRows()));
+  const rowIds = assessment.issues.filter((item) => !key || item.reasons.includes(key)).map((item) => item.id);
+  state.exportOpen = false;
+  navigateToView("detail", "review");
+  state.filter = "all";
+  state.query = "";
+  state.qualityFocus = { mode: "delivery", rowIds, label: window.CalligraphyExportWorkflow.releaseChecks.find((item) => item.key === key)?.label || "成果检查" };
+  state.selectedId = rowIds[0] || "";
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  render();
+  loadSelectedSource();
+}
+
+function deliveryModal() {
+  if (!state.exportOpen) return "";
+  const rows = deliveryRows();
+  const assessment = window.CalligraphyExportWorkflow.assessRelease(deliveryFacts(rows));
+  const formal = state.exportMode === "formal";
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="成果导出">
+      <form class="edit-modal delivery-modal" id="deliveryForm">
+        <div class="modal-head"><h2>成果导出</h2><button type="button" data-export-close aria-label="关闭成果导出" title="关闭">×</button></div>
+        <div class="delivery-options">
+          <fieldset><legend>类型</legend>
+            <label><input type="radio" name="deliveryMode" value="draft" ${!formal ? "checked" : ""}>工作草稿</label>
+            <label><input type="radio" name="deliveryMode" value="formal" ${formal ? "checked" : ""}>正式成果</label>
+          </fieldset>
+          <label>范围<select name="deliveryScope"><option value="all" ${state.exportScope === "all" ? "selected" : ""}>全部主表</option><option value="view" ${state.exportScope === "view" ? "selected" : ""}>当前筛选</option></select></label>
+        </div>
+        <div class="import-counts"><span><b>${rows.length}</b>所选条目</span><span><b>${assessment.blocked}</b>阻塞条目</span><span><b>${rows.length - assessment.blocked}</b>通过检查</span></div>
+        <div class="delivery-checks">${assessment.checks.map((check) => `<button type="button" data-delivery-blocker="${check.key}" ${check.count ? "" : "disabled"}><span>${check.label}</span><strong>${check.count}</strong></button>`).join("")}</div>
+        ${formal ? '<p class="muted">正式成果包含研究字段与出处，审校记录和原文保存在成果包中。</p>' : '<p class="muted">草稿保留全部工作字段及未完成条目。</p>'}
+        ${state.exportMessage ? `<p class="delivery-message" role="status">${escapeHtml(state.exportMessage)}</p>` : ""}
+        <details class="delivery-history" ${state.exportVersions.length ? "open" : ""}>
+          <summary>版本记录（${state.exportVersions.length}）</summary>
+          <div class="workflow-list-scroll">${state.exportVersions.slice().reverse().map((item) => `
+            <article><div><strong>v${escapeHtml(item.version)} · ${item.rows.length} 条</strong><p>${escapeHtml(formatLocalTime(item.createdAt))} · ${escapeHtml(item.scopeLabel)}</p></div>
+              <div class="delivery-downloads"><button type="button" data-release-csv="${escapeHtml(item.id)}">CSV</button><button type="button" data-release-json="${escapeHtml(item.id)}">成果包</button></div>
+            </article>`).join("") || "<p>暂无正式成果版本</p>"}</div>
+        </details>
+        <div class="modal-actions"><button type="button" data-workspace-export>工作区备份</button><button type="submit" ${!rows.length || (formal && !assessment.ready) ? "disabled" : ""}>${formal ? "生成正式版本" : "下载草稿"}</button></div>
+      </form>
+    </div>`;
+}
+
+function exportProblemRowsCsv() {
+  if (!state.rows.length) return;
+  const stamp = new Date().toISOString().slice(0, 10);
+  const csv = window.CalligraphyExportWorkflow.buildMainExport(exportableRows(state.rows.filter(rowHasProblem)), exportFields());
+  downloadBlob(`${stamp}-问题条目.csv`, `${csv}\n`, "text/csv;charset=utf-8");
+}
+
+function exportReviewLogCsv() {
+  if (!state.rows.length && !state.trashRows.length) return;
+  const stamp = new Date().toISOString().slice(0, 10);
+  const csv = window.CalligraphyExportWorkflow.buildReviewLogExport(reviewLogRows());
+  downloadBlob(`${stamp}-审校日志.csv`, `${csv}\n`, "text/csv;charset=utf-8");
+}
+
 function resetWorkspace() {
   if (state.rows.length && !window.confirm("清空当前浏览器里的书论工作区？此操作不会影响其他用户或线上代码。")) return;
-  clearWorkspace();
+  if (!clearWorkspace()) return;
   state.view = "home";
   location.hash = "#home";
   render();
 }
 
 function handleRowAction(action, rowId) {
+  if (action === "resolve") { state.resolutionRowId = rowId; render(); }
+  if (action === "submit-review") setProblemStatus(rowId, "pending_review", "已完成处理，提交复核。");
+  if (action === "reopen") setProblemStatus(rowId, "open", "人工重新打开问题。");
   if (action === "confirm") confirmRow(rowId);
+  if (action === "confirm-next") confirmAndNext(rowId);
+  if (action === "flag") toggleFlagRow(rowId);
   if (action === "edit") openEdit(rowId);
   if (action === "delete") deleteRow(rowId);
+  if (action === "next") nextResult();
+  if (action === "previous") previousResult();
 }
 
 function setQualityFocus(fieldId, mode) {
@@ -1930,25 +4052,40 @@ function appendIssue(row, note) {
 
 function batchMarkVisibleReview() {
   const rows = visibleRows();
-  if (!rows.length) return;
-  if (!window.confirm(`将当前队列的 ${rows.length} 行标记为待复核？`)) return;
+  if (!rows.length) return false;
+  if (!window.confirm(`将当前队列的 ${rows.length} 行标记为待复核？`)) return false;
+  const checkpoint = reviewChangeCheckpoint(rows);
   rows.forEach((row) => {
+    const beforeIssue = String(fieldValue(row, "issue") || row.issue || "");
     row.status = "待复核";
     row.bucket = "review";
     row.edited = true;
+    row.problemResolution = { status: "open", at: new Date().toISOString(), reason: "批量标记待复核。" };
+    row.reviewed = false;
+    state.reviewState.confirmedIds = state.reviewState.confirmedIds.filter((id) => id !== row.id);
     appendIssue(row, "批量队列标记待复核");
     addHistory(row, {
       type: "batch-review",
       actor: "human",
       reason: "从字段质量队列批量标记为待复核。",
-      changes: [{ fieldId: "issue", before: "", after: row.issue }]
+      changes: [{ fieldId: "issue", before: beforeIssue, after: row.issue }]
     });
     state.reviewState.edits[row.id] = editableSnapshot(row);
   });
+  state.undoAction = null;
   state.manifest = buildManifest(state.rows);
-  saveWorkspace();
+  const remaining = visibleRows();
+  if (!remaining.some((row) => row.id === state.selectedId)) state.selectedId = remaining[0]?.id || "";
+  if (!saveWorkspace()) {
+    restoreReviewCheckpoint(checkpoint);
+    return false;
+  }
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  if (state.researchRowId !== state.selectedId) resetResearchForRow(selectedRow());
   render();
   loadSelectedSource();
+  return true;
 }
 
 function setDetailDock(collapsed) {
@@ -1960,13 +4097,18 @@ function setDetailDock(collapsed) {
   panel?.classList.toggle("collapsed", state.detailCollapsed);
   triggerWorkbenchMotion(state.detailCollapsed ? "detail-closing" : "detail-opening", 520);
   if (button) {
-    button.textContent = state.detailCollapsed ? "展开" : "收起";
+    const label = state.detailCollapsed ? "展开条目详情" : "收起条目详情";
+    button.textContent = state.detailCollapsed ? "‹" : "›";
     button.setAttribute("aria-expanded", String(!state.detailCollapsed));
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
   }
 }
 
 function toggleDetailDock() {
+  if (state.aiPanelOpen) return false;
   setDetailDock(!state.detailCollapsed);
+  return true;
 }
 
 function toggleFilters() {
@@ -1976,8 +4118,11 @@ function toggleFilters() {
   triggerWorkbenchMotion("filter-motion", 360);
   controls?.classList.toggle("collapsed", state.filtersCollapsed);
   if (button) {
-    button.textContent = state.filtersCollapsed ? "展开" : "收起";
+    const label = state.filtersCollapsed ? "展开筛选" : "收起筛选";
+    button.textContent = state.filtersCollapsed ? "⌄" : "⌃";
     button.setAttribute("aria-expanded", String(!state.filtersCollapsed));
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
   }
 }
 
@@ -1993,9 +4138,12 @@ function applyTableViewState() {
   screen?.classList.toggle("table-head-collapsed", state.tableHeaderCollapsed);
   shell?.classList.toggle("table-focus-shell", state.tableFocus);
   if (headButton) {
-    headButton.textContent = state.tableHeaderCollapsed ? "显示表头" : "收起表头";
+    const label = state.tableHeaderCollapsed ? "显示表头" : "收起表头";
+    headButton.textContent = "▤";
     headButton.classList.toggle("active", state.tableHeaderCollapsed);
     headButton.setAttribute("aria-pressed", String(state.tableHeaderCollapsed));
+    headButton.setAttribute("aria-label", label);
+    headButton.setAttribute("title", label);
   }
   railButtons.forEach((railButton) => {
     if (!railButton.classList.contains("rail-collapse-control") && !railButton.classList.contains("rail-restore-control")) {
@@ -2007,16 +4155,21 @@ function applyTableViewState() {
     railButton.setAttribute("title", state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏");
   });
   if (focusButton) {
-    focusButton.textContent = state.tableFocus ? "退出专注" : "专注表格";
+    const label = state.tableFocus ? "退出表格专注" : "进入表格专注";
+    focusButton.textContent = "⛶";
     focusButton.classList.toggle("active", state.tableFocus);
     focusButton.setAttribute("aria-pressed", String(state.tableFocus));
+    focusButton.setAttribute("aria-label", label);
+    focusButton.setAttribute("title", label);
   }
 }
 
 function toggleRail() {
+  if (state.aiPanelOpen) return false;
   triggerWorkbenchMotion(state.railCollapsed ? "rail-opening" : "rail-closing", 560);
   state.railCollapsed = !state.railCollapsed;
   applyTableViewState();
+  return true;
 }
 
 function toggleTableHeader() {
@@ -2032,6 +4185,7 @@ function toggleConfidenceSort() {
 }
 
 function toggleTableFocus() {
+  if (state.aiPanelOpen) return false;
   state.tableFocus = !state.tableFocus;
   if (state.tableFocus) {
     state.detailCollapsed = true;
@@ -2039,6 +4193,7 @@ function toggleTableFocus() {
   }
   render();
   loadSelectedSource();
+  return true;
 }
 
 function reviewStats() {
@@ -2047,9 +4202,32 @@ function reviewStats() {
     confirmed: state.rows.filter((row) => row.reviewed).length,
     edited: state.rows.filter((row) => row.edited).length,
     deleted: state.reviewState.deletedIds.length,
+    flagged: state.rows.filter((row) => row.flagged).length,
+    problem: state.rows.filter(rowHasProblem).length,
     invalid: validations.filter((validation) => !validation.ok).length,
     missingRequired: validations.filter((validation) => validation.missingRequired.length).length
   };
+}
+
+function triageStats(limit = 7) {
+  return Object.entries(countBy(state.rows, "triageStatus"))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+}
+
+function triageStatusPanel() {
+  const items = triageStats();
+  if (!items.length) return `<p class="muted">导入后显示第三轮队列分布。</p>`;
+  return `
+    <div class="triage-status-list">
+      ${items.map(([label, count]) => `
+        <button type="button" data-status-filter="${escapeHtml(label)}">
+          <span>${escapeHtml(label || "未标注")}</span>
+          <strong>${formatCount(count)}</strong>
+        </button>
+      `).join("")}
+    </div>
+  `;
 }
 
 function reviewToolbar() {
@@ -2058,9 +4236,12 @@ function reviewToolbar() {
     <div class="review-toolbar">
       <span>已确认 <strong>${stats.confirmed}</strong></span>
       <span>已修改 <strong>${stats.edited}</strong></span>
+      <span>人工标注 <strong>${stats.flagged}</strong></span>
+      <span>问题队列 <strong>${stats.problem}</strong></span>
       <span>字段待补 <strong>${stats.invalid}</strong></span>
       <span>缺必填 <strong>${stats.missingRequired}</strong></span>
-      <span>已删除 <strong>${stats.deleted}</strong></span>
+      <button type="button" data-trash-open>回收站 ${state.trashRows.length}</button>
+      <button type="button" data-review-undo ${state.undoAction ? "" : "disabled"} aria-label="撤销最近操作" title="${state.undoAction ? "撤销" + escapeHtml(state.undoAction.label) : "暂无可撤销操作"}">↶</button>
       <button type="button" data-review-reset>重置审校</button>
     </div>
   `;
@@ -2068,6 +4249,17 @@ function reviewToolbar() {
 
 function qualityFocusBar(rows) {
   if (!state.qualityFocus) return "";
+  if (["delivery", "dashboard"].includes(state.qualityFocus.mode)) return `
+    <div class="queue-bar"><span>${escapeHtml(state.qualityFocus.label)} · ${rows.length} 条</span>
+    <button type="button" data-main-table-export>重新检查成果</button><button type="button" data-quality-clear>清除队列</button></div>`;
+  if (state.qualityFocus.mode === "triage") {
+    return `
+      <div class="queue-bar">
+        <span>当前队列：${escapeHtml(state.qualityFocus.value || "未标注")} · ${rows.length} 行</span>
+        <button type="button" data-quality-clear>清除队列</button>
+      </div>
+    `;
+  }
   const field = schemaField(state.qualityFocus.fieldId);
   const modeLabel = {
     empty: "空值",
@@ -2088,13 +4280,32 @@ function updateReviewToolbarDom() {
   const toolbar = document.querySelector(".review-toolbar");
   if (toolbar) toolbar.outerHTML = reviewToolbar();
   document.querySelector("[data-review-reset]")?.addEventListener("click", resetReviewState);
+  document.querySelector("[data-review-undo]")?.addEventListener("click", undoLastAction);
+  document.querySelector("[data-trash-open]")?.addEventListener("click", () => { state.trashOpen = true; render(); });
+  attachQueueFilterEvents();
 
   document.querySelectorAll("[data-quality-focus]").forEach((button) => {
     button.addEventListener("click", () => setQualityFocus(button.dataset.qualityFocus, button.dataset.qualityMode));
   });
 
+  attachQueueFilterEvents();
   document.querySelector("[data-quality-clear]")?.addEventListener("click", clearQualityFocus);
   document.querySelector("[data-quality-batch-review]")?.addEventListener("click", batchMarkVisibleReview);
+}
+
+function attachQueueFilterEvents() {
+  document.querySelectorAll("[data-status-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.motionName = "queue";
+      state.filter = "all";
+      state.qualityFocus = { mode: "triage", value: button.dataset.statusFilter || "" };
+      state.selectedId = visibleRows()[0]?.id || "";
+      state.sourceText = "";
+      state.sourceStatus = "idle";
+      render();
+      loadSelectedSource();
+    });
+  });
 }
 
 function updateVisibleCountDom() {
@@ -2105,7 +4316,8 @@ function updateVisibleCountDom() {
 function updateTableRowStatus(row) {
   const tableRow = document.querySelector(`tbody tr[data-row-id="${CSS.escape(row.id)}"]`);
   if (!tableRow) return;
-  tableRow.classList.toggle("abnormal", row.abnormal);
+  tableRow.classList.toggle("abnormal", sourceNeedsReview(row));
+  tableRow.classList.toggle("flagged", row.flagged);
   tableRow.classList.toggle("invalid", !rowValidation(row).ok);
   const reviewCellEl = tableRow.children[1];
   const validationCell = tableRow.children[2];
@@ -2194,6 +4406,149 @@ function editModal() {
   `;
 }
 
+function importIssueEntries() {
+  return state.importReports.flatMap((report, reportIndex) => (report.issues || []).map((issue, issueIndex) =>
+    ({ report, issue, reportIndex, issueIndex, key: `${reportIndex}:${issueIndex}` })));
+}
+
+function conflictSourceFile(issue) {
+  return issue.sourceFile || ((issue.sourceConflict || issue.reason?.includes("同名原文")) ? issue.row?.sourceFile : "") || "";
+}
+
+function resolveImportIssue(reportIndex, issueIndex, action, reason = "", quoteOverride) {
+  const original = state.importReports[reportIndex];
+  const originalIssue = original?.issues?.[issueIndex];
+  const fail = (message) => { state.conflictMessage = message; render(); return false; };
+  if (!originalIssue || !["keep", "add", "reopen"].includes(action)) return fail("冲突记录不存在，请重新选择。");
+  if (originalIssue.resolution && action !== "reopen") return true;
+  reason = String(reason).trim();
+  if (!reason) return fail("请填写处理依据。");
+  const report = cloneRow(original);
+  const issue = report.issues[issueIndex];
+  const sourceFile = conflictSourceFile(issue);
+  const sourceText = report.sourceConflicts?.[sourceFile];
+  const identity = issue.identity || window.CalligraphyImportWorkflow.issueIdentity(issue.row, sourceFile, sourceText ?? null);
+  const actor = state.cloud.user?.email || "本地用户";
+  const at = new Date().toISOString();
+  const decision = { action, reason, actor, at };
+  const before = Object.fromEntries(["rows", "originalRows", "uploadedPages", "importReports", "uploadLog", "undoAction"]
+    .map((key) => [key, state[key]]));
+  let addedRow = null;
+  let versionFile = "";
+  if (action === "add") {
+    const existing = [...state.rows, ...state.trashRows].find((row) =>
+      row.id === issue.acceptedRowId || row.importConflictKey === identity);
+    if (existing && state.trashRows.includes(existing)) return fail("另存条目已在回收站，请先恢复，不会重复创建。");
+    if (existing) {
+      decision.resultId = existing.id;
+    } else {
+      if (sourceFile) {
+        if (typeof sourceText !== "string") return fail("旧报告未保存冲突原文，请重新导入原文件后再另存。");
+        versionFile = report.sourceVersions?.[sourceFile];
+        if (!versionFile || state.uploadedPages.get(versionFile) !== sourceText) {
+          const sameVersion = [...state.uploadedPages].find(([name, text]) =>
+            name.startsWith(sourceFile.replace(/(?:__v[^.]*)?\.txt$/i, "") + "__v") && text === sourceText);
+          versionFile = sameVersion?.[0] || sourceFile.replace(/(?:__v[^.]*)?\.txt$/i, "") + "__v" + newWorkspaceId() + ".txt";
+        }
+        decision.resultFile = versionFile;
+        report.sourceVersions = { ...(report.sourceVersions || {}), [sourceFile]: versionFile };
+      }
+      if (issue.row) {
+        const quote = String(quoteOverride ?? issue.row.fields?.quote ?? issue.row.quote ?? "").trim();
+        if (!quote) return fail("请补齐原文摘录后再入表。");
+        addedRow = cloneRow(issue.row);
+        addedRow.id = "alternative-" + newWorkspaceId();
+        ["cloudId", "deleted", "deletedAt", "reviewedAt"].forEach((key) => delete addedRow[key]);
+        addedRow.reviewed = false;
+        addedRow.edited = false;
+        addedRow.flagged = true;
+        addedRow.problemTags = [...new Set([...(addedRow.problemTags || []), "manual_review"])];
+        addedRow.problemResolution = { status: "open", reason, at, actor };
+        addedRow.importConflictKey = identity;
+        setFieldValue(addedRow, "quote", quote);
+        if (versionFile) setFieldValue(addedRow, "sourceFile", versionFile);
+        syncLegacyFields(addedRow);
+        addedRow.originalImportOrigin = addedRow.importOrigin;
+        addedRow.importOrigin = { key: JSON.stringify(["alternative", addedRow.id]),
+          signature: window.CalligraphyImportWorkflow.contentSignature(addedRow) };
+        addHistory(addedRow, { type: "import-conflict-add", actor, reason,
+          changes: ["quote", "sourceFile"].filter((fieldId) => issue.row.fields?.[fieldId] !== addedRow.fields[fieldId])
+            .map((fieldId) => ({ fieldId, before: issue.row.fields?.[fieldId] || "", after: addedRow.fields[fieldId] })) });
+        decision.resultId = addedRow.id;
+      } else if (!versionFile) return fail("报告缺少可导入内容，请重新导入文件。");
+    }
+  }
+  issue.identity = identity;
+  issue.resolutionHistory = [...(issue.resolutionHistory || []), decision];
+  issue.resolution = action === "reopen" ? null : decision;
+  if (decision.resultId) issue.acceptedRowId = decision.resultId;
+  if (addedRow) {
+    state.rows = [...state.rows, addedRow];
+    state.originalRows = [...state.originalRows, cloneRow(addedRow)];
+    state.undoAction = null;
+  }
+  if (versionFile) state.uploadedPages = new Map([...state.uploadedPages, [versionFile, sourceText]]);
+  state.importReports = state.importReports.map((item, index) => index === reportIndex ? report : item);
+  state.uploadLog = [...state.uploadLog, logEntry("success", issue.row?.id || sourceFile,
+    ({ keep: "保留当前内容", add: "另存待审", reopen: "重新处理" })[action] + "：" + reason,
+    { step: "导入冲突", actor, resultId: decision.resultId || "", resultFile: decision.resultFile || "" })];
+  if (!saveWorkspace()) {
+    Object.assign(state, before);
+    return fail("保存失败，本次处理未生效。请释放存储空间后重试。");
+  }
+  state.manifest = buildManifest(state.rows);
+  state.sourceCache = new Map();
+  state.conflictMessage = action === "reopen" ? "已重新打开；此前另存的条目和原文仍保留。"
+    : action === "add" ? "已另存，条目仍需人工审校。" : "已记录处理依据，当前数据未改动。";
+  if (cloudReady()) state.cloud.message = "冲突处理已保存在本地，待同步云端";
+  render();
+  return true;
+}
+
+function importConflictModal() {
+  if (!state.conflictsOpen) return "";
+  const entries = importIssueEntries();
+  const filtered = entries.filter(({ issue }) => state.conflictFilter === "all"
+    || Boolean(issue.resolution) === (state.conflictFilter === "resolved"));
+  const selected = filtered.find((entry) => entry.key === state.conflictSelection) || filtered[0];
+  const issue = selected?.issue;
+  const incoming = issue?.row;
+  const current = issue && [...state.rows, ...state.trashRows].find((row) => row.id === issue.existingId);
+  const sourceFile = issue ? conflictSourceFile(issue) : "";
+  const missingSource = sourceFile && typeof selected.report.sourceConflicts?.[sourceFile] !== "string";
+  const fields = incoming ? orderedSchema().filter((field) => field.id === "quote"
+    || String(incoming.fields?.[field.id] || "") !== String(current?.fields?.[field.id] || "")) : [];
+  return `<div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="导入冲突处理">
+    <section class="edit-modal conflict-modal">
+      <div class="modal-head"><div><h2>导入冲突</h2><p>待处理 ${entries.filter((entry) => !entry.issue.resolution).length} · 已处理 ${entries.filter((entry) => entry.issue.resolution).length}</p></div>
+        <button type="button" data-conflict-close aria-label="关闭导入冲突" title="关闭">×</button></div>
+      <div class="conflict-toolbar"><label>状态 <select data-conflict-filter>
+        ${[["open", "待处理"], ["resolved", "已处理"], ["all", "全部"]].map(([key, label]) => `<option value="${key}" ${state.conflictFilter === key ? "selected" : ""}>${label}</option>`).join("")}
+      </select></label><p role="status">${escapeHtml(state.conflictMessage)}</p></div>
+      <div class="conflict-layout">
+        <nav class="conflict-list" aria-label="导入问题列表">${filtered.map((entry) => `<button type="button" data-conflict-select="${entry.key}" aria-current="${entry === selected ? "true" : "false"}">
+          <strong>${escapeHtml(entry.issue.row?.id || conflictSourceFile(entry.issue))}</strong><span>${escapeHtml(entry.issue.reason)}</span>
+          <small>${escapeHtml(entry.report.fileNames?.join("、") || "历史导入")} · ${entry.issue.resolution ? "已处理" : "待处理"}</small></button>`).join("") || '<p class="muted">没有待显示的问题</p>'}</nav>
+        <div class="conflict-detail">${issue ? `<form id="conflictForm" data-report-index="${selected.reportIndex}" data-issue-index="${selected.issueIndex}">
+          <h3>${escapeHtml(incoming?.id || sourceFile)}</h3><p class="import-warning">${escapeHtml(issue.reason)}</p>
+          ${fields.length ? `<table class="conflict-comparison"><thead><tr><th>字段</th><th>当前保留</th><th>本次导入</th></tr></thead><tbody>
+            ${fields.map((field) => `<tr><th>${escapeHtml(field.label)}</th><td>${escapeHtml(current?.fields?.[field.id] || "未入表")}</td><td>${escapeHtml(incoming.fields?.[field.id] || "空")}</td></tr>`).join("")}</tbody></table>` : ""}
+          ${sourceFile ? `<details class="conflict-source"><summary>原文版本对照 · ${escapeHtml(sourceFile)}</summary><div><section><h4>当前原文</h4><pre>${escapeHtml(selected.report.originalSources?.[sourceFile] ?? state.uploadedPages.get(sourceFile) ?? "原文不可用")}</pre></section>
+            <section><h4>本次导入</h4><pre>${escapeHtml(selected.report.sourceConflicts?.[sourceFile] ?? "旧报告未保存原文，请重新导入")}</pre></section></div></details>` : ""}
+          ${issue.resolution ? `<p>处理结果：${issue.resolution.action === "add" ? "另存待审" : "保留当前内容"}</p><p>${escapeHtml(issue.resolution.reason)}</p>
+            <p class="muted">${escapeHtml(issue.resolution.actor)} · ${escapeHtml(issue.resolution.at)}</p>` : ""}
+          ${issue.acceptedRowId ? `<button type="button" data-conflict-result="${escapeHtml(issue.acceptedRowId)}">查看另存条目</button>` : ""}
+          ${!issue.resolution && incoming && !issue.acceptedRowId ? `<label>入表摘录<textarea name="quote" rows="4">${escapeHtml(incoming.fields?.quote || incoming.quote || "")}</textarea></label>` : ""}
+          <label>处理依据<textarea name="reason" rows="2" required></textarea></label>
+          ${missingSource && !issue.resolution ? '<p class="import-warning">旧报告缺少原文内容，另存前需重新导入原文件。</p>' : ""}
+          <div class="modal-actions">${issue.resolution ? '<button type="submit" name="action" value="reopen">重新处理</button>' : `
+            <button type="submit" name="action" value="keep">${current || sourceFile ? "保留当前" : "不导入"}</button>
+            <button type="submit" name="action" value="add" ${missingSource ? "disabled" : ""}>${issue.acceptedRowId ? "保留另存条目" : incoming ? "另存为待审条目" : "另存原文版本"}</button>`}</div>
+        </form>` : '<p class="muted">当前列表已处理完毕</p>'}</div>
+      </div>
+    </section></div>`;
+}
+
 function mappingSelect(name, value, headers) {
   return `
     <select name="${escapeHtml(name)}">
@@ -2206,40 +4561,59 @@ function mappingSelect(name, value, headers) {
 function importMappingModal() {
   const pending = state.pendingImport;
   if (!pending) return "";
-  const headers = pending.headers || [];
-  const sample = pending.rows[0] || {};
+  const file = pending.files[pending.activeFile];
+  const headers = file?.headers || [];
+  const plan = pendingImportPlan();
+  const labels = { added: "新增", duplicate: "重复跳过", updated: "更新", conflict: "冲突保留", invalid: "无效跳过" };
+  const issues = [...plan.actions.filter((action) => ["conflict", "invalid"].includes(action.type)), ...plan.sourceIssues];
   return `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="CSV 字段映射">
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="导入预览">
       <form class="edit-modal mapping-modal" id="mappingForm">
         <div class="modal-head">
-          <div>
-            <p class="kicker">CSV Mapping</p>
-            <h2>确认字段映射</h2>
-            <p>${escapeHtml(pending.name)} · ${pending.rows.length} 行 · ${headers.length} 列。左侧是工作台字段，右侧选择 CSV 来源列。</p>
-          </div>
-          <button type="button" data-mapping-cancel>关闭</button>
+          <div><h2>导入预览</h2><p>${escapeHtml(pending.name)} · ${pending.files.reduce((n, item) => n + item.rows.length, 0)} 行 · ${pending.pages.size} 个原文页</p></div>
+          <button type="button" data-mapping-cancel aria-label="关闭导入预览" title="关闭">×</button>
         </div>
-        <div class="mapping-preview">
-          <strong>首行预览</strong>
-          <p>${headers.slice(0, 8).map((header) => `${header}: ${clip(sample[header], 28)}`).join(" ｜ ")}</p>
+        <div class="import-options">
+          <label>导入方式
+            <select name="importMode">
+              <option value="append" ${pending.mode === "append" ? "selected" : ""} ${pending.workspace ? "disabled" : ""}>追加到当前主表</option>
+              <option value="update" ${pending.mode === "update" ? "selected" : ""} ${pending.workspace ? "disabled" : ""}>更新未人工处理的条目</option>
+              <option value="new" ${pending.mode === "new" ? "selected" : ""} ${cloudReady() ? "disabled" : ""}>新建工作区</option>
+            </select>
+          </label>
+          ${file ? `<label>来源文件<select name="importFile">
+            ${pending.files.map((item, index) => `<option value="${index}" ${index === pending.activeFile ? "selected" : ""}>${escapeHtml(item.name)} · ${item.rows.length} 行</option>`).join("")}
+          </select></label>` : ""}
         </div>
-        <div class="mapping-grid">
-          <h3>系统字段</h3>
-          ${importSystemFields.map((field) => `
-            <label>
-              <span>${escapeHtml(field.label)}</span>
-              ${mappingSelect(`system:${field.id}`, pending.mapping.system?.[field.id] || "", headers)}
-            </label>
-          `).join("")}
-          <h3>模板字段</h3>
-          ${orderedSchema().map((field) => `
-            <label class="${field.required ? "required" : ""}">
-              <span>${escapeHtml(field.label)}${field.required ? " *" : ""}</span>
-              ${mappingSelect(`field:${field.id}`, pending.mapping.fields?.[field.id] || "", headers)}
-              <small>${escapeHtml(field.prompt || "")}</small>
-            </label>
-          `).join("")}
+        <div class="import-counts" aria-label="导入统计">
+          ${Object.entries(labels).map(([key, label]) => `<span><b>${plan.counts[key]}</b>${label}</span>`).join("")}
         </div>
+        ${pending.mode === "update" ? '<p class="muted">已人工修改、确认或标注的条目不会被覆盖。</p>' : ""}
+        ${pending.mode === "new" ? '<p class="muted">当前工作区会保留，可从首页切换回来。</p>' : ""}
+        ${pending.pilot ? `<details class="pilot-coverage" open><summary>试审覆盖 · 最多 50 条</summary><dl>${pending.pilot.coverage.map((item) => `<div><dt>${escapeHtml(item.label)}</dt><dd>${item.selected} 条${item.available ? ` / 原工作区 ${item.available} 条` : " · 未覆盖：原工作区无此类条目"}</dd></div>`).join("")}</dl></details>` : ""}
+        ${pending.log.filter((item) => item.type === "error").map((item) => `<p class="import-warning">${escapeHtml(item.name)}：${escapeHtml(item.message)}</p>`).join("")}
+        ${plan.pageConflicts.length ? `<p class="import-warning">原文重名冲突：${plan.pageConflicts.map(([name]) => escapeHtml(name)).join("、")}。保留旧原文，相关新条目暂不导入。</p>` : ""}
+        ${issues.length ? `
+          <details class="import-issues" open>
+            <summary>待处理记录（${issues.length}）</summary>
+            <div class="import-issue-list">
+              ${issues.slice(0, 30).map((action) => `
+                <article><strong>${escapeHtml(action.row?.id || action.sourceFile)} · ${escapeHtml(action.reason)}</strong>
+                  ${action.existing ? `<p>当前：${escapeHtml(clip(action.existing.quote, 100))}</p>` : ""}
+                  <p>导入：${escapeHtml(action.row ? clip(action.row.quote, 100) || "无摘录" : "原文新版本")}</p>
+                </article>`).join("")}
+              ${issues.length > 30 ? "<p>其余记录保存在导入报告中。</p>" : ""}
+            </div>
+          </details>` : ""}
+        ${file?.type === "csv" ? `
+          <details class="import-mapping" ${(file.mappingOpen ?? !file.known) ? "open" : ""}>
+            <summary>字段映射 · ${escapeHtml(file.name)}</summary>
+            <div class="mapping-preview"><strong>首行预览</strong><p>${headers.slice(0, 8).map((header) => escapeHtml(header + ": " + clip(file.rows[0]?.[header], 28))).join(" ｜ ")}</p></div>
+            <div class="mapping-grid">
+              ${importSystemFields.map((field) => `<label><span>${escapeHtml(field.label)}</span>${mappingSelect("system:" + field.id, file.mapping.system?.[field.id] || "", headers)}</label>`).join("")}
+              ${orderedSchema().map((field) => `<label><span>${escapeHtml(field.label)}${field.required ? " *" : ""}</span>${mappingSelect("field:" + field.id, file.mapping.fields?.[field.id] || "", headers)}</label>`).join("")}
+            </div>
+          </details>` : ""}
         <div class="modal-actions">
           <button type="button" data-mapping-cancel>取消</button>
           <button type="submit">确认导入</button>
@@ -2249,64 +4623,302 @@ function importMappingModal() {
   `;
 }
 
-function renderShell(content) {
-  app.innerHTML = `
-    <main class="app-shell ${state.view === "detail" ? "detail-shell" : ""} ${state.tableFocus ? "table-focus-shell" : ""}">
-      <header class="topbar compact">
-        <div>
-          <p class="kicker">Upload Evidence App</p>
-          <h1>书论成果工作台</h1>
+function localWorkspaceList() {
+  const items = [];
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith(WORKSPACE_STORAGE_PREFIX)) continue;
+    try {
+      const payload = JSON.parse(localStorage.getItem(key));
+      if (Array.isArray(payload?.rows)) items.push({
+        id: key.slice(WORKSPACE_STORAGE_PREFIX.length),
+        name: payload.datasetName || "未命名工作区",
+        count: payload.rows.length, at: payload.savedAt || ""
+      });
+    } catch { /* Ignore unrelated or unreadable backups. */ }
+  }
+  return items.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+function buildReviewPilot() {
+  const rows = state.rows.filter((row) => !row.deleted && String(row.id || "").trim());
+  const groups = [
+    { label: "字段缺失", limit: 5, rows: rows.filter((row) => rowValidation(row).missingRequired.length) },
+    { label: "已有疑似重复标记", limit: 5, rows: rows.filter((row) => normalizeProblemTags(row).includes("duplicate")) },
+    { label: "定位待核对", limit: 20, rows: rows.filter(sourceNeedsReview) },
+    { label: "摘录已匹配", limit: 20, rows: rows.filter((row) => sourceQuality(row).rank >= 2) }
+  ];
+  const selected = new Map();
+  // Round-robin sources within each stratum so one long source does not fill the pilot.
+  const take = (candidates, limit) => {
+    const sources = new Map();
+    candidates.forEach((row) => {
+      if (!sources.has(row.sourceFile)) sources.set(row.sourceFile, []);
+      sources.get(row.sourceFile).push(row);
+    });
+    let added = 0;
+    while (sources.size && added < limit && selected.size < 50) {
+      for (const [source, queue] of sources) {
+        const row = queue.shift();
+        if (!queue.length) sources.delete(source);
+        if (!selected.has(row.id)) { selected.set(row.id, row); added++; }
+        if (added === limit || selected.size === 50) break;
+      }
+    }
+  };
+  groups.forEach((group) => take(group.rows, group.limit));
+  take(rows, 50 - selected.size);
+  const picked = [...selected.values()].map(cloneRow);
+  const coverage = groups.map((group) => ({
+    label: group.label, available: group.rows.length,
+    selected: group.rows.filter((row) => selected.get(row.id) === row).length
+  }));
+  const pages = {};
+  picked.forEach((row) => {
+    const text = cachedSourceText(row.sourceFile);
+    if (text) pages[row.sourceFile] = text;
+    delete row.cloudId;
+  });
+  const base = workspacePayload();
+  return {
+    coverage, sourceWorkspaceId: state.workspaceId,
+    payload: {
+      ...base, workspaceId: "", datasetName: `试审副本 · ${picked.length} 条 · ${state.datasetName}`,
+      rows: picked, originalRows: picked.map(cloneRow), uploadedPages: pages,
+      trashRows: [], exportVersions: [], importReports: [], undoAction: null, uploadLog: [],
+      selectedId: picked[0]?.id || "",
+      reviewState: {
+        ...reviewDefaults(),
+        confirmedIds: (state.reviewState.confirmedIds || []).filter((id) => selected.has(id)),
+        edits: Object.fromEntries(Object.entries(state.reviewState.edits || {}).filter(([id]) => selected.has(id)))
+      }
+    }
+  };
+}
+
+async function prepareReviewPilot() {
+  if (cloudReady() || !state.rows.length || state.pendingImport) return false;
+  try {
+    const pilot = buildReviewPilot();
+    if (!pilot.payload.rows.length) return false;
+    const text = JSON.stringify(pilot.payload);
+    await processFiles([{ name: "review-pilot.json", text: async () => text }]);
+    if (!state.pendingImport) return false;
+    state.pendingImport.pilot = { coverage: pilot.coverage, sourceWorkspaceId: pilot.sourceWorkspaceId };
+    state.pendingImport.log.push(logEntry("success", "试审副本", `来源工作区 ${pilot.sourceWorkspaceId}；条目 ${pilot.payload.rows.map((row) => row.id).join("、")}；`
+      + pilot.coverage.map((item) => `${item.label} ${item.selected}/${item.available}`).join("；"), { step: "试审抽样" }));
+    state.workspaceListOpen = false;
+    render();
+    return true;
+  } catch (error) {
+    window.alert("试审副本准备失败：" + error.message);
+    return false;
+  }
+}
+
+function switchLocalWorkspace(id) {
+  if (cloudReady() || !id || !saveWorkspace()) return;
+  const previous = state.workspaceId;
+  const before = { ...state };
+  try {
+    localStorage.setItem(WORKSPACE_POINTER_KEY, id);
+    if (!loadWorkspace()) throw new Error("工作区读取失败");
+  } catch {
+    Object.assign(state, before);
+    localStorage.setItem(WORKSPACE_POINTER_KEY, previous);
+    window.alert("工作区读取失败，已保留当前工作区。");
+    return;
+  }
+  state.workspaceListOpen = false;
+  state.filter = "all";
+  state.query = "";
+  state.qualityFocus = null;
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  state.sourceCache = new Map();
+  render();
+  loadSelectedSource();
+}
+
+function workflowModal() {
+  const row = state.rows.find((item) => item.id === state.resolutionRowId);
+  if (row) return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="解决问题">
+      <form class="edit-modal workflow-modal" id="resolutionForm">
+        <div class="modal-head"><h2>解决问题 · ${escapeHtml(row.id)}</h2><button type="button" data-workflow-close aria-label="关闭" title="关闭">×</button></div>
+        <blockquote>${escapeHtml(clip(row.quote, 200))}</blockquote>
+        <label>处理说明<textarea name="reason" required rows="4" maxlength="2000"></textarea></label>
+        <div class="modal-actions"><button type="button" data-workflow-close>取消</button><button type="submit">确认解决</button></div>
+      </form>
+    </div>`;
+  if (!state.trashOpen && !state.workspaceListOpen) return "";
+  const isTrash = state.trashOpen;
+  const items = isTrash ? state.trashRows : localWorkspaceList();
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="${isTrash ? "回收站" : "切换工作区"}">
+      <section class="edit-modal workflow-modal">
+        <div class="modal-head"><h2>${isTrash ? "回收站" : "本地工作区"}</h2><button type="button" data-workflow-close aria-label="关闭" title="关闭">×</button></div>
+        <div class="workflow-list-scroll">
+          ${items.map((item) => `<article>
+            <div><strong>${escapeHtml(isTrash ? item.id : item.name)}</strong><p>${escapeHtml(isTrash ? clip(item.quote, 100) : item.count + " 条 · " + formatLocalTime(item.at))}</p></div>
+            <button type="button" ${isTrash ? "data-trash-restore" : "data-workspace-switch"}="${escapeHtml(item.id)}" ${!isTrash && (item.id === state.workspaceId || cloudReady()) ? "disabled" : ""}>${isTrash ? "恢复" : item.id === state.workspaceId ? "当前" : "打开"}</button>
+          </article>`).join("") || "<p>暂无记录</p>"}
         </div>
-        <nav class="top-actions">
-          <button type="button" class="${state.view === "home" ? "active" : ""}" data-view="home">首页</button>
-          <button type="button" class="${state.view === "detail" ? "active" : ""}" data-view="detail">详情</button>
-          <button type="button" data-workspace-export ${state.rows.length ? "" : "disabled"}>导出</button>
-        </nav>
+        ${!isTrash ? `<div class="modal-actions"><button type="button" data-review-pilot ${!state.rows.length || cloudReady() ? "disabled" : ""}>创建试审副本</button></div>` : ""}
+      </section>
+    </div>`;
+}
+
+function hideButtonTooltip() {
+  clearTimeout(buttonTooltipTimer);
+  buttonTooltipTimer = 0;
+  if (!buttonTooltip) return;
+  buttonTooltip.classList.remove("visible");
+  buttonTooltip.setAttribute("aria-hidden", "true");
+}
+
+function positionButtonTooltip(target) {
+  if (!buttonTooltip || !target?.isConnected) return;
+  const targetRect = target.getBoundingClientRect();
+  const tooltipRect = buttonTooltip.getBoundingClientRect();
+  const gutter = 10;
+  const edge = 8;
+  let left = targetRect.left + (targetRect.width - tooltipRect.width) / 2;
+  left = Math.max(edge, Math.min(left, window.innerWidth - tooltipRect.width - edge));
+  let top = targetRect.bottom + gutter;
+  let placement = "bottom";
+  if (top + tooltipRect.height > window.innerHeight - edge) {
+    top = targetRect.top - tooltipRect.height - gutter;
+    placement = "top";
+  }
+  buttonTooltip.style.left = `${Math.round(left)}px`;
+  buttonTooltip.style.top = `${Math.max(edge, Math.round(top))}px`;
+  buttonTooltip.dataset.placement = placement;
+}
+
+function showButtonTooltip(target, immediate = false) {
+  const label = target?.getAttribute("aria-label") || target?.getAttribute("title");
+  if (!label || target.disabled) return;
+  target.removeAttribute("title");
+  clearTimeout(buttonTooltipTimer);
+  const reveal = () => {
+    if (!target.isConnected) return;
+    buttonTooltip.textContent = label;
+    buttonTooltip.setAttribute("aria-hidden", "false");
+    buttonTooltip.classList.add("visible");
+    positionButtonTooltip(target);
+  };
+  if (immediate) reveal();
+  else buttonTooltipTimer = setTimeout(reveal, 160);
+}
+
+function initButtonTooltips() {
+  if (buttonTooltip || !document.body) return;
+  buttonTooltip = document.createElement("div");
+  buttonTooltip.id = "buttonTooltip";
+  buttonTooltip.className = "button-tooltip";
+  buttonTooltip.setAttribute("role", "tooltip");
+  buttonTooltip.setAttribute("aria-hidden", "true");
+  document.body.append(buttonTooltip);
+
+  document.addEventListener("pointerover", (event) => {
+    const target = event.target.closest?.(ICON_TOOLTIP_SELECTOR);
+    if (!target || target.contains(event.relatedTarget)) return;
+    showButtonTooltip(target);
+  });
+  document.addEventListener("pointerout", (event) => {
+    const target = event.target.closest?.(ICON_TOOLTIP_SELECTOR);
+    if (!target || target.contains(event.relatedTarget)) return;
+    hideButtonTooltip();
+  });
+  document.addEventListener("focusin", (event) => {
+    const target = event.target.closest?.(ICON_TOOLTIP_SELECTOR);
+    if (target) showButtonTooltip(target, true);
+  });
+  document.addEventListener("focusout", (event) => {
+    if (event.target.closest?.(ICON_TOOLTIP_SELECTOR)) hideButtonTooltip();
+  });
+  document.addEventListener("pointerdown", hideButtonTooltip);
+  window.addEventListener("resize", hideButtonTooltip);
+  window.addEventListener("scroll", hideButtonTooltip, true);
+}
+
+function renderShell(content) {
+  hideButtonTooltip();
+  const motionClass = state.motionName ? `motion-${state.motionName}` : "";
+  const workspaceEntryClass = state.workspaceEntryMotion ? "workspace-entering" : "";
+  const sectionLabel = currentSectionLabel();
+  app.innerHTML = `
+    <main class="app-shell ${state.view === "home" ? "home-shell" : ""} ${state.view === "detail" ? `detail-shell detail-mode-${state.detailMode}` : ""} ${state.tableFocus ? "table-focus-shell" : ""} ${motionClass} ${workspaceEntryClass}" ${state.primaryNavOpen ? "inert" : ""}>
+      <header class="topbar compact">
+        <div class="brand-cluster">
+          <button type="button" class="brand-mark-trigger" data-primary-nav-toggle aria-label="打开工作区导航" title="打开工作区导航" aria-expanded="${String(state.primaryNavOpen)}">
+            <img src="./src/assets/shulun-mark.png" alt="" />
+          </button>
+          <div class="brand-copy"><h1>书论工作区</h1><span>${sectionLabel}</span></div>
+        </div>
+        <div class="top-utility">
+          <label><span>⌕</span><input type="search" value="${escapeHtml(state.query)}" placeholder="全局搜索（Ctrl+K）" data-global-search /></label>
+          ${topUserControl()}
+        </div>
       </header>
       ${content}
     </main>
+    <div class="primary-nav-layer ${state.primaryNavOpen ? "open" : ""}" data-primary-nav-layer aria-hidden="${String(!state.primaryNavOpen)}">
+      <button type="button" class="primary-nav-scrim" data-primary-nav-close tabindex="-1" aria-label="关闭导航"></button>
+      <aside class="primary-nav-drawer" role="dialog" aria-modal="true" aria-label="工作区导航">
+        <div class="drawer-brand">
+          <span class="drawer-mark" aria-hidden="true"><img src="./src/assets/shulun-mark.png" alt="" /></span>
+          <div><strong>书论工作区</strong><span>${sectionLabel}</span></div>
+          <button type="button" class="drawer-close" data-primary-nav-close aria-label="关闭导航" title="关闭导航">×</button>
+        </div>
+        <nav class="drawer-nav">
+          <button type="button" class="${state.view === "home" ? "active" : ""}" data-view="home" ${state.view === "home" ? "aria-current='page'" : ""}>工作台</button>
+          <button type="button" data-home-focus="file">材料库</button>
+          <button type="button" class="${state.view === "detail" && state.detailMode === "table" ? "active" : ""}" data-view="detail" data-detail-mode="table" ${state.view === "detail" && state.detailMode === "table" ? "aria-current='page'" : ""}>统一主表</button>
+          <button type="button" class="${state.view === "detail" && state.detailMode === "review" ? "active" : ""}" data-view="detail" data-detail-mode="review" ${state.view === "detail" && state.detailMode === "review" ? "aria-current='page'" : ""}>回检修订</button>
+          <button type="button" data-home-focus="export" ${state.rows.length || state.exportVersions.length ? "" : "disabled"}>成果导出</button>
+          <button type="button" data-home-focus="schema">项目设置</button>
+        </nav>
+      </aside>
+    </div>
     ${editModal()}
     ${importMappingModal()}
+    ${importConflictModal()}
+    ${workflowModal()}
+    ${deliveryModal()}
+    ${dashboardImportSink()}
     ${templateDetailsModal()}
+    <div id="workspaceConflictHost"></div>
   `;
   attachGlobalEvents();
+  updateWorkspaceConflictDom();
+  if (state.workspaceEntryMotion) {
+    state.workspaceEntryMotion = false;
+    window.setTimeout(() => document.querySelector(".app-shell")?.classList.remove("workspace-entering"), 560);
+  }
+  if (state.motionName) {
+    const activeMotion = state.motionName;
+    window.setTimeout(() => {
+      document.querySelector(".app-shell")?.classList.remove(`motion-${activeMotion}`);
+      if (state.motionName === activeMotion) state.motionName = "";
+    }, 620);
+  }
 }
 
 function renderHome() {
   renderShell(`
-    <section class="home-layout">
-      <article class="home-intro">
-        <p class="kicker">Home</p>
-        <h2>每个人都有自己的本地书论工作区</h2>
-        <p>这个线上入口不再展示后端数据包或下载附件。上传 CSV/JSON/page 文本后，内容只进入当前浏览器；导出的工作区 JSON 可以发给别人导入复现。</p>
-        ${workspaceStatus()}
-        ${workspaceActions()}
-        ${templatePanel()}
-      </article>
-      <section class="upload-panel">
-        <div>
-          <p class="kicker">Upload</p>
-          <h2>上传或导入</h2>
-          <p>支持：结果表 CSV/JSON、工作区 JSON、原文页 <code>page_*.txt</code>。XLSX 不在公网前端解析，请先转换为 CSV。</p>
-        </div>
-        <label class="drop-zone">
-          <input id="fileInput" type="file" multiple accept=".csv,.json,.txt,.xlsx,application/json,text/csv,text/plain" />
-          <strong>选择或拖入文件</strong>
-          <span>可以一次上传结果表、原文页文本或工作区包</span>
-        </label>
-        ${uploadLog()}
-      </section>
-    </section>
-
-    <section class="home-metrics">
-      ${metricCards()}
-    </section>
-
-    <section class="flow-strip">
-      <article><span>01</span><strong>上传</strong><p>CSV/JSON 结果表进入浏览器内处理。</p></article>
-      <article><span>02</span><strong>识别</strong><p>字段映射为附表、书家、书体、摘录、页码和门禁。</p></article>
-      <article><span>03</span><strong>隔离</strong><p>数据保存在当前浏览器，不进入公共后端目录。</p></article>
-      <article><span>04</span><strong>导出</strong><p>下载工作区 JSON，发给其他人导入使用。</p></article>
+    <section class="dashboard-grid">
+      <aside class="dashboard-left">
+        ${dashboardProjectCard()}
+      </aside>
+      <main class="dashboard-center">
+        ${dashboardWorkflow()}
+        ${dashboardLogTable()}
+      </main>
+      <aside class="dashboard-right">
+        ${dashboardRightColumn()}
+      </aside>
     </section>
   `);
   attachHomeEvents();
@@ -2315,10 +4927,13 @@ function renderHome() {
 function renderDetail() {
   const rows = visibleRows();
   const row = selectedRow();
-  if (row && !state.selectedId) state.selectedId = row.id;
+  state.selectedId = row?.id || "";
+  if (state.researchRowId !== state.selectedId || state.researchWorkspaceId !== state.workspaceId) resetResearchForRow(row);
+  if (state.aiRowId !== state.selectedId || state.aiWorkspaceId !== state.workspaceId) resetAiForRow(row);
+  else invalidateAiCandidate(row);
 
   renderShell(`
-    <section class="review-screen ${state.detailCollapsed ? "detail-collapsed" : ""} ${state.railCollapsed || state.tableFocus ? "rail-collapsed" : ""} ${state.tableFocus ? "table-focus" : ""} ${state.tableHeaderCollapsed ? "table-head-collapsed" : ""}">
+    <section class="review-screen ${state.detailCollapsed ? "detail-collapsed" : ""} ${state.railCollapsed || state.tableFocus ? "rail-collapsed" : ""} ${state.tableFocus ? "table-focus" : ""} ${state.tableHeaderCollapsed ? "table-head-collapsed" : ""} ${state.aiPanelOpen ? "ai-review-open" : ""} ${state.aiPanelOpen ? `ai-mobile-${state.aiMobilePane}` : ""}">
       <aside class="dataset-rail">
         <button type="button" class="rail-collapse-control ${state.railCollapsed ? "active" : ""}" data-rail-toggle aria-pressed="${String(state.railCollapsed)}" aria-label="${state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏"}" title="${state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏"}"></button>
         <div class="rail-identity">
@@ -2329,6 +4944,10 @@ function renderDetail() {
         <details class="rail-section rail-review" open>
           <summary>审校状态</summary>
           ${reviewToolbar()}
+        </details>
+        <details class="rail-section" open>
+          <summary>导入队列</summary>
+          ${triageStatusPanel()}
         </details>
         <details class="rail-section">
           <summary>字段质量</summary>
@@ -2349,25 +4968,190 @@ function renderDetail() {
         </details>
       </aside>
 
+      ${state.aiPanelOpen ? `
+        <div class="ai-mobile-switch" role="group" aria-label="移动端审校面板">
+          <button type="button" data-ai-mobile-pane="fields" aria-pressed="${String(state.aiMobilePane === "fields")}">原字段</button>
+          <button type="button" data-ai-mobile-pane="reasoning" aria-pressed="${String(state.aiMobilePane === "reasoning")}">AI 理由</button>
+        </div>
+      ` : ""}
       <section class="main-panel workbench-main">
         <button type="button" class="rail-restore-control ${state.railCollapsed ? "active" : ""}" data-rail-toggle aria-pressed="${String(state.railCollapsed)}" aria-label="显示左侧栏" title="显示左侧栏"></button>
         <div class="panel-head">
           <div>
-            <p class="kicker">Results</p>
-            <h2>综合成果总表</h2>
+            <p class="kicker">${state.detailMode === "review" ? "Revision Queue" : "Master Table"}</p>
+            <h2>${state.detailMode === "review" ? "回检修订队列" : "统一主表"}</h2>
           </div>
           <div class="panel-tools">
             <div class="visible-count">${rows.length} / ${state.rows.length}</div>
             ${tableViewActions()}
           </div>
         </div>
+        ${modeSummaryPanel(rows)}
         ${resultsControlPanel(rows)}
         ${resultTable(rows)}
       </section>
       ${detailPanel(row)}
+      ${state.aiPanelOpen ? aiReviewPanel(row) : ""}
     </section>
   `);
   attachDetailEvents();
+}
+
+function verifyDemoCredentials(email, password) {
+  return String(email || "").trim().toLowerCase() === DEMO_LOGIN.email
+    && String(password || "") === DEMO_LOGIN.password;
+}
+
+function emailMemoryEnabled() {
+  return Boolean(state.cloud.config?.enabled && state.cloud.config.rememberEmail !== false);
+}
+
+function restoreRememberedEmail() {
+  if (!emailMemoryEnabled()) {
+    state.entryEmail = "";
+    state.entryRememberEmail = false;
+    try { localStorage.removeItem(REMEMBERED_EMAIL_KEY); } catch { /* Storage may be unavailable. */ }
+    return;
+  }
+  try {
+    state.entryEmail = String(localStorage.getItem(REMEMBERED_EMAIL_KEY) || "");
+  } catch {
+    state.entryEmail = "";
+  }
+  state.entryRememberEmail = Boolean(state.entryEmail);
+}
+
+function persistRememberedEmail(email, remember) {
+  if (!emailMemoryEnabled()) return;
+  try {
+    if (remember) localStorage.setItem(REMEMBERED_EMAIL_KEY, String(email || "").trim().toLowerCase());
+    else localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+  } catch { /* Login must remain usable when browser storage is blocked. */ }
+}
+
+function renderEntry() {
+  clearTimeout(entryStageTimer);
+  document.body?.setAttribute("data-entry-active", "true");
+  const signingIn = state.entryStage === "signin";
+  const registering = state.entryStage === "register";
+  const authenticating = signingIn || registering;
+  app.innerHTML = `
+    <main class="entry-gate ${registering ? "register-stage" : signingIn ? "signin-stage" : "welcome-stage"}">
+      ${authenticating ? `
+        <section class="entry-login" aria-labelledby="entryLoginTitle">
+          <div class="entry-login-brand">
+            <span class="entry-login-mark" aria-hidden="true"><img src="./src/assets/shulun-mark.png" alt="" /></span>
+            <span>书论工作区</span>
+          </div>
+          ${registering ? `
+            <form class="entry-login-form entry-register-form" id="entryRegisterForm" autocomplete="off">
+              <header><h1 id="entryLoginTitle">创建工作区账号</h1><p>通过邮箱验证链接完成注册</p></header>
+              <label><span>显示名称</span><input type="text" name="displayName" autocomplete="name" maxlength="60" required autofocus /></label>
+              <label><span>工作邮箱</span><input type="email" name="email" value="${escapeHtml(state.entryEmail)}" autocomplete="${emailMemoryEnabled() ? "email" : "off"}" required /></label>
+              <p class="entry-register-help">验证后可创建团队，也可接受已有团队的邀请。</p>
+              ${state.entryError ? `<p class="entry-login-error" role="alert" aria-live="polite">${escapeHtml(state.entryError)}</p>` : ""}
+              ${state.entryNotice ? `<p class="entry-register-notice" role="status" aria-live="polite">${escapeHtml(state.entryNotice)}</p>` : ""}
+              <button type="submit" class="entry-login-submit">发送注册链接</button>
+              <div class="entry-auth-switch"><span>已有账号？</span><button type="button" data-entry-signin>返回登录</button></div>
+            </form>
+          ` : `
+            <form class="entry-login-form" id="entryLoginForm" autocomplete="off">
+              <header><h1 id="entryLoginTitle">登录工作区</h1><p>进入书论材料整理与审校平台</p></header>
+              <label><span>账号</span><input type="email" name="email" value="${escapeHtml(state.entryEmail)}" autocomplete="${emailMemoryEnabled() ? "username" : "off"}" required /></label>
+              <label><span>密码</span><input type="password" name="password" autocomplete="current-password" required autofocus aria-invalid="${String(Boolean(state.entryError))}" /></label>
+              ${emailMemoryEnabled() ? `<label class="entry-remember"><input type="checkbox" name="rememberEmail" ${state.entryRememberEmail ? "checked" : ""} /><span>在此设备记住账号</span></label>` : ""}
+              <p class="entry-login-error" role="alert" aria-live="polite">${escapeHtml(state.entryError)}</p>
+              <button type="submit" class="entry-login-submit">登录</button>
+              <div class="entry-auth-switch"><span>还没有账号？</span><button type="button" data-entry-register>邮箱免密注册</button></div>
+              <button type="button" class="entry-login-back" data-entry-back>返回介绍</button>
+            </form>
+          `}
+        </section>
+      ` : `
+        <section class="entry-intro" aria-labelledby="entryTitle">
+          <div class="entry-logo-sequence" aria-hidden="true">
+            <span class="entry-logo-scroll"><img src="./src/assets/shulun-mark.png" alt="" /></span>
+            <span class="entry-logo-unfold"><img src="./src/assets/shulun-mark.png" alt="" /></span>
+          </div>
+          <div class="entry-copy">
+            <h1 id="entryTitle">书论工作区</h1>
+            <p>从原始材料到可回溯的书论研究成果</p>
+          </div>
+        </section>
+      `}
+    </main>
+  `;
+  if (!authenticating) {
+    const entryDelay = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? 100 : 3200;
+    entryStageTimer = window.setTimeout(() => {
+      if (state.entryStage !== "welcome") return;
+      state.entryStage = "signin";
+      state.entryError = "";
+      renderEntry();
+    }, entryDelay);
+  }
+  document.querySelector("[data-entry-back]")?.addEventListener("click", () => {
+    state.entryStage = "welcome";
+    state.entryError = "";
+    state.entryNotice = "";
+    renderEntry();
+  });
+  document.querySelector("[data-entry-register]")?.addEventListener("click", () => {
+    state.entryStage = "register";
+    state.entryError = "";
+    state.entryNotice = "";
+    renderEntry();
+  });
+  document.querySelector("[data-entry-signin]")?.addEventListener("click", () => {
+    state.entryStage = "signin";
+    state.entryError = "";
+    state.entryNotice = "";
+    renderEntry();
+  });
+  document.querySelector("#entryRegisterForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submit = form.querySelector("[type='submit']");
+    const values = new FormData(form);
+    const email = String(values.get("email") || "").trim().toLowerCase();
+    const displayName = String(values.get("displayName") || "").trim();
+    state.entryEmail = email;
+    state.entryError = "";
+    state.entryNotice = "";
+    if (!state.cloud.store) {
+      state.entryNotice = "注册入口已就绪。部署并配置云端认证后即可发送验证邮件。";
+      renderEntry();
+      return;
+    }
+    if (submit) { submit.disabled = true; submit.textContent = "正在发送..."; }
+    try {
+      await state.cloud.store.signInWithEmail(email, {
+        createUser: true,
+        metadata: { display_name: displayName }
+      });
+      state.entryNotice = `验证链接已发送至 ${email}`;
+    } catch (error) {
+      state.entryError = error?.message || "注册链接发送失败";
+    }
+    renderEntry();
+  });
+  document.querySelector("#entryLoginForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    state.entryEmail = String(values.get("email") || "").trim();
+    state.entryRememberEmail = values.get("rememberEmail") === "on";
+    if (!verifyDemoCredentials(state.entryEmail, values.get("password"))) {
+      state.entryError = "账号或密码不正确";
+      renderEntry();
+      return;
+    }
+    state.entryStage = "workspace";
+    state.entryError = "";
+    persistRememberedEmail(state.entryEmail, state.entryRememberEmail);
+    state.workspaceEntryMotion = true;
+    render();
+    if (state.view === "detail") loadSelectedSource();
+  });
 }
 
 function render() {
@@ -2375,8 +5159,32 @@ function render() {
     app.innerHTML = "<div class='boot'>加载线上数据包...</div>";
     return;
   }
+  if (state.entryStage !== "workspace") {
+    renderEntry();
+    return;
+  }
+  document.body?.removeAttribute("data-entry-active");
+  const search = document.querySelector("#searchInput");
+  const preserveSearch = search && document.activeElement === search && state.view === "detail";
+  const selection = preserveSearch ? [search.selectionStart, search.selectionEnd, search.selectionDirection] : null;
+  const panel = document.querySelector(".detail-panel");
+  const sameRow = panel?.dataset.selectedId === state.selectedId && panel?.dataset.dockMode === state.detailMode;
+  const table = document.querySelector(".table-shell");
+  const detail = document.querySelector(".detail-dock-body");
+  const scroll = sameRow ? { x: table?.scrollLeft || 0, y: table?.scrollTop || 0, detail: detail?.scrollTop || 0 } : null;
   if (state.view === "home") renderHome();
   else renderDetail();
+  if (preserveSearch) {
+    document.querySelector("#searchInput")?.replaceWith(search);
+    search.focus({ preventScroll: true });
+    search.setSelectionRange(...selection);
+  }
+  if (scroll && state.view === "detail") {
+    const nextTable = document.querySelector(".table-shell");
+    const nextDetail = document.querySelector(".detail-dock-body");
+    if (nextTable) { nextTable.scrollLeft = scroll.x; nextTable.scrollTop = scroll.y; }
+    if (nextDetail) nextDetail.scrollTop = scroll.detail;
+  }
 }
 
 function openTemplatePanel() {
@@ -2391,11 +5199,117 @@ function closeTemplatePanel() {
   if (state.view === "detail") loadSelectedSource();
 }
 
+function activateWorkspaceTool(tool) {
+  if (tool === "file") document.querySelector("#fileInput")?.click();
+  if (tool === "schema") openTemplatePanel();
+  if (tool === "export") openExportPanel();
+}
+
+function currentSectionLabel() {
+  if (state.view === "home") return "工作台";
+  return state.detailMode === "review" ? "回检修订" : "统一主表";
+}
+
+function setPrimaryNav(open, restoreFocus = true) {
+  state.primaryNavOpen = Boolean(open);
+  const layer = document.querySelector("[data-primary-nav-layer]");
+  const trigger = document.querySelector("[data-primary-nav-toggle]");
+  const shell = document.querySelector(".app-shell");
+  if (!layer || !trigger) return;
+  layer.classList.toggle("open", state.primaryNavOpen);
+  layer.setAttribute("aria-hidden", String(!state.primaryNavOpen));
+  trigger.setAttribute("aria-expanded", String(state.primaryNavOpen));
+  shell?.toggleAttribute("inert", state.primaryNavOpen);
+  if (state.primaryNavOpen) {
+    window.requestAnimationFrame(() => layer.querySelector("[aria-current='page'], [data-view]")?.focus({ preventScroll: true }));
+  } else if (restoreFocus) {
+    trigger.focus({ preventScroll: true });
+  }
+}
+
 function attachGlobalEvents() {
+  attachCloudControls();
+  document.querySelector("[data-primary-nav-toggle]")?.addEventListener("click", () => setPrimaryNav(!state.primaryNavOpen));
+  document.querySelectorAll("[data-primary-nav-close]").forEach((button) => button.addEventListener("click", () => setPrimaryNav(false)));
+  document.querySelectorAll("[data-import-conflicts]").forEach((button) => button.addEventListener("click", () => {
+    state.conflictsOpen = true; state.conflictMessage = ""; render();
+  }));
+  document.querySelector("[data-conflict-close]")?.addEventListener("click", () => { state.conflictsOpen = false; render(); });
+  document.querySelector("[data-conflict-filter]")?.addEventListener("change", (event) => {
+    state.conflictFilter = event.target.value; state.conflictSelection = ""; state.conflictMessage = ""; render();
+  });
+  document.querySelectorAll("[data-conflict-select]").forEach((button) => button.addEventListener("click", () => {
+    state.conflictSelection = button.dataset.conflictSelect; state.conflictMessage = ""; render();
+  }));
+  document.querySelector("#conflictForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    resolveImportIssue(Number(form.dataset.reportIndex), Number(form.dataset.issueIndex),
+      event.submitter?.value || "keep", data.get("reason"), data.get("quote") ?? undefined);
+  });
+  document.querySelector("[data-conflict-result]")?.addEventListener("click", (event) => {
+    const id = event.currentTarget.dataset.conflictResult;
+    if (!state.rows.some((row) => row.id === id)) { state.conflictMessage = "条目不在主表中，请检查回收站。"; render(); return; }
+    state.conflictsOpen = false; state.query = ""; state.filter = "all"; state.selectedId = id;
+    navigateToView("detail", "table"); render(); loadSelectedSource();
+  });
+  document.querySelectorAll("[data-home-focus]").forEach((button) => button.addEventListener("click", () => {
+    if (button.closest?.(".primary-nav-drawer")) setPrimaryNav(false, false);
+    activateWorkspaceTool(button.dataset.homeFocus);
+  }));
+  document.querySelectorAll("[data-dashboard-queue]").forEach((button) => button.addEventListener("click", () => inspectDashboardQueue(button.dataset.dashboardQueue)));
+  document.querySelector("#fileInput")?.addEventListener("change", (event) => processFiles([...event.currentTarget.files]));
+  document.querySelector("[data-export-close]")?.addEventListener("click", () => { state.exportOpen = false; render(); });
+  document.querySelector("#deliveryForm")?.addEventListener("change", (event) => {
+    const data = new FormData(event.currentTarget);
+    state.exportScope = String(data.get("deliveryScope") || "all");
+    state.exportMode = String(data.get("deliveryMode") || "draft");
+    state.exportMessage = "";
+    render();
+  });
+  document.querySelector("#deliveryForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (state.exportMode === "formal") createFormalRelease();
+    else downloadWorkingDraft();
+  });
+  document.querySelectorAll("[data-delivery-blocker]").forEach((button) =>
+    button.addEventListener("click", () => inspectDeliveryBlockers(button.dataset.deliveryBlocker)));
+  document.querySelectorAll("[data-release-csv]").forEach((button) =>
+    button.addEventListener("click", () => downloadRelease(button.dataset.releaseCsv)));
+  document.querySelectorAll("[data-release-json]").forEach((button) =>
+    button.addEventListener("click", () => downloadRelease(button.dataset.releaseJson, "json")));
+  document.querySelector("[data-review-undo]")?.addEventListener("click", undoLastAction);
+  document.querySelector("[data-trash-open]")?.addEventListener("click", () => { state.trashOpen = true; render(); });
+  document.querySelector("[data-workspace-list]")?.addEventListener("click", () => { state.workspaceListOpen = true; render(); });
+  document.querySelector("[data-review-pilot]")?.addEventListener("click", prepareReviewPilot);
+  document.querySelectorAll("[data-workflow-close]").forEach((button) => button.addEventListener("click", () => {
+    state.resolutionRowId = ""; state.trashOpen = false; state.workspaceListOpen = false; render();
+  }));
+  document.querySelectorAll("[data-trash-restore]").forEach((button) =>
+    button.addEventListener("click", () => restoreTrashRow(button.dataset.trashRestore)));
+  document.querySelectorAll("[data-workspace-switch]").forEach((button) =>
+    button.addEventListener("click", () => switchLocalWorkspace(button.dataset.workspaceSwitch)));
+  document.querySelector("#resolutionForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    setProblemStatus(state.resolutionRowId, "resolved", new FormData(event.currentTarget).get("reason"));
+  });
+  document.querySelector("[data-import-report-export]")?.addEventListener("click", () => {
+    downloadBlob("导入报告.json", JSON.stringify(state.importReports, null, 2));
+  });
+
+  document.querySelector("[data-global-search]")?.addEventListener("change", (event) => {
+    state.query = event.target.value;
+    navigateToView("detail", "table");
+    state.selectedId = visibleRows()[0]?.id || "";
+    render();
+    loadSelectedSource();
+  });
+
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.view = button.dataset.view;
-      location.hash = state.view === "detail" ? "#detail" : "#home";
+      if (button.closest?.(".primary-nav-drawer")) setPrimaryNav(false, false);
+      navigateToView(button.dataset.view, button.dataset.detailMode || state.detailMode);
       render();
       if (state.view === "detail") loadSelectedSource();
     });
@@ -2416,17 +5330,15 @@ function attachGlobalEvents() {
 
   document.querySelector("#mappingForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    if (state.pendingImport) {
-      state.pendingImport.mapping = { system: {}, fields: {} };
-      importSystemFields.forEach((field) => {
-        state.pendingImport.mapping.system[field.id] = String(data.get(`system:${field.id}`) || "");
-      });
-      orderedSchema().forEach((field) => {
-        state.pendingImport.mapping.fields[field.id] = String(data.get(`field:${field.id}`) || "");
-      });
-    }
+    readImportMapping(event.currentTarget);
     confirmPendingImport();
+  });
+  document.querySelector("#mappingForm")?.addEventListener("change", (event) => {
+    const controlName = event.target.name;
+    readImportMapping(event.currentTarget);
+    if (event.target.name === "importFile") state.pendingImport.activeFile = Number(event.target.value);
+    render();
+    document.querySelector("#mappingForm")?.elements.namedItem(controlName)?.focus();
   });
 
   document.querySelectorAll("[data-mapping-cancel]").forEach((button) => {
@@ -2435,6 +5347,18 @@ function attachGlobalEvents() {
 
   document.querySelectorAll("[data-workspace-export]").forEach((button) => {
     button.addEventListener("click", exportWorkspace);
+  });
+
+  document.querySelectorAll("[data-main-table-export]").forEach((button) => {
+    button.addEventListener("click", exportMainTableCsv);
+  });
+
+  document.querySelectorAll("[data-problem-export]").forEach((button) => {
+    button.addEventListener("click", exportProblemRowsCsv);
+  });
+
+  document.querySelectorAll("[data-review-log-export]").forEach((button) => {
+    button.addEventListener("click", exportReviewLogCsv);
   });
 
   document.querySelectorAll("[data-template-download]").forEach((button) => {
@@ -2488,9 +5412,7 @@ function attachGlobalEvents() {
 }
 
 function attachHomeEvents() {
-  const input = document.querySelector("#fileInput");
   const zone = document.querySelector(".drop-zone");
-  input?.addEventListener("change", () => processFiles([...input.files]));
   zone?.addEventListener("dragover", (event) => {
     event.preventDefault();
     zone.classList.add("dragging");
@@ -2501,6 +5423,54 @@ function attachHomeEvents() {
     zone.classList.remove("dragging");
     processFiles([...event.dataTransfer.files]);
   });
+}
+
+function shouldIgnoreShortcut(event) {
+  const target = event.target;
+  if (!target) return false;
+  const tag = target.tagName;
+  return target.isContentEditable
+    || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag)
+    || Boolean(target.closest(".modal-backdrop"));
+}
+
+function handleWorkbenchShortcut(event) {
+  if (state.aiPanelOpen && event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation?.();
+    closeAiPanel();
+    return;
+  }
+  if (state.primaryNavOpen && event.key === "Escape") {
+    event.preventDefault();
+    setPrimaryNav(false);
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    document.querySelector("[data-global-search]")?.focus({ preventScroll: true });
+    return;
+  }
+  if (state.view !== "detail" || event.isComposing || state.templatePanelExpanded || state.conflictsOpen || state.exportOpen || state.pendingImport || state.resolutionRowId || state.trashOpen || state.workspaceListOpen || state.editingId || shouldIgnoreShortcut(event)) return;
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    undoLastAction();
+    return;
+  }
+  if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+  if (event.key === "j" || event.key === "J" || event.key === "ArrowDown") {
+    event.preventDefault();
+    nextResult();
+  }
+  if (event.key === "k" || event.key === "K" || event.key === "ArrowUp") {
+    event.preventDefault();
+    previousResult();
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (event.repeat) return;
+    confirmAndNext(state.selectedId);
+  }
 }
 
 function attachDetailEvents() {
@@ -2515,6 +5485,7 @@ function attachDetailEvents() {
 
   document.querySelectorAll("[data-filter]").forEach((button) => {
     button.addEventListener("click", () => {
+      state.motionName = "filter";
       state.filter = button.dataset.filter;
       state.selectedId = visibleRows()[0]?.id || "";
       state.sourceText = "";
@@ -2524,14 +5495,19 @@ function attachDetailEvents() {
     });
   });
 
-  document.querySelector("#searchInput")?.addEventListener("input", (event) => {
+  const updateSearch = (event) => {
+    if (event.isComposing) return;
+    state.motionName = "filter";
     state.query = event.target.value;
     state.selectedId = visibleRows()[0]?.id || "";
     state.sourceText = "";
     state.sourceStatus = "idle";
+    resetResearchForRow(selectedRow());
     render();
     loadSelectedSource();
-  });
+  };
+  document.querySelector("#searchInput")?.addEventListener("input", updateSearch);
+  document.querySelector("#searchInput")?.addEventListener("compositionend", updateSearch);
 
   document.querySelector(".table-shell")?.addEventListener("click", (event) => {
     const action = event.target.closest("[data-row-action]");
@@ -2545,10 +5521,74 @@ function attachDetailEvents() {
     selectResult(item.dataset.rowId);
   });
 
+  document.querySelector(".review-screen")?.addEventListener("click", (event) => {
+    const open = event.target.closest("[data-ai-panel-open]");
+    if (open) {
+      openAiPanel(open);
+      return;
+    }
+    if (event.target.closest("[data-ai-panel-close]")) {
+      closeAiPanel();
+      return;
+    }
+    const judgment = event.target.closest("[data-ai-judgment]");
+    if (judgment) {
+      setAiFieldJudgment(judgment.dataset.fieldId, judgment.dataset.aiJudgment);
+      return;
+    }
+    const mobilePane = event.target.closest("[data-ai-mobile-pane]");
+    if (mobilePane) {
+      setAiMobilePane(mobilePane.dataset.aiMobilePane);
+      return;
+    }
+    if (event.target.closest("[data-ai-generate]")) {
+      performAiExtraction(state.selectedId);
+      return;
+    }
+    if (event.target.closest("[data-ai-clear]")) {
+      clearAiProposal();
+      return;
+    }
+    if (event.target.closest("[data-ai-apply]")) applyAiProposal(state.selectedId);
+  });
+
   document.querySelector(".detail-panel")?.addEventListener("click", (event) => {
+    const preset = event.target.closest("[data-research-preset]");
+    if (preset) {
+      const row = selectedRow();
+      if (!row) return;
+      resetResearchForRow(row);
+      state.researchQuery = researchPresetQuery(row, preset.dataset.researchPreset);
+      state.researchStatus = "idle";
+      state.researchResults = [];
+      state.researchError = "";
+      updateResearchDom(row);
+      return;
+    }
+    const problemTag = event.target.closest("[data-problem-tag]");
+    if (problemTag) {
+      toggleProblemTag(problemTag.dataset.rowId, problemTag.dataset.problemTag);
+      return;
+    }
     const action = event.target.closest("[data-row-action]");
     if (!action) return;
     handleRowAction(action.dataset.rowAction, action.dataset.rowId);
+  });
+
+  document.querySelector(".detail-panel")?.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-research-form]");
+    if (!form) return;
+    event.preventDefault();
+    const row = selectedRow();
+    const query = new FormData(form).get("researchQuery") || activeResearchQuery(row);
+    performResearchSearch(query, row?.id);
+  });
+
+  document.querySelector(".detail-panel")?.addEventListener("input", (event) => {
+    if (!event.target.matches("[data-research-form] input")) return;
+    const row = selectedRow();
+    if (state.researchRowId !== row?.id) resetResearchForRow(row);
+    state.researchQuery = event.target.value;
   });
 
   document.querySelector("[data-review-reset]")?.addEventListener("click", resetReviewState);
@@ -2557,6 +5597,7 @@ function attachDetailEvents() {
     button.addEventListener("click", () => setQualityFocus(button.dataset.qualityFocus, button.dataset.qualityMode));
   });
 
+  attachQueueFilterEvents();
   document.querySelector("[data-quality-clear]")?.addEventListener("click", clearQualityFocus);
   document.querySelector("[data-quality-batch-review]")?.addEventListener("click", batchMarkVisibleReview);
 }
@@ -2569,46 +5610,192 @@ function isResultTable(rows) {
 
 function mappedRowsFromPendingImport() {
   const pending = state.pendingImport;
-  if (!pending?.rows?.length) return [];
-  const mapping = pending.mapping || { system: {}, fields: {} };
-  return pending.rows.map((row) => {
-    const mapped = {};
+  if (!pending) return [];
+  return pending.files.flatMap((file) => file.rows.map((raw, index) => {
+    let row;
+    if (file.type === "json") {
+      row = makeResult(raw, index);
+    } else {
+      const mapped = file.known ? { ...raw } : {};
+      importSystemFields.forEach((field) => {
+        const source = file.mapping.system?.[field.id];
+        if (source) mapped[field.target] = raw[source] ?? "";
+      });
+      orderedSchema().forEach((field) => {
+        const source = file.mapping.fields?.[field.id];
+        mapped[field.label] = source ? raw[source] ?? "" : "";
+        // Canonical aliases must take precedence over legacy raw columns.
+        if (field.id === "quote") mapped.quote = mapped[field.label];
+        if (field.id === "pageNo") mapped.page_no = mapped[field.label];
+        if (field.id === "sourceFile") mapped.source_file = mapped[field.label];
+      });
+      mapped.__rowNumber = raw.__rowNumber || index + 2;
+      row = makeResult(mapped, index);
+      orderedSchema().forEach((field) => {
+        const source = file.mapping.fields?.[field.id];
+        setFieldValue(row, field.id, source ? raw[source] ?? "" : "");
+      });
+      syncLegacyFields(row);
+      row.aiDraft = rowDraftFromFields(row.fields);
+      row.history = createInitialHistory(row);
+      row.abnormal = hasAbnormal(row);
+    }
+    const signature = window.CalligraphyImportWorkflow.contentSignature(row);
+    const sourceId = file.type === "json" ? raw.id : raw[file.mapping.system?.id];
+    if (!sourceId && !raw.id) row.id = pending.batch.id + "-" + file.index + "-" + index;
+    row.importOrigin = raw.importOrigin || {
+      key: JSON.stringify([file.name, sourceId || signature]),
+      signature
+    };
+    row.importBatchId = pending.batch.id;
+    row.importFileName = file.name;
+    return row;
+  }));
+}
+
+function pendingImportPlan() {
+  const pending = state.pendingImport;
+  if (!pending) return null;
+  const pageConflicts = [...pending.pages].filter(([name, content]) =>
+    pending.mode !== "new" && state.uploadedPages.has(name) && state.uploadedPages.get(name) !== content);
+  const blockedPages = new Set(pageConflicts.map(([name]) => name));
+  const workflow = window.CalligraphyImportWorkflow;
+  const allIncoming = mappedRowsFromPendingImport();
+  const decided = [];
+  const incoming = allIncoming.filter((row) => {
+    const sourceFile = blockedPages.has(row.sourceFile) ? row.sourceFile : "";
+    const identity = workflow.issueIdentity(row, sourceFile, sourceFile ? pending.pages.get(sourceFile) : null);
+    if (pending.mode !== "new" && workflow.resolvedDecision(state.importReports, identity)) {
+      decided.push({ type: "duplicate", row, reason: "相同导入内容已人工处理" });
+      return false;
+    }
+    return true;
+  });
+  const blockedRows = incoming.filter((row) => blockedPages.has(row.sourceFile));
+  const plan = window.CalligraphyImportWorkflow.planImport(
+    state.rows, incoming.filter((row) => !blockedPages.has(row.sourceFile)),
+    { mode: pending.mode, deletedRows: state.trashRows, preserveInvalid: Boolean(pending.workspace) });
+  blockedRows.forEach((row) => {
+    plan.counts.conflict++;
+    const existing = [...state.rows, ...state.trashRows].find((item) =>
+      item.id === row.id || (row.importOrigin?.key && item.importOrigin?.key === row.importOrigin.key));
+    plan.actions.push({ type: "conflict", row, existing, sourceConflict: true,
+      sourceFile: row.sourceFile, reason: "同名原文内容不同，保留旧原文" });
+  });
+  plan.counts.duplicate += decided.length;
+  plan.actions.push(...decided);
+  const sourceIssues = pageConflicts.filter(([name, text]) =>
+    !allIncoming.some((row) => row.sourceFile === name)
+    && !workflow.resolvedDecision(state.importReports, workflow.issueIdentity(null, name, text)))
+    .map(([sourceFile]) => ({ type: "source", row: null, sourceFile, sourceConflict: true,
+      reason: "同名原文内容不同，保留旧原文" }));
+  plan.counts.conflict += sourceIssues.length;
+  return { ...plan, pageConflicts, sourceIssues };
+}
+
+function readImportMapping(form) {
+  const pending = state.pendingImport;
+  if (!pending) return;
+  const file = pending.files[pending.activeFile];
+  const data = new FormData(form);
+  if (file?.type === "csv") {
+    const mappingDetails = form.querySelector?.(".import-mapping");
+    if (mappingDetails) file.mappingOpen = mappingDetails.open;
+    file.mapping = { system: {}, fields: {} };
     importSystemFields.forEach((field) => {
-      const source = mapping.system?.[field.id];
-      if (source) mapped[field.target] = row[source] || "";
+      file.mapping.system[field.id] = String(data.get("system:" + field.id) || "");
     });
     orderedSchema().forEach((field) => {
-      const source = mapping.fields?.[field.id];
-      mapped[field.label] = source ? row[source] || "" : "";
+      file.mapping.fields[field.id] = String(data.get("field:" + field.id) || "");
     });
-    mapped.__rowNumber = row.__rowNumber;
-    return mapped;
-  });
+  }
+  pending.mode = String(data.get("importMode") || pending.mode);
 }
 
 function confirmPendingImport() {
   const pending = state.pendingImport;
-  if (!pending) return;
-  const nextRows = mappedRowsFromPendingImport().map(makeResult);
-  state.reviewState = reviewDefaults();
-  state.originalRows = nextRows.map(cloneRow);
-  state.rows = nextRows;
-  state.workspaceId = newWorkspaceId();
-  state.datasetName = `上传：${pending.name}`;
-  state.manifest = buildManifest(nextRows);
-  state.selectedId = nextRows[0]?.id || "";
-  state.filter = "all";
-  state.query = "";
+  if (!pending) return false;
+  if (pending.mode === "new" && cloudReady()) {
+    window.alert("云端工作区请使用追加或更新；新建工作区需先完成云端项目配置。");
+    return false;
+  }
+  const plan = pendingImportPlan();
+  if (!saveWorkspace()) return false;
+  const keys = ["rows", "originalRows", "workspaceId", "datasetName", "reviewState",
+    "trashRows", "undoAction", "uploadedPages", "uploadLog", "importReports", "exportVersions", "schema",
+    "schemaTemplateId", "schemaVersion", "promptVersion", "selectedId"];
+  const before = Object.fromEntries(keys.map((key) => [key, state[key]]));
+  const isNew = pending.mode === "new";
+  if (isNew) {
+    state.workspaceId = newWorkspaceId();
+    state.datasetName = pending.workspace?.datasetName || pending.name;
+    state.reviewState = { ...reviewDefaults(), ...(pending.workspace?.reviewState || {}) };
+    state.trashRows = (pending.workspace?.trashRows || []).map(makeResult);
+    state.undoAction = null;
+    state.importReports = pending.workspace?.importReports || [];
+    state.exportVersions = pending.workspace?.exportVersions || [];
+    state.uploadedPages = new Map();
+    if (pending.workspace?.schema?.length) {
+      state.schema = cloneSchema(pending.workspace.schema);
+      state.schemaTemplateId = pending.workspace.schemaTemplateId || state.schemaTemplateId;
+      state.schemaVersion = pending.workspace.schemaVersion || SCHEMA_VERSION;
+      state.promptVersion = pending.workspace.promptVersion || PROMPT_VERSION;
+    }
+  }
+  state.rows = plan.rows;
+  const originals = new Map((isNew ? [] : state.originalRows).map((row) => [row.id, row]));
+  plan.actions.filter((action) => ["added", "updated"].includes(action.type))
+    .forEach((action) => originals.set(action.row.id, cloneRow(action.row)));
+  if (isNew && pending.workspace?.originalRows) {
+    pending.workspace.originalRows.forEach((row) => originals.set(row.id, cloneRow(row)));
+  }
+  state.originalRows = [...originals.values()];
+  state.uploadedPages = new Map(state.uploadedPages);
+  const blocked = new Set(plan.pageConflicts.map(([name]) => name));
+  pending.pages.forEach((content, name) => {
+    if (!blocked.has(name)) state.uploadedPages.set(name, content);
+  });
+  const report = {
+    id: pending.batch.id, createdAt: new Date().toISOString(), mode: pending.mode,
+    fileNames: pending.batch.fileNames, counts: plan.counts,
+    pageConflicts: [...blocked],
+    sourceConflicts: Object.fromEntries(plan.pageConflicts), sourceVersions: {},
+    originalSources: Object.fromEntries(plan.pageConflicts.map(([name]) => [name, before.uploadedPages.get(name)])),
+    issues: [...plan.actions.filter((action) => ["conflict", "invalid"].includes(action.type)), ...plan.sourceIssues]
+      .map((action) => ({ type: action.type, row: action.row ? cloneRow(action.row) : null,
+        existingId: action.existing?.id || "", reason: action.reason,
+        sourceFile: action.sourceFile || "", sourceConflict: Boolean(action.sourceConflict),
+        identity: window.CalligraphyImportWorkflow.issueIdentity(action.row, action.sourceFile || "",
+          action.sourceFile ? pending.pages.get(action.sourceFile) : null) }))
+  };
+  state.importReports = [...state.importReports, report];
+  const count = plan.counts;
+  state.uploadLog = [...(isNew ? [] : state.uploadLog), ...pending.log,
+    logEntry("success", pending.name, "新增 " + count.added + " · 跳过重复 " + count.duplicate
+      + " · 更新 " + count.updated + " · 冲突 " + count.conflict + " · 无效 " + count.invalid,
+    { rows: count.added, step: "导入完成" })];
+  state.selectedId = state.rows.some((row) => row.id === before.selectedId) ? before.selectedId : state.rows[0]?.id || "";
+  if (!saveWorkspace()) {
+    Object.assign(state, before);
+    return false;
+  }
+  state.pendingImport = null;
+  state.conflictsOpen = report.issues.length > 0;
+  state.conflictFilter = "open";
+  state.conflictSelection = report.issues.length ? `${state.importReports.length - 1}:0` : "";
+  state.conflictMessage = "";
   state.sourceText = "";
   state.sourceStatus = "idle";
   state.sourceCache = new Map();
-  state.uploadLog = [{ type: "success", title: pending.name, message: `已按字段映射导入 ${nextRows.length} 行。` }];
-  state.pendingImport = null;
-  state.view = "detail";
-  location.hash = "#detail";
-  saveWorkspace();
+  state.manifest = buildManifest(state.rows);
+  if (cloudReady()) state.cloud.message = "导入已保存在本地，待同步云端";
+  state.filter = "all";
+  state.query = "";
+  state.qualityFocus = null;
+  navigateToView("detail", "table");
   render();
   loadSelectedSource();
+  return true;
 }
 
 function cancelPendingImport() {
@@ -2618,91 +5805,53 @@ function cancelPendingImport() {
 
 async function processFiles(files) {
   if (!files.length) return;
-  const nextLog = [];
-  let nextRows = null;
-  let importedWorkspace = null;
-
+  const batch = window.CalligraphyImportWorkflow.createImportBatch(files);
+  const pending = {
+    name: files.length + " 个文件", batch, files: [], pages: new Map(),
+    log: [], activeFile: 0, mode: "append", workspace: null
+  };
   for (const file of files) {
     const name = file.name;
     const lower = name.toLowerCase();
     try {
-      if (lower.endsWith(".txt") && /^page_\d+\.txt$/i.test(name)) {
-        state.uploadedPages.set(name, await file.text());
-        nextLog.push({ type: "success", title: name, message: "已作为原文页加入回检缓存。" });
+      if (SOURCE_PAGE_PATTERN.test(name)) {
+        const content = await file.text();
+        if (pending.pages.has(name) && pending.pages.get(name) !== content) throw new Error("同批次原文重名且内容不同");
+        pending.pages.set(name, content);
       } else if (lower.endsWith(".csv")) {
         const rows = parseCsv(await file.text());
-        if (!rows.length) {
-          nextLog.push({ type: "warn", title: name, message: "CSV 没有可导入的数据行。" });
-        } else {
-          createPendingCsvImport(name, rows);
-          nextLog.push({ type: "success", title: name, message: `已读取 ${rows.length} 行。请确认 CSV 列与当前模板字段的映射。` });
-        }
+        if (!rows.length) throw new Error("CSV 没有数据行");
+        pending.files.push({ type: "csv", name, rows, headers: csvHeaders(rows),
+          known: isKnownResultCsv(name, rows), mapping: guessCsvMapping(rows), index: pending.files.length });
       } else if (lower.endsWith(".json")) {
         const payload = JSON.parse(await file.text());
-        if (payload.type === "calligraphy-workspace" && Array.isArray(payload.rows)) {
-          importedWorkspace = payload;
-          state.schemaTemplateId = payload.schemaTemplateId || state.schemaTemplateId || "calligraphy-style";
-          if (Array.isArray(payload.customTemplates)) {
-            const mergedTemplates = [...loadCustomTemplates(), ...payload.customTemplates].reduce((acc, template) => {
-              acc.set(template.id, { ...template, custom: true, fields: cloneSchema(template.fields || []) });
-              return acc;
-            }, new Map());
-            saveCustomTemplates([...mergedTemplates.values()]);
-          }
-          state.schema = cloneSchema(payload.schema?.length ? payload.schema : defaultSchema(state.schemaTemplateId));
-          state.schemaVersion = payload.schemaVersion || SCHEMA_VERSION;
-          state.promptVersion = payload.promptVersion || PROMPT_VERSION;
-          nextRows = payload.rows.map(makeResult);
-          Object.entries(payload.uploadedPages || {}).forEach(([page, content]) => {
-            if (/^page_\d+\.txt$/i.test(page)) state.uploadedPages.set(page, String(content));
+        const workspace = payload.type === "calligraphy-workspace" ? payload : null;
+        if (workspace && files.length !== 1) throw new Error("工作区备份请单独导入");
+        const rows = Array.isArray(payload) ? payload : payload.rows || payload.results || [];
+        if (!Array.isArray(rows) || rows.some((row) => !row || typeof row !== "object" || Array.isArray(row))) throw new Error("JSON 条目格式不正确");
+        if (workspace) {
+          pending.workspace = workspace;
+          pending.mode = "new";
+          pending.name = workspace.datasetName || name;
+          Object.entries(workspace.uploadedPages || {}).forEach(([page, text]) => {
+            if (SOURCE_PAGE_PATTERN.test(page)) pending.pages.set(page, String(text));
           });
-          state.reviewState = { ...reviewDefaults(), ...(payload.reviewState || {}) };
-          state.datasetName = payload.datasetName ? `导入：${payload.datasetName}` : `导入：${name}`;
-          nextLog.push({ type: "success", title: name, message: `已导入 ${nextRows.length} 行和 ${state.uploadedPages.size} 个原文页。` });
-          continue;
         }
-        const rows = Array.isArray(payload) ? payload : payload.results || [];
-        if (!rows.length) {
-          nextLog.push({ type: "warn", title: name, message: "JSON 中没有找到 results 数组。" });
-        } else {
-          nextRows = rows.map(makeResult);
-          state.datasetName = `上传：${name}`;
-          nextLog.push({ type: "success", title: name, message: `已处理 ${nextRows.length} 行 JSON 结果。` });
-        }
-      } else if (lower.endsWith(".xlsx")) {
-        nextLog.push({ type: "warn", title: name, message: "公网前端暂不直接解析 XLSX。请先通过后端/工作流转换为 CSV，再上传。" });
+        pending.files.push({ type: "json", name, rows, index: pending.files.length });
       } else {
-        nextLog.push({ type: "warn", title: name, message: "文件类型未处理。" });
+        throw new Error(lower.endsWith(".xlsx") ? "请先将 XLSX 转为 CSV" : "暂不支持此文件类型");
       }
+      pending.log.push(logEntry("success", name, "文件已读取", { step: "材料导入" }));
     } catch (error) {
-      nextLog.push({ type: "error", title: name, message: error.message });
+      pending.log.push(logEntry("error", name, error.message, { step: "材料导入" }));
     }
   }
-
-  state.uploadLog = nextLog;
-  if (nextRows) {
-    if (!importedWorkspace) state.reviewState = reviewDefaults();
-    state.originalRows = (importedWorkspace?.originalRows?.length ? importedWorkspace.originalRows : nextRows).map(cloneRow);
-    state.rows = nextRows;
-    state.workspaceId = newWorkspaceId();
-    state.manifest = buildManifest(nextRows);
-    state.selectedId = nextRows[0]?.id || "";
-    state.filter = "all";
-    state.query = "";
-    state.sourceText = "";
-    state.sourceStatus = "idle";
-    state.sourceCache = new Map();
-    state.view = "detail";
-    location.hash = "#detail";
-    state.uploadLog = nextLog;
-    saveWorkspace();
-    render();
-    loadSelectedSource();
-  } else {
-    state.manifest = buildManifest(state.rows);
-    saveWorkspace();
-    render();
+  if (!pending.files.length && !pending.pages.size) {
+    window.alert(pending.log.map((item) => item.name + "：" + item.message).join("\n"));
+    return;
   }
+  state.pendingImport = pending;
+  render();
 }
 
 async function loadSelectedSource(options = {}) {
@@ -2736,8 +5885,64 @@ async function loadSelectedSource(options = {}) {
   updateSourceDom(row);
 }
 
+async function loadBundledSampleData() {
+  try {
+    const requestedReviewMode = location.hash === "#review" || state.detailMode === "review";
+    const embedded = window.CALLIGRAPHY_EMBEDDED_SAMPLE;
+    let csvText = embedded?.csv || "";
+    if (!csvText) {
+      const csvResponse = await fetch(SAMPLE_DATASET.csv, { cache: "no-store" });
+      if (!csvResponse.ok) throw new Error(`样本主表读取失败：${csvResponse.status}`);
+      csvText = await csvResponse.text();
+    }
+    const csvRows = parseCsv(csvText);
+    if (!csvRows.length) throw new Error("样本主表没有数据行。");
+
+    state.uploadedPages = new Map();
+    if (embedded?.pages) {
+      Object.entries(embedded.pages).forEach(([name, content]) => {
+        if (SOURCE_PAGE_PATTERN.test(name)) state.uploadedPages.set(name, String(content));
+      });
+    } else {
+      await Promise.all(SAMPLE_DATASET.pages.map(async (name) => {
+        const response = await fetch(`./data/sample/source-pages/${name}`, { cache: "no-store" });
+        if (response.ok) state.uploadedPages.set(name, await response.text());
+      }));
+    }
+
+    const rows = csvRows.map(makeResult);
+    state.rows = rows;
+    state.originalRows = rows.map(cloneRow);
+    state.datasetName = embedded?.name || "旧版第三轮综合总表 · 真实样本";
+    state.manifest = buildManifest(rows);
+    state.selectedId = rows[0]?.id || "";
+    state.filter = "all";
+    state.query = "";
+    state.sourceText = "";
+    state.sourceStatus = "idle";
+    state.sourceCache = new Map();
+    state.uploadLog = [
+      logEntry("success", "旧版第三轮综合总表", `已自动载入 ${rows.length} 行真实样本。`, { rows: rows.length, step: "样本导入" }),
+      logEntry("success", "原文页缓存", `已载入 ${state.uploadedPages.size} 个 page_*.txt 原文页。`, { count: state.uploadedPages.size, step: "原文页" })
+    ];
+    state.view = "detail";
+    state.detailMode = requestedReviewMode ? "review" : "table";
+    applyDetailModeDefaults(state.detailMode);
+    location.hash = state.detailMode === "review" ? "#review" : "#detail";
+    return true;
+  } catch (error) {
+    state.uploadLog = [logEntry("warn", "真实样本", error.message, { step: "样本导入" })];
+    return false;
+  }
+}
+
 async function init() {
-  if (!loadWorkspace()) {
+  initButtonTooltips();
+  await initCloudRuntime();
+  restoreRememberedEmail();
+  const loadedCloudWorkspace = await loadCloudWorkspaceData();
+  const loadedWorkspace = loadedCloudWorkspace || loadWorkspace();
+  if (!loadedWorkspace) {
     state.workspaceId = newWorkspaceId();
     state.schemaTemplateId = "calligraphy-style";
     state.schema = defaultSchema(state.schemaTemplateId);
@@ -2747,16 +5952,40 @@ async function init() {
     state.rows = [];
     state.originalRows = [];
     state.manifest = buildManifest([]);
+  }
+  if (!state.rows.length && !state.uploadedPages.size) {
+    await loadBundledSampleData();
     saveWorkspace();
   }
+  if (state.view === "detail") applyDetailModeDefaults(state.detailMode);
   render();
-  if (state.view === "detail") loadSelectedSource();
+  if (state.entryStage === "workspace" && state.view === "detail") loadSelectedSource();
 }
 
 window.addEventListener("hashchange", () => {
-  state.view = location.hash === "#detail" ? "detail" : "home";
+  if (state.suppressHashMotion) {
+    state.suppressHashMotion = false;
+    return;
+  }
+  const previousView = state.view;
+  const previousDetailMode = state.detailMode;
+  applyRouteFromHash();
+  if (state.view === "detail") applyDetailModeDefaults(state.detailMode);
+  const from = viewKey(previousView, previousDetailMode);
+  const to = viewKey();
+  state.motionName = from === to ? "refresh" : `${from}-${to}`;
   render();
-  if (state.view === "detail") loadSelectedSource();
+  if (state.entryStage === "workspace" && state.view === "detail") loadSelectedSource();
+});
+
+window.addEventListener("keydown", handleWorkbenchShortcut);
+
+compactWorkbench?.addEventListener("change", (event) => {
+  state.railCollapsed = event.matches;
+  if (state.manifest) applyTableViewState();
+});
+narrowWorkbench?.addEventListener("change", (event) => {
+  setDetailDock(state.aiPanelOpen ? false : event.matches && state.detailMode === "table");
 });
 
 init().catch((error) => {

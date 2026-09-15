@@ -1,0 +1,334 @@
+body[data-entry-active="true"] {
+  overflow: hidden;
+  background: #f6f7f4;
+}
+
+.entry-gate {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #f6f7f4;
+  color: #1c2421;
+  font-family: var(--sans);
+}
+
+.entry-gate::before {
+  content: "";
+  position: absolute;
+  inset: 24px;
+  border: 1px solid #e0e3de;
+  pointer-events: none;
+}
+
+.entry-intro {
+  position: relative;
+  z-index: 1;
+  width: min(620px, calc(100% - 48px));
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.entry-logo-sequence {
+  position: relative;
+  width: 184px;
+  height: 220px;
+}
+
+.entry-logo-scroll,
+.entry-logo-unfold {
+  position: absolute;
+  inset: 0;
+}
+
+.entry-logo-sequence img {
+  position: absolute;
+  top: 53%;
+  left: 50%;
+  width: 286px;
+  height: 286px;
+  max-width: none;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+}
+
+.entry-logo-scroll {
+  animation: entryScrollArrive 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.entry-logo-scroll img { clip-path: inset(0 59% 0 20%); }
+
+.entry-logo-unfold img {
+  animation: entryLogoUnfold 2250ms cubic-bezier(0.45, 0, 0.55, 1) 360ms both;
+}
+
+.entry-copy {
+  margin-top: 12px;
+  animation: entryCopyReveal 720ms cubic-bezier(0.22, 1, 0.36, 1) 2440ms both;
+}
+
+.entry-copy h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.entry-copy p {
+  margin: 16px 0 0;
+  color: #686e69;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.entry-login {
+  position: relative;
+  z-index: 1;
+  width: min(420px, calc(100% - 40px));
+  animation: entryLoginReveal 820ms ease-out both;
+}
+
+.entry-login-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  color: #202824;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.entry-login-mark {
+  position: relative;
+  width: 40px;
+  height: 44px;
+  overflow: hidden;
+}
+
+.entry-login-mark img {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  width: 62px;
+  height: 62px;
+  max-width: none;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+}
+
+.entry-login-form {
+  display: grid;
+  gap: 16px;
+  border: 1px solid #dfe2dc;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 18px 46px rgba(27, 36, 31, 0.09);
+  padding: 30px;
+}
+
+.entry-login-form header { margin-bottom: 4px; }
+.entry-login-form h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 28px;
+  line-height: 1.25;
+}
+
+.entry-login-form header p {
+  margin: 8px 0 0;
+  color: #737873;
+  font-size: 13px;
+}
+
+.entry-login-form label {
+  display: grid;
+  gap: 7px;
+  color: #404641;
+  font-size: 13px;
+}
+
+.entry-login-form input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #d7dbd5;
+  border-radius: 4px;
+  background: #fbfcfa;
+  color: #1f2521;
+  outline: 0;
+  padding: 0 12px;
+  font-size: 15px;
+}
+
+.entry-login-form input:focus {
+  border-color: #39744c;
+  box-shadow: 0 0 0 3px rgba(57, 116, 76, 0.1);
+}
+
+.entry-login-form input[aria-invalid="true"] { border-color: #a64a3a; }
+
+.entry-login-error {
+  min-height: 20px;
+  margin: -4px 0 0;
+  color: #9b3e31;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.entry-register-help,
+.entry-register-notice {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.entry-register-help { color: #747a75; }
+
+.entry-register-notice {
+  min-height: 19px;
+  color: #28633e;
+}
+
+.entry-login-submit {
+  min-height: 42px;
+  border: 1px solid #28633e;
+  border-radius: 4px;
+  background: #28633e;
+  color: #fff;
+  cursor: pointer;
+}
+
+.entry-login-submit:hover,
+.entry-login-submit:focus-visible {
+  border-color: #194f30;
+  background: #194f30;
+  outline: 0;
+}
+
+.entry-login-submit:disabled {
+  border-color: #9bb0a0;
+  background: #9bb0a0;
+  cursor: wait;
+}
+
+.entry-auth-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: #747a75;
+  font-size: 13px;
+}
+
+.entry-auth-switch button {
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: #28633e;
+  cursor: pointer;
+  padding: 0 3px;
+  font: inherit;
+  font-weight: 600;
+}
+
+.entry-auth-switch button:hover,
+.entry-auth-switch button:focus-visible {
+  color: #194f30;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  outline: 0;
+}
+
+.entry-login-form .entry-remember {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 8px;
+  color: #626863;
+  cursor: pointer;
+}
+
+.entry-login-form .entry-remember input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  accent-color: #28633e;
+}
+
+.entry-login-back {
+  justify-self: center;
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: #69706b;
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.entry-login-back:hover,
+.entry-login-back:focus-visible { color: #245f39; outline: 0; }
+
+.app-shell.workspace-entering > .topbar {
+  animation: workspaceHeaderEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.app-shell.workspace-entering > .dashboard-grid,
+.app-shell.workspace-entering > .review-screen {
+  animation: workspaceBodyEnter 440ms cubic-bezier(0.22, 1, 0.36, 1) 70ms both;
+}
+
+@keyframes entryScrollArrive {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes entryLogoUnfold {
+  from { clip-path: inset(0 59% 0 41%); }
+  to { clip-path: inset(0 0 0 41%); }
+}
+
+@keyframes entryCopyReveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes entryLoginReveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes workspaceHeaderEnter {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes workspaceBodyEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 560px) {
+  .entry-gate::before { inset: 12px; }
+  .entry-logo-sequence { width: 150px; height: 184px; }
+  .entry-logo-sequence img { width: 238px; height: 238px; }
+  .entry-copy h1 { font-size: 34px; }
+  .entry-copy p { max-width: 280px; font-size: 14px; }
+  .entry-login-form { padding: 24px 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entry-logo-scroll,
+  .entry-logo-unfold img,
+  .entry-copy,
+  .entry-login,
+  .app-shell.workspace-entering > .topbar,
+  .app-shell.workspace-entering > .dashboard-grid,
+  .app-shell.workspace-entering > .review-screen { animation: none; }
+}

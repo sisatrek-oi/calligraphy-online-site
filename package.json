@@ -1,0 +1,11 @@
+{
+  "name": "calligraphy-online-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test scripts/test-*.mjs && python3 -B -m unittest discover -s scripts -p 'test_*.py'",
+    "start": "python3 server.py --host 127.0.0.1 --port 8765",
+    "check": "node --check src/schema.js && node --check src/import-workflow.js && node --check src/review-workflow.js && node --check src/export-workflow.js && node --check src/main.js && node --check src/cloud-store.js && node --check api/config.js && node --check api/search.js && node --check scripts/verify-cloud-isolation.mjs && python3 -m py_compile server.py && node scripts/verify-cloud-isolation.mjs"
+  }
+}
