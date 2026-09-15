@@ -119,9 +119,12 @@ function loadSample(a) {
 
 test("demo entry gate accepts only the configured credentials", () => {
   const a = app();
-  assert.equal(a.get("verifyDemoCredentials('2552848@tongji.com', '123456')"), true);
-  assert.equal(a.get("verifyDemoCredentials('2552848@tongji.com', '1234567')"), false);
-  assert.equal(a.get("verifyDemoCredentials('other@tongji.com', '123456')"), false);
+  assert.equal(a.get("verifyDemoCredentials('tongji', '123456')"), true);
+  assert.equal(a.get("verifyDemoCredentials('tongji', '1234567')"), false);
+  assert.equal(a.get("verifyDemoCredentials('2552848@tongji.com', '123456')"), false);
+  a.run("state.entryStage = 'signin'; renderEntry()");
+  assert.match(a.root.innerHTML, /name="account"/);
+  assert.doesNotMatch(a.root.innerHTML, /name="account"[^>]*type="email"/);
 });
 
 test("local test sessions open the workspace without storing credentials", () => {
@@ -130,7 +133,7 @@ test("local test sessions open the workspace without storing credentials", () =>
   assert.equal(local.get("state.entryStage"), "workspace");
   assert.equal(local.disk.get("calligraphy-local-demo-session-v1"), "active");
   assert.equal(local.disk.has("calligraphy-remembered-email-v1"), false);
-  assert.equal([...local.disk.values()].some((value) => value.includes("2552848@tongji.com") || value.includes("123456")), false);
+  assert.equal([...local.disk.values()].some((value) => value.includes("tongji") || value.includes("123456")), false);
 
   const loginPreview = app({ search: "?login=1" });
   assert.equal(loginPreview.get("restoreLocalDemoSession()"), false);

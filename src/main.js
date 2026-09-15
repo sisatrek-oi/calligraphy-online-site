@@ -27,7 +27,7 @@ const CUSTOM_TEMPLATES_KEY = "calligraphy-custom-schema-templates-v1";
 const SCHEMA_VERSION = 1;
 const PROMPT_VERSION = 1;
 // Local product-demo gate only. Production access must use server-side authentication.
-const DEMO_LOGIN = Object.freeze({ email: "2552848@tongji.com", password: "123456" });
+const DEMO_LOGIN = Object.freeze({ account: "tongji", password: "123456" });
 const SOURCE_PAGE_PATTERN = /^page_\d+(?:__v[a-z0-9-]+)?\.txt$/i;
 const SAMPLE_DATASET = {
   csv: "./data/sample/main.csv",
@@ -231,6 +231,7 @@ const state = {
     invites: []
   },
   entryStage: "welcome",
+  entryAccount: "",
   entryEmail: "",
   entryRememberEmail: false,
   entryError: "",
@@ -5258,8 +5259,8 @@ function renderDetail() {
   attachDetailEvents();
 }
 
-function verifyDemoCredentials(email, password) {
-  return String(email || "").trim().toLowerCase() === DEMO_LOGIN.email
+function verifyDemoCredentials(account, password) {
+  return String(account || "").trim().toLowerCase() === DEMO_LOGIN.account
     && String(password || "") === DEMO_LOGIN.password;
 }
 
@@ -5275,6 +5276,7 @@ function restoreLocalDemoSession() {
   if (!localDemoSessionAvailable()) return false;
   try { localStorage.setItem(LOCAL_DEMO_SESSION_KEY, "active"); } catch { /* Local preview can still continue without storage. */ }
   state.entryStage = "workspace";
+  state.entryAccount = "";
   state.entryEmail = "";
   state.entryRememberEmail = false;
   state.entryError = "";
@@ -5341,7 +5343,7 @@ function renderEntry() {
           ` : `
             <form class="entry-login-form" id="entryLoginForm" autocomplete="off">
               <header><h1 id="entryLoginTitle">登录工作区</h1><p>进入书论材料整理与审校平台</p></header>
-              <label><span>账号</span><input type="email" name="email" value="${escapeHtml(state.entryEmail)}" autocomplete="${emailMemoryEnabled() ? "username" : "off"}" required /></label>
+              <label><span>账号</span><input type="text" name="account" value="${escapeHtml(state.entryAccount)}" autocomplete="username" autocapitalize="none" spellcheck="false" required /></label>
               <label><span>密码</span><input type="password" name="password" autocomplete="current-password" required autofocus aria-invalid="${String(Boolean(state.entryError))}" /></label>
               ${emailMemoryEnabled() ? `<label class="entry-remember"><input type="checkbox" name="rememberEmail" ${state.entryRememberEmail ? "checked" : ""} /><span>在此设备记住账号</span></label>` : ""}
               <p class="entry-login-error" role="alert" aria-live="polite">${escapeHtml(state.entryError)}</p>
@@ -5422,16 +5424,16 @@ function renderEntry() {
   document.querySelector("#entryLoginForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    state.entryEmail = String(values.get("email") || "").trim();
+    state.entryAccount = String(values.get("account") || "").trim();
     state.entryRememberEmail = values.get("rememberEmail") === "on";
-    if (!verifyDemoCredentials(state.entryEmail, values.get("password"))) {
+    if (!verifyDemoCredentials(state.entryAccount, values.get("password"))) {
       state.entryError = "账号或密码不正确";
       renderEntry();
       return;
     }
     state.entryStage = "workspace";
     state.entryError = "";
-    persistRememberedEmail(state.entryEmail, state.entryRememberEmail);
+    persistRememberedEmail(state.entryAccount, state.entryRememberEmail);
     persistLocalDemoSession();
     state.workspaceEntryMotion = true;
     render();
