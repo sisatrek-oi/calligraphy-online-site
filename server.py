@@ -157,6 +157,64 @@ def delete_local_model_config(path: Path = MODEL_CONFIG_PATH) -> bool:
         return False
 
 
+def model_config_request_allowed(client_host: str, origin: str) -> bool:
+    if client_host not in {"127.0.0.1", "::1"}:
+        return False
+    if not origin:
+        return True
+    try:
+        parsed = urllib.parse.urlparse(origin)
+        host = (parsed.hostname or "").lower()
+    except ValueError:
+        return False
+    return parsed.scheme in {"http", "https"} and host in {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    }
+
+
+def test_model_connection(
+    payload: dict, path: Path = MODEL_CONFIG_PATH
+) -> dict[str, str | int | bool]:
+    existing = load_local_model_config(path)
+    config = normalize_model_config(payload, existing["apiKey"] if existing else "")
+    request = urllib.request.Request(
+        config["apiUrl"],
+        data=json.dumps(
+            {
+                "model": config["model"],
+                "messages": [{"role": "user", "content": "只回复 OK"}],
+                "temperature": 0,
+                "max_tokens": 8,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {config['apiKey']}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            response.read(65536)
+    except urllib.error.HTTPError as exc:
+        if exc.code in {401, 403}:
+            raise ApiError("认证失败，请检查 API Key", 502) from exc
+        if exc.code == 429:
+            raise ApiError("模型服务限流，请稍后重试", 502) from exc
+        raise ApiError(f"模型服务返回 {exc.code}", 502) from exc
+    except Exception as exc:
+        raise ApiError("模型服务连接失败", 502) from exc
+    return {
+        "ok": True,
+        "model": config["model"],
+        "elapsedMs": round((time.monotonic() - started) * 1000),
+    }
+
+
 class WorkspaceHandler(SimpleHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
@@ -166,6 +224,9 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/config":
             self._send_json(public_cloud_config())
             return
+        if parsed.path == "/api/model-config":
+            self._handle_api_action(lambda _payload: public_model_config(), local_only=True, body=False)
+            return
         if parsed.path == "/api/search":
             self._handle_search(parsed.query)
             return
@@ -173,21 +234,38 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path != "/api/ai/extract":
+        if parsed.path == "/api/ai/extract":
+            self._handle_api_action(run_model_extraction)
+            return
+        if parsed.path == "/api/model-config/test":
+            self._handle_api_action(test_model_connection, local_only=True)
+            return
+        self._send_json({"error": "not found"}, status=404)
+
+    def do_PUT(self) -> None:
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path != "/api/model-config":
             self._send_json({"error": "not found"}, status=404)
             return
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length <= 0 or length > 2_000_000:
-                raise ApiError("请求内容为空或过大", 413)
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            self._send_json(run_model_extraction(payload))
-        except ApiError as exc:
-            self._send_json({"error": str(exc)}, status=exc.status)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            self._send_json({"error": "请求不是有效 JSON"}, status=400)
-        except Exception as exc:  # pragma: no cover - provider failures vary by environment.
-            self._send_json({"error": f"模型调用失败：{exc}"}, status=502)
+        self._handle_api_action(
+            lambda payload: public_model_config()
+            if save_local_model_config(payload)
+            else public_model_config(),
+            local_only=True,
+        )
+
+    def do_DELETE(self) -> None:
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path != "/api/model-config":
+            self._send_json({"error": "not found"}, status=404)
+            return
+        self._handle_api_action(
+            lambda _payload: public_model_config()
+            if delete_local_model_config()
+            else public_model_config(),
+            local_only=True,
+            body=False,
+        )
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
@@ -208,6 +286,30 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
                 {"query": query, "results": [], "error": f"search unavailable: {exc}"},
                 status=502,
             )
+
+    def _read_json_body(self) -> dict:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0 or length > 2_000_000:
+            raise ApiError("请求内容为空或过大", 413)
+        payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ApiError("请求不是 JSON 对象")
+        return payload
+
+    def _handle_api_action(self, action, *, local_only: bool = False, body: bool = True) -> None:
+        try:
+            if local_only and not model_config_request_allowed(
+                self.client_address[0], self.headers.get("Origin", "")
+            ):
+                raise ApiError("模型配置仅允许本机页面访问", 403)
+            payload = self._read_json_body() if body else {}
+            self._send_json(action(payload))
+        except ApiError as exc:
+            self._send_json({"error": str(exc)}, status=exc.status)
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+            self._send_json({"error": "请求不是有效 JSON"}, status=400)
+        except Exception:  # pragma: no cover - provider and filesystem failures vary.
+            self._send_json({"error": "服务暂时不可用"}, status=502)
 
     def _send_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -406,11 +508,12 @@ def normalize_ai_proposal(raw: dict, schema: list[dict[str, object]], source_tex
 
 
 def run_model_extraction(payload: dict) -> dict:
-    api_url = os.environ.get("MODEL_API_URL", "")
-    api_key = os.environ.get("MODEL_API_KEY", "")
-    model = os.environ.get("MODEL_NAME", "")
-    if not api_url or not api_key or not model:
+    config = active_model_config()
+    if not config:
         raise ApiError("模型服务尚未配置", 503)
+    api_url = config["apiUrl"]
+    api_key = config["apiKey"]
+    model = config["model"]
     source_text = str(payload.get("sourceText") or "")
     if not source_text.strip():
         raise ApiError("当前条目没有可用原文")
@@ -450,10 +553,11 @@ def run_model_extraction(payload: dict) -> dict:
 def public_cloud_config() -> dict[str, str | bool]:
     supabase_url = os.environ.get("SUPABASE_URL", "")
     supabase_anon_key = os.environ.get("SUPABASE_ANON_KEY", "")
+    ai_enabled = bool(active_model_config())
     if supabase_url and supabase_anon_key:
         return {
             "enabled": os.environ.get("CLOUD_SYNC_ENABLED", "true") != "false",
-            "aiEnabled": bool(os.environ.get("MODEL_API_URL") and os.environ.get("MODEL_API_KEY") and os.environ.get("MODEL_NAME")),
+            "aiEnabled": ai_enabled,
             "supabaseUrl": supabase_url,
             "supabaseAnonKey": supabase_anon_key,
             "rememberEmail": os.environ.get("REMEMBER_EMAIL_ENABLED", "true") != "false",
@@ -467,14 +571,14 @@ def public_cloud_config() -> dict[str, str | bool]:
         try:
             config = json.loads(config_path.read_text(encoding="utf-8"))
             if isinstance(config, dict):
-                config["aiEnabled"] = bool(os.environ.get("MODEL_API_URL") and os.environ.get("MODEL_API_KEY") and os.environ.get("MODEL_NAME"))
+                config["aiEnabled"] = ai_enabled
                 return config
             return {"enabled": False, "aiEnabled": False}
         except json.JSONDecodeError:
             return {"enabled": False, "aiEnabled": False}
     return {
         "enabled": False,
-        "aiEnabled": bool(os.environ.get("MODEL_API_URL") and os.environ.get("MODEL_API_KEY") and os.environ.get("MODEL_NAME")),
+        "aiEnabled": ai_enabled,
     }
 
 

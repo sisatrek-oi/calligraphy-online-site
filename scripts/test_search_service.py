@@ -80,6 +80,79 @@ class SearchServiceTest(unittest.TestCase):
             server.delete_local_model_config(path)
             self.assertFalse(path.exists())
 
+    def test_model_connection_uses_draft_without_saving(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model-config.json"
+            response = io.BytesIO(
+                json.dumps({"choices": [{"message": {"content": "OK"}}]}).encode()
+            )
+            with patch.object(server.urllib.request, "urlopen", return_value=response) as urlopen:
+                result = server.test_model_connection(
+                    {
+                        "apiUrl": "https://api.example.com/chat",
+                        "apiKey": "draft-secret",
+                        "model": "draft-model",
+                    },
+                    path,
+                )
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["model"], "draft-model")
+            self.assertFalse(path.exists())
+            request = urlopen.call_args.args[0]
+            self.assertEqual(request.get_header("Authorization"), "Bearer draft-secret")
+
+    def test_ai_extraction_uses_saved_model_config(self):
+        provider = io.BytesIO(
+            json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": json.dumps(
+                                    {
+                                        "fields": {},
+                                        "evidence": [],
+                                        "reasoning": [],
+                                        "abstentions": [],
+                                    }
+                                )
+                            }
+                        }
+                    ]
+                }
+            ).encode()
+        )
+        saved = {
+            "apiUrl": "https://saved.example/chat",
+            "apiKey": "saved-secret",
+            "model": "saved-model",
+        }
+        with (
+            patch.object(server, "active_model_config", return_value=saved),
+            patch.object(server.urllib.request, "urlopen", return_value=provider) as urlopen,
+        ):
+            result = server.run_model_extraction(
+                {"sourceText": "原文", "schema": [{"id": "quote"}]}
+            )
+        self.assertEqual(result["meta"]["model"], "saved-model")
+        self.assertEqual(urlopen.call_args.args[0].full_url, "https://saved.example/chat")
+
+    def test_model_config_mutations_require_local_same_origin(self):
+        self.assertTrue(
+            server.model_config_request_allowed(
+                "127.0.0.1", "http://127.0.0.1:8765"
+            )
+        )
+        self.assertTrue(server.model_config_request_allowed("::1", ""))
+        self.assertFalse(
+            server.model_config_request_allowed(
+                "192.168.1.10", "http://127.0.0.1:8765"
+            )
+        )
+        self.assertFalse(
+            server.model_config_request_allowed("127.0.0.1", "https://evil.example")
+        )
+
     def test_local_env_loader_preserves_shell_values(self):
         with tempfile.TemporaryDirectory() as directory:
             env_path = Path(directory) / ".env.local"

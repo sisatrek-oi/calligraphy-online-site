@@ -210,7 +210,7 @@ git commit -m "feat: persist local model configuration"
 - Modify: `server.py:300-370`
 - Test: `scripts/test_search_service.py`
 
-- [ ] **Step 1: 写入连接测试和统一活动配置的失败测试**
+- [x] **Step 1: 写入连接测试和统一活动配置的失败测试**
 
 ```python
     def test_model_connection_uses_draft_without_saving(self):
@@ -238,13 +238,13 @@ git commit -m "feat: persist local model configuration"
         self.assertEqual(urlopen.call_args.args[0].full_url, "https://saved.example/chat")
 ```
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run: `python3 -B -m unittest scripts.test_search_service.SearchServiceTest.test_model_connection_uses_draft_without_saving scripts.test_search_service.SearchServiceTest.test_ai_extraction_uses_saved_model_config`
 
 Expected: FAIL，提示 `test_model_connection` 未定义或抽取仍使用环境变量。
 
-- [ ] **Step 3: 实现连接测试并让抽取使用统一配置**
+- [x] **Step 3: 实现连接测试并让抽取使用统一配置**
 
 ```python
 def test_model_connection(payload: dict, path: Path = MODEL_CONFIG_PATH) -> dict:
@@ -285,7 +285,7 @@ def test_model_connection(payload: dict, path: Path = MODEL_CONFIG_PATH) -> dict
     api_url, api_key, model = config["apiUrl"], config["apiKey"], config["model"]
 ```
 
-- [ ] **Step 4: 写入本机同源检查和路由分派测试**
+- [x] **Step 4: 写入本机同源检查和路由分派测试**
 
 ```python
     def test_model_config_mutations_require_local_same_origin(self):
@@ -295,7 +295,7 @@ def test_model_connection(payload: dict, path: Path = MODEL_CONFIG_PATH) -> dict
         self.assertFalse(server.model_config_request_allowed("127.0.0.1", "https://evil.example"))
 ```
 
-- [ ] **Step 5: 实现安全检查与四个配置路由**
+- [x] **Step 5: 实现安全检查与四个配置路由**
 
 在 `WorkspaceHandler` 中加入 `GET /api/model-config`、`POST /api/model-config/test`、`PUT /api/model-config` 和 `DELETE /api/model-config`。写操作先调用：
 
@@ -311,7 +311,7 @@ def model_config_request_allowed(client_host: str, origin: str) -> bool:
 
 路由返回只调用 `public_model_config()`，错误统一为 `{ "error": "简洁中文信息" }`。`public_cloud_config()` 的 `aiEnabled` 改为 `bool(active_model_config())`，让保存配置后前端立即识别 AI 能力。
 
-- [ ] **Step 6: 运行后端测试并提交**
+- [x] **Step 6: 运行后端测试并提交**
 
 Run: `python3 -B -m unittest scripts.test_search_service`
 
