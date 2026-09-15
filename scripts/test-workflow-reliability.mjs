@@ -235,6 +235,14 @@ test("model configuration requests use the local API without persisting the key 
   assert.equal(JSON.stringify(a.get("state.modelSettings")).includes("temporary-secret"), false);
 });
 
+test("model settings uses the shared modal and bounded responsive controls", () => {
+  const css = fs.readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.settings-tabs\s*\{/);
+  assert.match(css, /\.model-settings-grid\s*\{/);
+  assert.match(css, /minmax\(0,\s*1fr\)/);
+  assert.match(css, /@media\s*\(max-width:\s*760px\)/);
+});
+
 test("table and review share four summary slots, three toolbar slots and the dock preference", () => {
   const a = app();
   loadSample(a);

@@ -458,7 +458,7 @@ git commit -m "feat: add model connection settings"
 - Modify: `docs/deployment.md`
 - Test: `scripts/test-workflow-reliability.mjs`
 
-- [ ] **Step 1: 增加设置布局约束测试**
+- [x] **Step 1: 增加设置布局约束测试**
 
 ```js
 test("model settings uses the shared modal and bounded responsive controls", () => {
@@ -470,13 +470,13 @@ test("model settings uses the shared modal and bounded responsive controls", () 
 });
 ```
 
-- [ ] **Step 2: 运行布局测试并确认失败**
+- [x] **Step 2: 运行布局测试并确认失败**
 
 Run: `node --test --test-name-pattern="model settings uses" scripts/test-workflow-reliability.mjs`
 
 Expected: FAIL，提示缺少模型设置选择器。
 
-- [ ] **Step 3: 实现与现有工作台一致的响应式样式**
+- [x] **Step 3: 实现与现有工作台一致的响应式样式**
 
 在 `src/styles.css` 增加：
 
@@ -522,17 +522,17 @@ Expected: FAIL，提示缺少模型设置选择器。
 
 复用现有输入框、按钮、边框和色彩变量，不引入新卡片层级。
 
-- [ ] **Step 4: 更新资源版本和部署文档**
+- [x] **Step 4: 更新资源版本和部署文档**
 
 将 `index.html` 中 `src/styles.css` 与 `src/main.js` 的查询版本更新为 `20260915-model-settings`。在 `docs/deployment.md` 记录：本地 `server.py` 支持 `.runtime/model-config.json`；纯静态 GitHub Pages 只能展示设置能力限制；Vercel 继续通过环境变量配置模型。
 
-- [ ] **Step 5: 运行全部自动化验证**
+- [x] **Step 5: 运行全部自动化验证**
 
 Run: `npm run check && npm test && git diff --check`
 
 Expected: JavaScript/Python 语法、云端隔离、全部 Node/Python 测试和空白检查 PASS。
 
-- [ ] **Step 6: 重启本地服务并完成浏览器验收**
+- [x] **Step 6: 重启本地服务并完成浏览器验收**
 
 重新启动 `npm start`，打开 `http://127.0.0.1:8765/index.html#home`：
 
@@ -544,7 +544,7 @@ Expected: JavaScript/Python 语法、云端隔离、全部 Node/Python 测试和
 6. 在 1280x800 与 390x844 检查无重叠、无横向溢出。
 7. 直接请求已带版本的 CSS 和 JS，确认均返回 `200` 且包含新选择器/函数。
 
-- [ ] **Step 7: 检查密钥泄漏并提交**
+- [x] **Step 7: 检查密钥泄漏并提交**
 
 Run: `rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'sk-[A-Za-z0-9]{20,}' index.html src scripts docs || true`
 

@@ -1,6 +1,6 @@
 # 书论工作区部署说明
 
-Review date: 2026-09-03
+Review date: 2026-09-15
 
 ## 目标
 
@@ -31,6 +31,20 @@ DEFAULT_WORKSPACE_NAME=书论统一主表
 
 4. 不要配置或暴露 `SUPABASE_SERVICE_ROLE_KEY`。前端只能使用 anon key，权限靠 RLS 控制。
 
+## 模型接口配置
+
+本地运行 `server.py` 时，可以在“项目设置 → 模型连接”中测试、保存、切换或删除 OpenAI Chat Completions 兼容接口。保存后的配置位于 `.runtime/model-config.json`，该目录已被 Git 忽略；API Key 只由本地服务读取，浏览器状态、工作区数据和公开配置接口均不保存或返回完整密钥。
+
+本地网页配置优先于环境变量。删除本地配置后，服务会回退到以下环境变量：
+
+```text
+MODEL_API_URL
+MODEL_API_KEY
+MODEL_NAME
+```
+
+GitHub Pages 等纯静态托管无法写入服务器配置，设置界面会显示“不支持本地保存”。Vercel 部署继续使用上面的环境变量，不要把 API Key 写入仓库或前端代码。团队版本如需网页端动态切换模型，应把配置存入受权限控制的服务端密钥存储，并单独实现管理员权限与审计记录。
+
 ## 本地验证
 
 ```bash
@@ -38,8 +52,11 @@ npm run check
 npm start
 curl -fsS http://127.0.0.1:8765/api/health
 curl -fsS http://127.0.0.1:8765/api/config
+curl -fsS http://127.0.0.1:8765/api/model-config
 curl -fsS "http://127.0.0.1:8765/api/search?q=王羲之"
 ```
+
+`/api/model-config` 只返回接口地址、模型名、配置来源和密钥末四位，不返回完整 API Key。
 
 ## Vercel 部署
 
