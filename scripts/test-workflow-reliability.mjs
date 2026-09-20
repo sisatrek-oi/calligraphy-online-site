@@ -188,6 +188,17 @@ test("local AI configuration remains available without cloud sync", async () => 
   assert.equal(a.get("state.cloud.mode"), "local");
 });
 
+test("local API disabled config is authoritative and does not probe a missing static config", async () => {
+  const a = app();
+  const requests = [];
+  a.set("fetch", async (endpoint) => {
+    requests.push(endpoint);
+    return { ok: true, json: async () => ({ enabled: false, aiEnabled: false }) };
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(await a.run("loadCloudConfig()"))), { enabled: false, aiEnabled: false });
+  assert.deepEqual(requests, ["/api/config"]);
+});
+
 test("project settings separates schema and local model connection without storing the key", async () => {
   const a = app();
   a.set("fetch", async (url) => ({
@@ -450,6 +461,90 @@ test("AI uses one icon entry and one docked evidence panel", () => {
   assert.match(panel, /data-ai-panel-close/);
 });
 
+function consensusReadyApp({ decision = "adopt_fields", reviewMode = "assist", blockers = [] } = {}) {
+  const a = app();
+  loadSample(a);
+  a.set("consensusFixture", {
+    runId: "run-test",
+    status: "complete",
+    startedAt: "2026-09-20T00:00:00Z",
+    completedAt: "2026-09-20T00:00:01Z",
+    snapshotVersion: 1,
+    decision,
+    blockers,
+    fields: { author: { status: "unanimous", value: "苏轼", policy: "standard", verifiedEvidence: 3, votes: ["苏轼", "苏轼", "苏轼"] } },
+    models: [
+      { profileId: "primary", status: "success", elapsedMs: 20, profile: { id: "primary", displayName: "A", model: "a", modelFamily: "family-a", apiKey: "must-not-survive" }, proposal: { fields: { author: "苏轼" }, reasoning: [{ fieldId: "author", decision: "change", reason: "原文直指", evidenceQuote: "苏轼", evidenceVerified: true, apiKey: "must-not-survive" }], evidence: [{ fieldId: "author", quote: "苏轼", verified: true }], abstentions: [] } },
+      { profileId: "secondary", status: "success", elapsedMs: 24, profile: { id: "secondary", displayName: "B", model: "b", modelFamily: "family-b" }, proposal: { fields: { author: "苏轼" }, reasoning: [], evidence: [], abstentions: [] } },
+      { profileId: "tertiary", status: "success", elapsedMs: 28, profile: { id: "tertiary", displayName: "C", model: "c", modelFamily: "family-c" }, proposal: { fields: { author: "苏轼" }, reasoning: [], evidence: [], abstentions: [] } }
+    ]
+  });
+  a.run(`
+    state.modelSettings.policy.reviewMode = ${JSON.stringify(reviewMode)};
+    state.modelSettings.policy.defaultConsensus = "standard";
+    state.aiPanelOpen = true;
+    state.aiStatus = "ready";
+    state.aiRowId = state.selectedId;
+    state.aiWorkspaceId = state.workspaceId;
+    state.aiInputSignature = aiInputSignature(selectedRow());
+    state.aiProposal = window.CalligraphyAiConsensus.normalizeConsensusResponse(consensusFixture);
+    state.aiFieldJudgments = initializeConsensusJudgments(state.aiProposal);
+  `);
+  return a;
+}
+
+test("consensus panel keeps the existing aside and collapses individual model details", () => {
+  const a = consensusReadyApp();
+  const markup = a.run("aiReviewPanel(selectedRow())");
+  assert.match(markup, /class="ai-review-panel/);
+  assert.match(markup, />3\/3</);
+  assert.equal((markup.match(/<details class="ai-model-details"/g) || []).length, 3);
+  assert.match(markup, /data-ai-retry-profile="primary"/);
+  assert.match(markup, /title="仅重试该模型"/);
+  assert.doesNotMatch(markup, /modal-backdrop|drawer-backdrop/);
+});
+
+test("consensus generation uses the new endpoint and retry calls only one profile", async () => {
+  const a = app();
+  loadSample(a);
+  const requests = [];
+  a.run(`
+    state.cloud.config = { enabled: false, aiEnabled: true, consensusEnabled: true };
+    state.modelSettings.policy = { reviewMode: "assist", defaultConsensus: "standard", fieldOverrides: {} };
+    state.sourceText = sourcePages[selectedRow().sourceFile];
+    state.sourceStatus = "ready";
+    resetAiForRow(selectedRow());
+  `);
+  a.set("fetch", async (url, options = {}) => {
+    requests.push({ url, options });
+    const retry = String(url).includes("/retry/");
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        runId: retry ? "run-retry" : JSON.parse(options.body).runId,
+        status: "complete",
+        snapshotVersion: retry ? 2 : 1,
+        decision: "adopt_fields",
+        blockers: [],
+        fields: { author: { status: "unanimous", value: "苏轼", policy: "standard", verifiedEvidence: 3, votes: ["苏轼", "苏轼", "苏轼"] } },
+        models: ["primary", "secondary", "tertiary"].map((id) => ({ profileId: id, status: "success", profile: { id, displayName: id, model: id, modelFamily: id }, proposal: { fields: { author: "苏轼" }, reasoning: [], evidence: [], abstentions: [] } }))
+      })
+    };
+  });
+  assert.equal(await a.run("performAiExtraction(state.selectedId)"), true);
+  assert.equal(requests[0].url, "./api/ai/consensus");
+  const body = JSON.parse(requests[0].options.body);
+  assert.equal(body.reviewMode, "assist");
+  assert.equal(body.defaultConsensus, "standard");
+  assert.equal(a.get("state.aiFieldJudgments.author"), "accept");
+  const originalModels = a.get("state.aiProposal.models.map(item => item.profileId)");
+  assert.equal(await a.run("retryConsensusModel('secondary')"), true);
+  assert.match(requests[1].url, /\/api\/ai\/consensus\/[^/]+\/retry\/secondary$/);
+  assert.deepEqual(a.get("state.aiProposal.models.map(item => item.profileId)"), originalModels);
+  assert.equal(a.get("state.aiProposal.snapshotVersion"), 2);
+});
+
 test("Escape closes the AI panel and restores layout state and focus to its new entry", () => {
   const a = app();
   const focus = [];
@@ -631,6 +726,76 @@ test("AI apply writes only accepted changed fields and records rejected feedback
   assert.equal(a.get("fieldValue(selectedRow(), 'scriptType')"), originalScript);
   assert.equal(a.get("selectedRow().history.at(-1).decisions.scriptType"), "reject");
   assert.equal(a.get("selectedRow().reviewed"), false);
+});
+
+test("assist mode adopts unanimous fields but leaves the record unreviewed with a safe audit snapshot", () => {
+  const a = consensusReadyApp({ decision: "adopt_fields", reviewMode: "assist" });
+  assert.equal(a.run("applyAiProposal(state.selectedId)"), true);
+  assert.equal(a.get("selectedRow().reviewed"), false);
+  assert.equal(a.get("fieldValue(selectedRow(), 'author')"), "苏轼");
+  assert.equal(a.get("selectedRow().history.at(-1).type"), "ai-consensus-assist");
+  assert.equal(a.get("selectedRow().history.at(-1).consensusRun.runId"), "run-test");
+  assert.equal(JSON.stringify(a.get("selectedRow().history.at(-1).consensusRun")).includes("must-not-survive"), false);
+});
+
+test("auto mode approves only a server-qualified unanimous record and undo preserves its audit", () => {
+  const a = consensusReadyApp({ decision: "auto_approve_record", reviewMode: "auto" });
+  const rowId = a.get("state.selectedId");
+  assert.equal(a.run("applyConsensusDecision(state.selectedId)"), true);
+  assert.equal(a.run(`state.rows.find(item => item.id === ${JSON.stringify(rowId)}).reviewed`), true);
+  assert.equal(a.run(`state.rows.find(item => item.id === ${JSON.stringify(rowId)}).history.at(-1).type`), "ai-consensus-auto-approve");
+  assert.equal(a.run("undoLastAction()"), true);
+  assert.equal(a.run(`state.rows.find(item => item.id === ${JSON.stringify(rowId)}).reviewed`), false);
+  assert.deepEqual(a.get(`state.rows.find(item => item.id === ${JSON.stringify(rowId)}).history.slice(-2).map(event => event.type)`), ["ai-consensus-auto-approve", "ai-consensus-reverted"]);
+  assert.equal(a.run(`Boolean(state.rows.find(item => item.id === ${JSON.stringify(rowId)}).history.find(event => event.type === 'ai-consensus-auto-approve').consensusRun.runId)`), true);
+});
+
+test("consensus audit is visible in the existing detail history panel", () => {
+  const a = consensusReadyApp({ decision: "auto_approve_record", reviewMode: "auto" });
+  assert.equal(a.run("applyConsensusDecision(state.selectedId)"), true);
+  const markup = a.run("detailPanel(selectedRow())");
+  assert.match(markup, /class="trace-card"/);
+  assert.match(markup, /共识自动判过/);
+  assert.match(markup, /class="consensus-history-details"/);
+  assert.match(markup, /查看判定依据/);
+  assert.match(markup, /run-test/);
+});
+
+test("auto consensus rolls back the record when workspace persistence fails", () => {
+  const a = consensusReadyApp({ decision: "auto_approve_record", reviewMode: "auto" });
+  const before = a.get("cloneRow(selectedRow())");
+  a.failWrites(true);
+  assert.equal(a.run("applyConsensusDecision(state.selectedId)"), false);
+  assert.deepEqual(a.get("cloneRow(selectedRow())"), before);
+  assert.equal(a.get("state.aiStatus"), "ready");
+});
+
+test("auto mode applies a qualified server decision immediately after generation", async () => {
+  const a = app();
+  loadSample(a);
+  const rowId = a.get("state.selectedId");
+  a.run(`
+    state.cloud.config = { enabled: false, aiEnabled: true, consensusEnabled: true };
+    state.modelSettings.policy = { reviewMode: "auto", defaultConsensus: "standard", fieldOverrides: {} };
+    state.sourceText = sourcePages[selectedRow().sourceFile];
+    state.sourceStatus = "ready";
+    resetAiForRow(selectedRow());
+  `);
+  a.set("fetch", async (_url, options = {}) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      runId: JSON.parse(options.body).runId,
+      status: "complete",
+      decision: "auto_approve_record",
+      blockers: [],
+      fields: { author: { status: "unanimous", value: "苏轼", policy: "standard", verifiedEvidence: 3, votes: ["苏轼", "苏轼", "苏轼"] } },
+      models: ["primary", "secondary", "tertiary"].map((id, index) => ({ profileId: id, status: "success", profile: { id, displayName: id, model: id, modelFamily: index ? "family-b" : "family-a" }, proposal: { fields: { author: "苏轼" }, reasoning: [], evidence: [], abstentions: [] } }))
+    })
+  }));
+  assert.equal(await a.run("performAiExtraction(state.selectedId)"), true);
+  assert.equal(a.run(`state.rows.find(item => item.id === ${JSON.stringify(rowId)}).reviewed`), true);
+  assert.equal(a.run(`state.rows.find(item => item.id === ${JSON.stringify(rowId)}).history.at(-1).type`), "ai-consensus-auto-approve");
 });
 
 for (const [decisionLabel, reasoning] of [

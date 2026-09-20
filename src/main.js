@@ -210,6 +210,8 @@ const state = {
   aiRequestId: 0,
   aiInputSignature: "",
   aiFieldJudgments: {},
+  aiRetryProfileId: "",
+  aiRetryError: "",
   aiMobilePane: "fields",
   aiRailWasCollapsed: null,
   aiDetailWasCollapsed: null,
@@ -658,6 +660,7 @@ async function loadCloudConfig() {
       const response = await fetch(endpoint, { cache: "no-store" });
       if (!response.ok) continue;
       const config = await response.json();
+      if (endpoint === "/api/config" && config && typeof config === "object" && ("enabled" in config || "aiEnabled" in config)) return config;
       if (config?.enabled || config?.aiEnabled) return config;
     } catch {
       // Keep local static previews usable when the deployment API is unavailable.
@@ -2834,6 +2837,30 @@ function problemTagControls(row) {
   `;
 }
 
+function historyEventLabel(type) {
+  return {
+    "ai-draft": "AI 初稿",
+    confirm: "人工确认",
+    "ai-consensus-assist": "共识辅助",
+    "ai-consensus-auto-approve": "共识自动判过",
+    "ai-consensus-reverted": "已撤销共识判过",
+    undo: "撤销"
+  }[type] || "人工修订";
+}
+
+function consensusHistoryDetails(event) {
+  const snapshot = event.consensusRun;
+  if (!snapshot || typeof snapshot !== "object") return "";
+  const fields = Object.entries(snapshot.fields || {});
+  return `<details class="consensus-history-details">
+    <summary>查看判定依据</summary>
+    <div class="consensus-history-meta"><span>run ${escapeHtml(snapshot.runId || "-")}</span><span>快照 v${escapeHtml(snapshot.snapshotVersion || 1)}</span><span>${escapeHtml(snapshot.decision || "needs_human_review")}</span></div>
+    ${snapshot.blockers?.length ? `<ul>${snapshot.blockers.map((item) => `<li>${escapeHtml(consensusBlockerLabel(item))}</li>`).join("")}</ul>` : ""}
+    <dl>${fields.map(([fieldId, result]) => `<dt>${escapeHtml(schemaField(fieldId)?.label || fieldId)}</dt><dd>${escapeHtml(result.status || "blocked")} · ${escapeHtml(result.value || "空")} · 证据 ${Number(result.verifiedEvidence) || 0}/3</dd>`).join("")}</dl>
+    <p>${(snapshot.models || []).map((item) => `${item.profile?.displayName || item.profileId || "模型"}：${item.status === "success" ? `${item.elapsedMs || 0} ms` : item.error || "失败"}`).map(escapeHtml).join(" · ")}</p>
+  </details>`;
+}
+
 function historyPanel(row) {
   const history = normalizeHistory(row).slice().reverse();
   if (!history.length) {
@@ -2852,7 +2879,7 @@ function historyPanel(row) {
         ${history.map((event) => `
           <article>
             <div class="trace-event-head">
-              <strong>${escapeHtml(event.type === "ai-draft" ? "AI 初稿" : event.type === "confirm" ? "人工确认" : "人工修订")}</strong>
+              <strong>${escapeHtml(historyEventLabel(event.type))}</strong>
               <span>${escapeHtml(new Date(event.at).toLocaleString("zh-CN"))}</span>
             </div>
             <p>${escapeHtml(event.reason || "未填写说明")}</p>
@@ -2868,6 +2895,7 @@ function historyPanel(row) {
                 }).join("")}
               </dl>
             ` : ""}
+            ${consensusHistoryDetails(event)}
           </article>
         `).join("")}
       </div>
@@ -3077,6 +3105,8 @@ function resetAiForRow(row) {
   state.aiError = "";
   state.aiInputSignature = "";
   state.aiFieldJudgments = {};
+  state.aiRetryProfileId = "";
+  state.aiRetryError = "";
   state.aiMobilePane = "fields";
 }
 
@@ -3112,18 +3142,50 @@ function invalidateAiCandidate(row = selectedRow()) {
   return true;
 }
 
+function isConsensusProposal(proposal = state.aiProposal) {
+  return Boolean(proposal && typeof proposal.fields === "object" && Array.isArray(proposal.models) && proposal.runId);
+}
+
+function consensusRequestPayload(row, sourceText) {
+  return {
+    runId: `run-${Date.now()}-${state.workspaceId}-${row.id}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80),
+    workspaceId: state.workspaceId,
+    rowId: row.id,
+    sourceText,
+    sourceFile: row.sourceFile,
+    pageNo: row.pageNo,
+    promptVersion: state.promptVersion,
+    reviewMode: state.modelSettings.policy.reviewMode,
+    defaultConsensus: state.modelSettings.policy.defaultConsensus,
+    fieldOverrides: state.modelSettings.policy.fieldOverrides || {},
+    aliases: state.modelSettings.policy.aliases || {},
+    currentFields: Object.fromEntries(orderedSchema().map((field) => [field.id, String(fieldValue(row, field.id) || "")])),
+    schema: orderedSchema().map(({ id, label, prompt, required, evidenceRequired }) => ({ id, label, prompt, required, evidenceRequired }))
+  };
+}
+
+function initializeConsensusJudgments(consensus) {
+  if (state.modelSettings.policy.reviewMode !== "assist") return {};
+  return Object.fromEntries(window.CalligraphyAiConsensus.adoptableFieldIds(consensus)
+    .filter((fieldId) => schemaField(fieldId)?.visible !== false)
+    .map((fieldId) => [fieldId, "accept"]));
+}
+
 function aiPanelActionState(row) {
   const { status, proposal } = aiPresentation(row);
   const fields = proposal ? aiReviewedFields(row) : [];
   const decided = fields.filter((item) => item.judgment).length;
   const accepted = fields.filter((item) => item.judgment === "accept").length;
   const pending = Math.max(0, fields.length - decided);
-  const reasonedFields = fields.filter((item) => !item.reasoning.missing);
+  const reasonedFields = fields.filter((item) => !item.reasoning.missing && (!isConsensusProposal(proposal) || item.consensus?.status === "unanimous"));
+  const autoQualified = isConsensusProposal(proposal)
+    && proposal.decision === "auto_approve_record"
+    && state.modelSettings.policy.reviewMode === "auto";
   return {
     canAcceptAll: status === "ready" && reasonedFields.some((item) => item.judgment !== "accept"),
     canClear: status !== "idle" || Boolean(proposal),
-    canApply: status === "ready" && decided > 0,
-    applyLabel: pending ? `保存核验（待处理 ${pending}）` : `保存核验（认可 ${accepted}）`
+    canApply: status === "ready" && (autoQualified || decided > 0),
+    applyLabel: autoQualified ? "执行自动判过" : pending ? `保存核验（待处理 ${pending}）` : `保存核验（认可 ${accepted}）`
   };
 }
 
@@ -3178,7 +3240,7 @@ function acceptAllAiFieldJudgments(row = selectedRow()) {
     && state.aiInputSignature
     && state.aiInputSignature === aiInputSignature(row);
   if (!belongsToCandidate) return false;
-  const eligible = aiReviewedFields(row).filter((item) => !item.reasoning.missing);
+  const eligible = aiReviewedFields(row).filter((item) => !item.reasoning.missing && (!isConsensusProposal() || item.consensus?.status === "unanimous"));
   if (!eligible.length || eligible.every((item) => state.aiFieldJudgments[item.field.id] === "accept")) return false;
   state.aiFieldJudgments = {
     ...state.aiFieldJudgments,
@@ -3189,6 +3251,7 @@ function acceptAllAiFieldJudgments(row = selectedRow()) {
 }
 
 function aiReviewedFields(row) {
+  if (isConsensusProposal()) return consensusReviewedFields(row);
   const proposals = state.aiProposal?.proposal?.fields || {};
   const reasoningByField = new Map((state.aiProposal?.proposal?.reasoning || []).map((item) => [item.fieldId, item]));
   return orderedSchema({ includeHidden: false }).map((field) => {
@@ -3207,6 +3270,30 @@ function aiReviewedFields(row) {
   });
 }
 
+function consensusReviewedFields(row) {
+  const fields = state.aiProposal?.fields || {};
+  return orderedSchema({ includeHidden: false }).map((field) => {
+    const consensus = fields[field.id] || { status: "blocked", value: "", votes: [], verifiedEvidence: 0, policy: "standard" };
+    const before = String(fieldValue(row, field.id) || "");
+    const after = String(consensus.value || before);
+    const voteCount = Math.max(0, ...Object.values((consensus.votes || []).reduce((counts, value) => {
+      counts[value] = (counts[value] || 0) + 1;
+      return counts;
+    }, {})));
+    const reasoning = {
+      fieldId: field.id,
+      decision: consensus.status === "unanimous" ? (before === after ? "keep" : "change") : "abstain",
+      reason: consensus.status === "unanimous"
+        ? `三个模型在${consensus.policy || "standard"}策略下形成一致结论。`
+        : consensus.status === "split" ? "模型结果存在分歧，不能自动采纳。" : "该字段未通过共识规则。",
+      evidenceQuote: "",
+      evidenceVerified: Number(consensus.verifiedEvidence) > 0,
+      missing: false
+    };
+    return { field, before, after, reasoning, judgment: state.aiFieldJudgments[field.id] || "", consensus, voteCount };
+  });
+}
+
 function aiPresentation(row) {
   const configured = Boolean(state.cloud.config?.aiEnabled);
   const belongsToRow = state.aiRowId === row?.id && state.aiWorkspaceId === state.workspaceId;
@@ -3217,7 +3304,7 @@ function aiPresentation(row) {
   const evidence = Array.isArray(proposal?.proposal?.evidence) ? proposal.proposal.evidence : [];
   const abstentions = Array.isArray(proposal?.proposal?.abstentions) ? proposal.proposal.abstentions : [];
   const sourceReady = Boolean(aiSourceForRow(row));
-  const statusLabel = !configured ? "未配置" : status === "loading" ? "生成中" : status === "ready" ? "待核验" : status === "applied" ? "已保存" : status === "error" ? "失败" : "就绪";
+  const statusLabel = !configured ? "未配置" : status === "loading" ? "生成中" : status === "ready" ? (isConsensusProposal(proposal) ? "共识待核" : "待核验") : status === "applied" ? "已保存" : status === "error" ? "失败" : "就绪";
   return { configured, status, proposal, error, reviewedFields, evidence, abstentions, sourceReady, statusLabel };
 }
 
@@ -3244,14 +3331,117 @@ function aiFieldReviewCard(item) {
   `;
 }
 
+function consensusStatusLabel(item) {
+  if (item.consensus.status === "unanimous") return "3/3";
+  if (item.consensus.status === "split") return `${Math.max(2, item.voteCount || 0)}/3`;
+  return "异常";
+}
+
+function consensusPolicyLabel(policy) {
+  return { loose: "宽松", standard: "标准", strict: "严格" }[policy] || "标准";
+}
+
+function consensusBlockerLabel(blocker) {
+  const value = String(blocker || "");
+  const labels = {
+    model_count: "未获得三个完整模型结果",
+    model_failure: "至少一个模型请求失败",
+    model_family_diversity: "模型家族不足两个"
+  };
+  if (labels[value]) return labels[value];
+  const [fieldId, reason] = value.split(":");
+  const fieldLabel = schemaField(fieldId)?.label || fieldId;
+  const reasonLabel = { manual_only: "必须人工确认", split: "结果分歧", blocked: "未通过规则" }[reason] || reason || "已阻断";
+  return `${fieldLabel}：${reasonLabel}`;
+}
+
+function consensusFieldCard(item) {
+  const { field, before, after, judgment, consensus } = item;
+  const labels = { accept: "采纳", reject: "驳回", uncertain: "存疑" };
+  const symbols = { accept: "✓", reject: "×", uncertain: "?" };
+  const statusClass = consensus.status === "unanimous" ? "unanimous" : consensus.status === "split" ? "split" : "blocked";
+  return `
+    <article class="ai-consensus-field ${statusClass}">
+      <div class="ai-field-head">
+        <strong>${escapeHtml(field.label)}</strong>
+        <span class="ai-consensus-vote ${statusClass}">${consensusStatusLabel(item)}</span>
+      </div>
+      <dl class="ai-field-values">
+        <dt>当前</dt><dd>${escapeHtml(before || "空")}</dd>
+        <dt>建议</dt><dd>${escapeHtml(after || "空")}</dd>
+      </dl>
+      <div class="ai-consensus-field-meta">
+        <span>${consensusPolicyLabel(consensus.policy)}策略</span>
+        <span>证据命中 ${Number(consensus.verifiedEvidence) || 0}/3</span>
+      </div>
+      <div class="ai-judgment" role="group" aria-label="${escapeHtml(field.label)}人工裁定">
+        ${["accept", "reject", "uncertain"].map((value) => `<button type="button" data-ai-judgment="${value}" data-field-id="${escapeHtml(field.id)}" aria-pressed="${String(judgment === value)}" aria-label="${labels[value]}${escapeHtml(field.label)}建议" title="${labels[value]}${escapeHtml(field.label)}建议" ${value === "accept" && consensus.status !== "unanimous" ? "disabled" : ""}>${symbols[value]}</button>`).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function modelReasoningMarkup(model) {
+  if (model.status !== "success" || !model.proposal) {
+    return `<p class="ai-model-error">${escapeHtml(model.error || "模型返回异常")}</p>`;
+  }
+  const evidenceByField = new Map((Array.isArray(model.proposal.evidence) ? model.proposal.evidence : [])
+    .map((item) => [item.fieldId, item]));
+  const reasoning = Array.isArray(model.proposal.reasoning) ? model.proposal.reasoning : [];
+  if (!reasoning.length) return `<p class="ai-model-empty">模型未提供字段理由。</p>`;
+  return `<div class="ai-model-reasoning">${reasoning.map((item) => {
+    const evidence = evidenceByField.get(item.fieldId) || {};
+    const quote = item.evidenceQuote || evidence.quote || "";
+    const verified = Boolean(item.evidenceVerified || evidence.verified);
+    const location = evidence.location && typeof evidence.location === "object"
+      ? Object.values(evidence.location).filter(Boolean).join(" · ") : "";
+    return `<article><strong>${escapeHtml(schemaField(item.fieldId)?.label || item.fieldId)}</strong><p>${escapeHtml(item.reason || "未提供理由")}</p>${quote ? `<blockquote>${escapeHtml(quote)}</blockquote><small class="${verified ? "verified" : "unverified"}">${verified ? "原文命中" : "未命中"}${location ? ` · ${escapeHtml(location)}` : ""}</small>` : `<small class="missing">未提供证据</small>`}</article>`;
+  }).join("")}</div>`;
+}
+
+function consensusModelDetails(consensus) {
+  return `<section class="ai-model-list" aria-label="三模型详情">${consensus.models.map((model) => {
+    const retrying = state.aiRetryProfileId === model.profileId;
+    return `<details class="ai-model-details">
+      <summary>
+        <span><strong>${escapeHtml(model.profile.displayName || model.profileId)}</strong><small>${escapeHtml(model.profile.model || "未记录模型")} · ${escapeHtml(model.profile.modelFamily || "未知家族")}</small></span>
+        <span class="ai-model-summary-status ${model.status}">${model.status === "success" ? `${model.elapsedMs || 0} ms` : "失败"}</span>
+        <button type="button" class="icon-control" data-ai-retry-profile="${escapeHtml(model.profileId)}" ${retrying ? "disabled" : ""} aria-label="重试${escapeHtml(model.profile.displayName || model.profileId)}" title="仅重试该模型">${retrying ? "…" : "↻"}</button>
+      </summary>
+      ${modelReasoningMarkup(model)}
+    </details>`;
+  }).join("")}</section>`;
+}
+
+function consensusSuggestionContent(row, proposal, reviewedFields) {
+  const successful = proposal.models.filter((item) => item.status === "success").length;
+  const manual = reviewedFields.filter((item) => item.consensus.status !== "unanimous").length;
+  const mode = state.modelSettings.policy.reviewMode === "auto" ? "B 自动审核" : "A 辅助审核";
+  return `
+    <div class="ai-consensus-summary">
+      <div><span>审核模式</span><strong>${mode}</strong></div>
+      <div><span>共识档位</span><strong>${consensusPolicyLabel(state.modelSettings.policy.defaultConsensus)}</strong></div>
+      <div><span>在线模型</span><strong>${successful}/3</strong></div>
+      <div><span>需人工</span><strong>${manual}</strong></div>
+    </div>
+    <div class="ai-run-meta"><span>run ${escapeHtml(proposal.runId)}</span><span>快照 v${escapeHtml(proposal.snapshotVersion || 1)}</span></div>
+    <div class="ai-consensus-fields">${reviewedFields.map(consensusFieldCard).join("")}</div>
+    ${proposal.blockers.length ? `<section class="ai-consensus-blockers"><strong>判定阻断</strong><ul>${proposal.blockers.map((item) => `<li>${escapeHtml(consensusBlockerLabel(item))}</li>`).join("")}</ul></section>` : `<p class="ai-consensus-pass">所有字段已满足当前共识规则。</p>`}
+    ${state.aiRetryError ? `<p class="ai-retry-error" role="alert">${escapeHtml(state.aiRetryError)}</p>` : ""}
+    ${consensusModelDetails(proposal)}
+  `;
+}
+
 function aiSuggestionContent(row) {
   const { configured, status, proposal, error, reviewedFields, abstentions, sourceReady } = aiPresentation(row);
   return `
     <section class="ai-suggestion-content ${status}" aria-live="polite" aria-busy="${String(status === "loading")}">
       ${status === "ready" && proposal ? `
-        <div class="ai-run-meta"><span>${escapeHtml(proposal.meta?.model || "未记录模型")}</span><span>提示词 v${escapeHtml(proposal.meta?.promptVersion || state.promptVersion)}</span></div>
-        <div class="ai-field-list">${reviewedFields.map(aiFieldReviewCard).join("")}</div>
-        ${abstentions.length ? `<details class="ai-abstentions"><summary>弃答 ${abstentions.length} 项</summary><ul>${abstentions.map((item) => `<li><strong>${escapeHtml(schemaField(item.fieldId)?.label || item.fieldId)}</strong>${escapeHtml(item.reason)}</li>`).join("")}</ul></details>` : ""}
+        ${isConsensusProposal(proposal) ? consensusSuggestionContent(row, proposal, reviewedFields) : `
+          <div class="ai-run-meta"><span>${escapeHtml(proposal.meta?.model || "未记录模型")}</span><span>提示词 v${escapeHtml(proposal.meta?.promptVersion || state.promptVersion)}</span></div>
+          <div class="ai-field-list">${reviewedFields.map(aiFieldReviewCard).join("")}</div>
+          ${abstentions.length ? `<details class="ai-abstentions"><summary>弃答 ${abstentions.length} 项</summary><ul>${abstentions.map((item) => `<li><strong>${escapeHtml(schemaField(item.fieldId)?.label || item.fieldId)}</strong>${escapeHtml(item.reason)}</li>`).join("")}</ul></details>` : ""}
+        `}
       ` : !configured ? `
         <div class="ai-empty"><p>模型服务尚未配置，人工审校功能不受影响。</p></div>
       ` : status === "loading" ? `
@@ -3259,7 +3449,7 @@ function aiSuggestionContent(row) {
       ` : status === "error" ? `
         <div class="ai-empty error"><p>${escapeHtml(error || "模型调用失败")}</p></div>
       ` : status === "applied" ? `
-        <div class="ai-empty success"><p>建议已作为人工采纳记录写入，本条仍需确认。</p></div>
+        <div class="ai-empty success"><p>${isConsensusProposal(proposal) && proposal.decision === "auto_approve_record" ? "共识结果已自动判过，可从历史中查看依据并撤销。" : "建议已作为人工采纳记录写入，本条仍需确认。"}</p></div>
       ` : `
         <div class="ai-empty"><p>${sourceReady ? "基于当前原文生成结构化候选，不会自动覆盖主表。" : state.sourceStatus === "loading" ? "正在读取原文..." : "当前条目没有可供模型分析的原文。"}</p></div>
       `}
@@ -3281,7 +3471,10 @@ function aiReviewPanel(row) {
   const { configured, status, sourceReady, statusLabel } = aiPresentation(row);
   const title = `${fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注条目"} · ${row.id}`;
   const canGenerate = configured && sourceReady && status !== "loading";
-  const generateLabel = status === "idle" ? "生成 AI 理由" : "重新生成 AI 理由";
+  const consensusEnabled = Boolean(state.cloud.config?.consensusEnabled);
+  const generateLabel = status === "idle"
+    ? (consensusEnabled ? "生成三模型共识" : "生成 AI 理由")
+    : (consensusEnabled ? "重新生成三模型共识" : "重新生成 AI 理由");
   return `
     <aside id="aiEvidencePanel" class="ai-review-panel ${status}" aria-labelledby="aiPanelTitle" data-row-id="${escapeHtml(row.id)}">
       <header class="ai-panel-head">
@@ -3408,6 +3601,8 @@ async function performAiExtraction(rowId) {
   state.aiError = "";
   state.aiInputSignature = inputSignature;
   state.aiFieldJudgments = {};
+  state.aiRetryProfileId = "";
+  state.aiRetryError = "";
   updateAiDom(row);
   const isCurrent = () => requestId === state.aiRequestId
     && workspaceId === state.workspaceId
@@ -3423,19 +3618,21 @@ async function performAiExtraction(rowId) {
     }
   };
   try {
-    const response = await fetch("./api/ai/extract", {
+    const consensusEnabled = Boolean(state.cloud.config?.consensusEnabled);
+    const requestPayload = consensusEnabled ? consensusRequestPayload(row, sourceText) : {
+      workspaceId: state.workspaceId,
+      rowId: row.id,
+      sourceText,
+      sourceFile: row.sourceFile,
+      pageNo: row.pageNo,
+      promptVersion: state.promptVersion,
+      currentFields: Object.fromEntries(orderedSchema().map((field) => [field.id, String(fieldValue(row, field.id) || "")])),
+      schema: orderedSchema().map(({ id, label, prompt, required, evidenceRequired }) => ({ id, label, prompt, required, evidenceRequired }))
+    };
+    const response = await fetch(consensusEnabled ? "./api/ai/consensus" : "./api/ai/extract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workspaceId: state.workspaceId,
-        rowId: row.id,
-        sourceText,
-        sourceFile: row.sourceFile,
-        pageNo: row.pageNo,
-        promptVersion: state.promptVersion,
-        currentFields: Object.fromEntries(orderedSchema().map((field) => [field.id, String(fieldValue(row, field.id) || "")])),
-        schema: orderedSchema().map(({ id, label, prompt, required, evidenceRequired }) => ({ id, label, prompt, required, evidenceRequired }))
-      })
+      body: JSON.stringify(requestPayload)
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `模型服务返回 ${response.status}`);
@@ -3443,8 +3640,14 @@ async function performAiExtraction(rowId) {
       discardChangedInputs();
       return false;
     }
-    state.aiProposal = normalizedAiResponse(payload);
+    state.aiProposal = consensusEnabled
+      ? window.CalligraphyAiConsensus.normalizeConsensusResponse(payload)
+      : normalizedAiResponse(payload);
+    state.aiFieldJudgments = consensusEnabled ? initializeConsensusJudgments(state.aiProposal) : {};
     state.aiStatus = "ready";
+    if (consensusEnabled && state.aiProposal.decision === "auto_approve_record" && state.modelSettings.policy.reviewMode === "auto") {
+      return applyConsensusDecision(row.id);
+    }
     updateAiDom(row);
     return true;
   } catch (error) {
@@ -3459,10 +3662,177 @@ async function performAiExtraction(rowId) {
   }
 }
 
+async function retryConsensusModel(profileId, row = selectedRow()) {
+  if (!row || !isConsensusProposal() || state.aiStatus !== "ready" || state.aiRetryProfileId) return false;
+  if (state.aiRowId !== row.id || state.aiWorkspaceId !== state.workspaceId || state.aiInputSignature !== aiInputSignature(row)) return false;
+  if (!state.aiProposal.models.some((item) => item.profileId === profileId)) return false;
+  const runId = state.aiProposal.runId;
+  const requestId = state.aiRequestId;
+  const signature = state.aiInputSignature;
+  state.aiRetryProfileId = profileId;
+  state.aiRetryError = "";
+  updateAiDom(row);
+  try {
+    const response = await fetch(`./api/ai/consensus/${encodeURIComponent(runId)}/retry/${encodeURIComponent(profileId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}"
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `模型服务返回 ${response.status}`);
+    if (requestId !== state.aiRequestId || state.aiRowId !== row.id || state.aiWorkspaceId !== state.workspaceId || signature !== state.aiInputSignature || signature !== aiInputSignature(row)) return false;
+    state.aiProposal = window.CalligraphyAiConsensus.normalizeConsensusResponse(payload);
+    state.aiFieldJudgments = initializeConsensusJudgments(state.aiProposal);
+    state.aiRetryProfileId = "";
+    state.aiRetryError = "";
+    if (state.aiProposal.decision === "auto_approve_record" && state.modelSettings.policy.reviewMode === "auto") {
+      return applyConsensusDecision(row.id);
+    }
+    updateAiDom(row);
+    return true;
+  } catch (error) {
+    if (requestId !== state.aiRequestId || state.aiRowId !== row.id || signature !== state.aiInputSignature) return false;
+    state.aiRetryProfileId = "";
+    state.aiRetryError = error?.message || "单模型重试失败";
+    updateAiDom(row);
+    return false;
+  }
+}
+
 function clearAiProposal(row = selectedRow()) {
   if (!row) return;
   resetAiForRow(row);
   updateAiDom(row);
+}
+
+function applyUnanimousConsensusFields(row, consensus, acceptedFieldIds = null) {
+  const accepted = acceptedFieldIds ? new Set(acceptedFieldIds) : null;
+  const changes = [];
+  for (const [fieldId, result] of Object.entries(consensus?.fields || {})) {
+    if (result.status !== "unanimous" || !schemaField(fieldId) || (accepted && !accepted.has(fieldId))) continue;
+    const before = String(fieldValue(row, fieldId) || "");
+    const after = String(result.value || "");
+    if (before === after) continue;
+    setFieldValue(row, fieldId, after);
+    changes.push({ fieldId, before, after });
+  }
+  syncLegacyFields(row);
+  return changes;
+}
+
+function consensusAuditSnapshot(consensus) {
+  const fields = Object.fromEntries(Object.entries(consensus?.fields || {})
+    .filter(([fieldId]) => Boolean(schemaField(fieldId)))
+    .map(([fieldId, result]) => [fieldId, {
+      status: result.status,
+      value: result.value,
+      policy: result.policy,
+      verifiedEvidence: Number(result.verifiedEvidence) || 0,
+      votes: [...(result.votes || [])]
+    }]));
+  const models = (consensus?.models || []).map((item) => ({
+    profileId: item.profileId,
+    status: item.status,
+    error: item.error || "",
+    elapsedMs: Number(item.elapsedMs) || 0,
+    profile: {
+      id: item.profile?.id || "",
+      displayName: item.profile?.displayName || "",
+      model: item.profile?.model || "",
+      modelFamily: item.profile?.modelFamily || ""
+    },
+    proposal: item.proposal ? {
+      fields: Object.fromEntries(Object.entries(item.proposal.fields || {}).filter(([fieldId]) => Boolean(schemaField(fieldId)))),
+      reasoning: Array.isArray(item.proposal.reasoning) ? item.proposal.reasoning : [],
+      evidence: Array.isArray(item.proposal.evidence) ? item.proposal.evidence : [],
+      abstentions: Array.isArray(item.proposal.abstentions) ? item.proposal.abstentions : []
+    } : null
+  }));
+  return {
+    runId: consensus?.runId || "",
+    snapshotVersion: Number(consensus?.snapshotVersion) || 1,
+    startedAt: consensus?.startedAt || "",
+    completedAt: consensus?.completedAt || "",
+    decision: consensus?.decision || "needs_human_review",
+    blockers: [...(consensus?.blockers || [])],
+    fields,
+    models
+  };
+}
+
+function consensusModelVersion(consensus) {
+  return (consensus?.models || []).map((item) => item.profile?.model).filter(Boolean).join(" + ") || "multi-model-consensus";
+}
+
+function applyConsensusAssist(row) {
+  const reviewedFields = consensusReviewedFields(row);
+  const decisions = Object.fromEntries(reviewedFields.filter((item) => item.judgment).map((item) => [item.field.id, item.judgment]));
+  if (!Object.keys(decisions).length) return false;
+  const acceptedIds = reviewedFields
+    .filter((item) => item.judgment === "accept" && item.consensus.status === "unanimous")
+    .map((item) => item.field.id);
+  const uncertain = reviewedFields.filter((item) => item.judgment === "uncertain");
+  const rejected = reviewedFields.filter((item) => item.judgment === "reject");
+  const checkpoint = rememberUndo(row, "核验三模型共识");
+  const acceptedChanges = applyUnanimousConsensusFields(row, state.aiProposal, acceptedIds);
+  row.aiDraft = { ...(row.aiDraft || {}), ...Object.fromEntries(acceptedChanges.map((change) => [change.fieldId, change.after])) };
+  row.modelVersion = consensusModelVersion(state.aiProposal);
+  row.promptVersion = state.promptVersion;
+  row.edited = row.edited || acceptedChanges.length > 0;
+  row.reviewed = false;
+  delete row.reviewedAt;
+  if (uncertain.length || state.aiProposal.blockers.length) {
+    row.problemResolution = {
+      status: "pending_review",
+      at: new Date().toISOString(),
+      reason: uncertain.length ? `共识字段存疑：${uncertain.map((item) => item.field.label).join("、")}` : "共识运行存在阻断项，待人工复核。"
+    };
+  } else if (acceptedChanges.length && row.problemResolution?.status === "resolved") {
+    row.problemResolution = { status: "pending_review", at: new Date().toISOString(), reason: "采纳三模型共识后待人工确认。" };
+  }
+  addHistory(row, {
+    type: "ai-consensus-assist",
+    actor: "human",
+    reason: `人工核验三模型共识：采纳 ${acceptedChanges.length} 项，驳回 ${rejected.length} 项，存疑 ${uncertain.length} 项。`,
+    consensusRun: consensusAuditSnapshot(state.aiProposal),
+    decisions,
+    changes: acceptedChanges
+  });
+  state.aiStatus = "applied";
+  if (!finishReviewChange(row, "ai-consensus-assist", "人工核验三模型共识。", acceptedChanges, checkpoint)) {
+    state.aiStatus = "ready";
+    return false;
+  }
+  return true;
+}
+
+function applyConsensusDecision(rowId) {
+  const row = state.rows.find((item) => item.id === rowId);
+  if (!row || state.aiStatus !== "ready" || state.aiRowId !== row.id || state.aiWorkspaceId !== state.workspaceId || !isConsensusProposal()) return false;
+  if (!state.aiInputSignature || state.aiInputSignature !== aiInputSignature(row)) return false;
+  if (state.aiProposal.decision !== "auto_approve_record" || state.modelSettings.policy.reviewMode !== "auto") return false;
+  const checkpoint = rememberUndo(row, "AI 自动判过");
+  const changes = applyUnanimousConsensusFields(row, state.aiProposal);
+  row.aiDraft = { ...(row.aiDraft || {}), ...Object.fromEntries(changes.map((change) => [change.fieldId, change.after])) };
+  row.modelVersion = consensusModelVersion(state.aiProposal);
+  row.promptVersion = state.promptVersion;
+  row.edited = row.edited || changes.length > 0;
+  row.reviewed = true;
+  row.reviewedAt = new Date().toISOString();
+  row.problemResolution = { status: "resolved", at: row.reviewedAt, reason: "三模型共识自动判过。" };
+  addHistory(row, {
+    type: "ai-consensus-auto-approve",
+    actor: "system",
+    reason: "三模型共识自动判过。",
+    consensusRun: consensusAuditSnapshot(state.aiProposal),
+    changes
+  });
+  state.aiStatus = "applied";
+  if (!finishReviewChange(row, "ai-consensus-auto-approve", "三模型共识自动判过。", changes, checkpoint)) {
+    state.aiStatus = "ready";
+    return false;
+  }
+  return true;
 }
 
 function applyAiProposal(rowId) {
@@ -3472,6 +3842,10 @@ function applyAiProposal(rowId) {
     resetAiForRow(row);
     updateAiDom(row);
     return false;
+  }
+  if (isConsensusProposal()) {
+    if (state.aiProposal.decision === "auto_approve_record" && state.modelSettings.policy.reviewMode === "auto") return applyConsensusDecision(rowId);
+    return applyConsensusAssist(row);
   }
   const reviewedFields = aiReviewedFields(row);
   const acceptedChanges = reviewedFields
@@ -3639,10 +4013,12 @@ function detailPanel(row) {
           ${reviewFocusCard(row)}
           ${sourceCard(row)}
           ${detailCard(row)}
+          ${historyPanel(row)}
           ${researchCard(row)}
         ` : `
           ${sourceCard(row)}
           ${detailCard(row)}
+          ${historyPanel(row)}
           ${researchCard(row)}
         `}
       </div>
@@ -3680,7 +4056,8 @@ function updateDetailDom(row) {
   const focus = panel.querySelector(".review-focus-card");
   const research = panel.querySelector(".research-card");
   const source = panel.querySelector(".source-card");
-  if (!detail || !research || !source) {
+  const trace = panel.querySelector(".trace-card");
+  if (!detail || !research || !source || !trace) {
     render();
     return;
   }
@@ -3692,6 +4069,7 @@ function updateDetailDom(row) {
   detail.innerHTML = detailCardContent(row);
   research.innerHTML = researchCardContent(row);
   source.innerHTML = sourceCardContent(row);
+  trace.outerHTML = historyPanel(row);
   updateAiDom(row);
 }
 
@@ -3898,7 +4276,14 @@ function undoLastAction() {
   restored.cloudId = current.cloudId || restored.cloudId;
   restored.history = normalizeHistory(current).map((event) => ({ ...event }));
   restored.deleted = false;
-  addHistory(restored, { type: "undo", actor: "human", reason: "撤销最近一次" + undo.label + "。", changes: [] });
+  const revertingConsensus = normalizeHistory(current).at(-1)?.type === "ai-consensus-auto-approve";
+  addHistory(restored, {
+    type: revertingConsensus ? "ai-consensus-reverted" : "undo",
+    actor: "human",
+    reason: "撤销最近一次" + undo.label + "。",
+    revertedConsensusRunId: revertingConsensus ? normalizeHistory(current).at(-1)?.consensusRun?.runId || "" : "",
+    changes: []
+  });
   const index = state.rows.findIndex((row) => row.id === restored.id);
   if (index < 0) state.rows.push(restored);
   else state.rows[index] = restored;
@@ -6146,6 +6531,13 @@ function attachDetailEvents() {
       closeAiPanel();
       return;
     }
+    const retry = event.target.closest("[data-ai-retry-profile]");
+    if (retry) {
+      event.preventDefault();
+      event.stopPropagation();
+      retryConsensusModel(retry.dataset.aiRetryProfile, selectedRow());
+      return;
+    }
     const judgment = event.target.closest("[data-ai-judgment]");
     if (judgment) {
       setAiFieldJudgment(judgment.dataset.fieldId, judgment.dataset.aiJudgment);
@@ -6577,6 +6969,7 @@ async function init() {
     await loadBundledSampleData();
     saveWorkspace();
   }
+  if (state.cloud.config?.aiEnabled && state.modelSettings.status === "idle") await loadModelConfig();
   if (state.view === "detail") applyDetailModeDefaults(state.detailMode);
   render();
   if (state.entryStage === "workspace" && state.view === "detail") loadSelectedSource();

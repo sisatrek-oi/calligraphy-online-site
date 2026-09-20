@@ -1,25 +1,45 @@
 (function () {
   const text = (value) => String(value ?? "");
 
+  function normalizeProposal(value) {
+    if (!value || typeof value !== "object") return null;
+    const fields = value.fields && typeof value.fields === "object"
+      ? Object.fromEntries(Object.entries(value.fields).slice(0, 100).map(([id, fieldValue]) => [text(id).slice(0, 64), text(fieldValue).slice(0, 2000)])) : {};
+    const evidence = Array.isArray(value.evidence) ? value.evidence.slice(0, 60).map((item) => ({
+      fieldId: text(item?.fieldId).slice(0, 64), quote: text(item?.quote).slice(0, 500), verified: Boolean(item?.verified),
+      location: item?.location && typeof item.location === "object" ? {
+        page: text(item.location.page).slice(0, 120), paragraph: text(item.location.paragraph).slice(0, 120), item: text(item.location.item).slice(0, 120)
+      } : {}
+    })) : [];
+    const reasoning = Array.isArray(value.reasoning) ? value.reasoning.slice(0, 30).map((item) => ({
+      fieldId: text(item?.fieldId).slice(0, 64), decision: text(item?.decision).slice(0, 20), reason: text(item?.reason).slice(0, 800),
+      evidenceQuote: text(item?.evidenceQuote).slice(0, 500), evidenceVerified: Boolean(item?.evidenceVerified)
+    })) : [];
+    const abstentions = Array.isArray(value.abstentions) ? value.abstentions.slice(0, 30).map((item) => ({
+      fieldId: text(item?.fieldId).slice(0, 64), reason: text(item?.reason).slice(0, 500)
+    })) : [];
+    return { fields, evidence, reasoning, abstentions };
+  }
+
   function normalizeConsensusResponse(payload = {}) {
     const models = Array.isArray(payload.models) ? payload.models.map((item) => ({
-      profileId: text(item?.profileId),
+      profileId: text(item?.profileId).slice(0, 80),
       status: item?.status === "success" ? "success" : "error",
       profile: {
-        id: text(item?.profile?.id),
-        displayName: text(item?.profile?.displayName || item?.profileId),
-        model: text(item?.profile?.model),
-        modelFamily: text(item?.profile?.modelFamily)
+        id: text(item?.profile?.id).slice(0, 80),
+        displayName: text(item?.profile?.displayName || item?.profileId).slice(0, 80),
+        model: text(item?.profile?.model).slice(0, 120),
+        modelFamily: text(item?.profile?.modelFamily).slice(0, 80)
       },
-      proposal: item?.proposal && typeof item.proposal === "object" ? item.proposal : null,
-      error: text(item?.error),
+      proposal: normalizeProposal(item?.proposal),
+      error: text(item?.error).slice(0, 500),
       elapsedMs: Number(item?.elapsedMs) || 0
     })) : [];
     const sourceFields = payload.fields && typeof payload.fields === "object" ? payload.fields : {};
     const fields = Object.fromEntries(Object.entries(sourceFields).map(([id, field]) => [id, {
       status: ["unanimous", "split", "blocked"].includes(field?.status) ? field.status : "blocked",
-      value: text(field?.value),
-      votes: Array.isArray(field?.votes) ? field.votes.map(text) : [],
+      value: text(field?.value).slice(0, 2000),
+      votes: Array.isArray(field?.votes) ? field.votes.slice(0, 3).map((value) => text(value).slice(0, 2000)) : [],
       policy: ["loose", "standard", "strict"].includes(field?.policy) ? field.policy : "standard",
       verifiedEvidence: Number(field?.verifiedEvidence) || 0
     }]));
@@ -27,10 +47,13 @@
     return {
       runId: text(payload.runId),
       status: text(payload.status),
+      startedAt: text(payload.startedAt),
+      completedAt: text(payload.completedAt),
+      snapshotVersion: Math.max(1, Number(payload.snapshotVersion) || 1),
       decision: decisions.includes(payload.decision) ? payload.decision : "needs_human_review",
       fields,
       models,
-      blockers: Array.isArray(payload.blockers) ? payload.blockers.map(text) : []
+      blockers: Array.isArray(payload.blockers) ? payload.blockers.slice(0, 100).map((value) => text(value).slice(0, 500)) : []
     };
   }
 

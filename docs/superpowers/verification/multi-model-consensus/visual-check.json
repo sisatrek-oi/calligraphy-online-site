@@ -1,0 +1,153 @@
+[
+  {
+    "viewport": "1440x900",
+    "screenshot": "docs/superpowers/verification/multi-model-consensus/1440x900-consensus.png",
+    "tooltipScreenshot": "docs/superpowers/verification/multi-model-consensus/1440x900-tooltip.png",
+    "tooltipVisible": true,
+    "tooltipText": "重试DeepSeek",
+    "focusOutline": {
+      "style": "auto",
+      "width": "1px"
+    },
+    "layout": {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "documentScrollWidth": 1440,
+      "panel": {
+        "left": 981.609375,
+        "right": 1428,
+        "top": 82,
+        "bottom": 884,
+        "width": 446.390625,
+        "height": 802
+      },
+      "main": {
+        "left": 12,
+        "right": 554.421875,
+        "top": 82,
+        "bottom": 884,
+        "width": 542.421875,
+        "height": 802
+      },
+      "detail": {
+        "left": 566.421875,
+        "right": 969.609375,
+        "top": 82,
+        "bottom": 884,
+        "width": 403.1875,
+        "height": 802
+      },
+      "panelWithinViewport": true,
+      "panelOverlapsMain": false,
+      "panelOverlapsDetail": false,
+      "internalOverflow": true,
+      "scrollMetrics": {
+        "scrollHeight": 1398,
+        "clientHeight": 666,
+        "overflowY": "auto"
+      },
+      "chromeWithinPanel": true,
+      "mobileSwitchVisible": false
+    },
+    "consoleErrors": [],
+    "pageErrors": []
+  },
+  {
+    "viewport": "1280x800",
+    "screenshot": "docs/superpowers/verification/multi-model-consensus/1280x800-consensus.png",
+    "tooltipScreenshot": "",
+    "tooltipVisible": true,
+    "tooltipText": "重试DeepSeek",
+    "focusOutline": {
+      "style": "auto",
+      "width": "1px"
+    },
+    "layout": {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "documentScrollWidth": 1280,
+      "panel": {
+        "left": 871.203125,
+        "right": 1268,
+        "top": 82,
+        "bottom": 784,
+        "width": 396.796875,
+        "height": 702
+      },
+      "main": {
+        "left": 12,
+        "right": 488.8125,
+        "top": 82,
+        "bottom": 784,
+        "width": 476.8125,
+        "height": 702
+      },
+      "detail": {
+        "left": 500.8125,
+        "right": 859.203125,
+        "top": 82,
+        "bottom": 784,
+        "width": 358.390625,
+        "height": 702
+      },
+      "panelWithinViewport": true,
+      "panelOverlapsMain": false,
+      "panelOverlapsDetail": false,
+      "internalOverflow": true,
+      "scrollMetrics": {
+        "scrollHeight": 1398,
+        "clientHeight": 566,
+        "overflowY": "auto"
+      },
+      "chromeWithinPanel": true,
+      "mobileSwitchVisible": false
+    },
+    "consoleErrors": [],
+    "pageErrors": []
+  },
+  {
+    "viewport": "390x844",
+    "screenshot": "docs/superpowers/verification/multi-model-consensus/390x844-consensus.png",
+    "tooltipScreenshot": "",
+    "tooltipVisible": true,
+    "tooltipText": "重试DeepSeek",
+    "focusOutline": {
+      "style": "auto",
+      "width": "1px"
+    },
+    "layout": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "documentScrollWidth": 390,
+      "panel": {
+        "left": 8,
+        "right": 382,
+        "top": 126,
+        "bottom": 836,
+        "width": 374,
+        "height": 710
+      },
+      "main": null,
+      "detail": null,
+      "panelWithinViewport": true,
+      "panelOverlapsMain": false,
+      "panelOverlapsDetail": false,
+      "internalOverflow": true,
+      "scrollMetrics": {
+        "scrollHeight": 1398,
+        "clientHeight": 588,
+        "overflowY": "auto"
+      },
+      "chromeWithinPanel": true,
+      "mobileSwitchVisible": true
+    },
+    "consoleErrors": [],
+    "pageErrors": []
+  }
+]
