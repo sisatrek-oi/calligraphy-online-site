@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -12,6 +13,340 @@ import server
 
 
 class SearchServiceTest(unittest.TestCase):
+    def setUp(self):
+        runs = getattr(server, "CONSENSUS_RUNS", None)
+        if runs is not None:
+            runs.clear()
+
+    @staticmethod
+    def consensus_profiles():
+        return [
+            {
+                "id": profile_id,
+                "displayName": profile_id.title(),
+                "apiUrl": f"https://{profile_id}.test/chat",
+                "apiKey": f"key-{profile_id}",
+                "model": f"{family}-model",
+                "modelFamily": family,
+                "enabled": True,
+            }
+            for profile_id, family in (
+                ("primary", "family-a"),
+                ("secondary", "family-b"),
+                ("tertiary", "family-c"),
+            )
+        ]
+
+    @staticmethod
+    def consensus_proposal(value="苏轼"):
+        return {
+            "fields": {"author": value},
+            "evidence": [
+                {
+                    "fieldId": "author",
+                    "quote": "苏轼",
+                    "verified": True,
+                    "location": {"page": 12, "paragraph": 2},
+                }
+            ],
+            "reasoning": [],
+            "abstentions": [],
+        }
+
+    def test_consensus_runs_three_profiles_concurrently_and_isolates_one_failure(self):
+        profiles = self.consensus_profiles()
+        barrier = threading.Barrier(3, timeout=2)
+
+        def fake_runner(_payload, profile):
+            barrier.wait()
+            if profile["id"] == "secondary":
+                raise server.ApiError("模型服务限流", 502)
+            return {
+                "profileId": profile["id"],
+                "status": "success",
+                "profile": server.public_model_profile(profile),
+                "proposal": self.consensus_proposal(),
+                "elapsedMs": 10,
+            }
+
+        payload = {
+            "runId": "run-1",
+            "sourceText": "苏轼论书",
+            "schema": [{"id": "author", "required": True}],
+            "reviewMode": "auto",
+            "defaultConsensus": "standard",
+        }
+        with (
+            patch.object(server, "active_model_profiles", return_value=profiles),
+            patch.object(server, "run_model_with_profile", side_effect=fake_runner),
+        ):
+            result = server.run_model_consensus(payload)
+        self.assertEqual([item["profileId"] for item in result["models"]], ["primary", "secondary", "tertiary"])
+        self.assertEqual(result["models"][1]["status"], "error")
+        self.assertEqual(result["models"][1]["error"], "模型服务限流")
+        self.assertEqual(result["decision"], "needs_human_review")
+        self.assertIn("model_failure", result["blockers"])
+
+    def test_consensus_run_id_is_idempotent(self):
+        profiles = self.consensus_profiles()
+
+        def fake_runner(_payload, profile):
+            return {
+                "profileId": profile["id"],
+                "status": "success",
+                "profile": server.public_model_profile(profile),
+                "proposal": self.consensus_proposal(),
+                "elapsedMs": 1,
+            }
+
+        payload = {
+            "runId": "same-run",
+            "sourceText": "苏轼论书",
+            "schema": [{"id": "author", "required": True}],
+            "reviewMode": "auto",
+            "defaultConsensus": "standard",
+        }
+        with (
+            patch.object(server, "active_model_profiles", return_value=profiles),
+            patch.object(server, "run_model_with_profile", side_effect=fake_runner) as runner,
+        ):
+            first = server.run_model_consensus(payload)
+            second = server.run_model_consensus({**payload, "sourceText": "被重放的不同输入"})
+        self.assertIs(first, second)
+        self.assertEqual(runner.call_count, 3)
+        self.assertEqual(first["decision"], "auto_approve_record")
+        self.assertEqual(first["snapshotVersion"], 1)
+
+    def test_retry_replaces_only_one_model_and_appends_snapshot(self):
+        profiles = self.consensus_profiles()
+
+        def initial_runner(_payload, profile):
+            if profile["id"] == "secondary":
+                raise server.ApiError("模型服务超时", 502)
+            return {
+                "profileId": profile["id"],
+                "status": "success",
+                "profile": server.public_model_profile(profile),
+                "proposal": self.consensus_proposal(),
+                "elapsedMs": 1,
+            }
+
+        payload = {
+            "runId": "retry-run",
+            "sourceText": "苏轼论书",
+            "schema": [{"id": "author", "required": True}],
+            "reviewMode": "auto",
+            "defaultConsensus": "standard",
+        }
+        with (
+            patch.object(server, "active_model_profiles", return_value=profiles),
+            patch.object(server, "run_model_with_profile", side_effect=initial_runner),
+        ):
+            first = server.run_model_consensus(payload)
+
+        retried = {
+            "profileId": "secondary",
+            "status": "success",
+            "profile": server.public_model_profile(profiles[1]),
+            "proposal": self.consensus_proposal(),
+            "elapsedMs": 5,
+        }
+        with patch.object(server, "run_model_with_profile", return_value=retried) as runner:
+            second = server.retry_consensus_model("retry-run", "secondary", {})
+        runner.assert_called_once()
+        self.assertEqual(second["snapshotVersion"], 2)
+        self.assertEqual(second["decision"], "auto_approve_record")
+        self.assertEqual(first["models"][1]["status"], "error")
+        self.assertEqual(second["models"][0], first["models"][0])
+        self.assertEqual(second["models"][2], first["models"][2])
+        self.assertEqual(len(server.CONSENSUS_RUNS["retry-run"]["snapshots"]), 2)
+
+    def test_model_proposal_rejects_json_with_invalid_schema(self):
+        profile = self.consensus_profiles()[0]
+        provider = io.BytesIO(
+            json.dumps(
+                {"choices": [{"message": {"content": json.dumps({"fields": []})}}]}
+            ).encode()
+        )
+        with patch.object(server.urllib.request, "urlopen", return_value=provider):
+            with self.assertRaises(server.ApiError) as error:
+                server.request_model_proposal(
+                    {
+                        "sourceText": "苏轼论书",
+                        "schema": [{"id": "author", "required": True}],
+                    },
+                    profile,
+                )
+        self.assertEqual(error.exception.status, 502)
+        self.assertIn("格式", str(error.exception))
+
+    def test_model_proposal_maps_provider_errors_to_safe_messages(self):
+        profile = self.consensus_profiles()[0]
+        payload = {
+            "sourceText": "苏轼论书",
+            "schema": [{"id": "author", "required": True}],
+        }
+        cases = [
+            (
+                server.urllib.error.HTTPError(
+                    profile["apiUrl"], 401, "secret provider body", {}, None
+                ),
+                "模型认证失败",
+            ),
+            (
+                server.urllib.error.HTTPError(
+                    profile["apiUrl"], 429, "secret provider body", {}, None
+                ),
+                "模型服务限流",
+            ),
+            (TimeoutError("private timeout detail"), "模型服务超时"),
+        ]
+        for provider_error, expected in cases:
+            with self.subTest(expected=expected), patch.object(
+                server.urllib.request, "urlopen", side_effect=provider_error
+            ):
+                with self.assertRaises(server.ApiError) as error:
+                    server.request_model_proposal(payload, profile)
+                self.assertEqual(str(error.exception), expected)
+
+    def test_legacy_model_config_becomes_primary_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model-config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "apiUrl": "https://one.test/chat",
+                        "apiKey": "secret-1234",
+                        "model": "deepseek-chat",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            bundle = server.load_model_config_bundle(path)
+            self.assertEqual(bundle["profiles"][0]["id"], "primary")
+            self.assertEqual(bundle["profiles"][0]["modelFamily"], "deepseek")
+            public = server.public_model_config(path)
+            self.assertEqual(len(public["profiles"]), 1)
+            self.assertNotIn("apiKey", public["profiles"][0])
+            self.assertEqual(public["profiles"][0]["keyHint"], "1234")
+            self.assertEqual(public["model"], "deepseek-chat")
+
+    def test_three_profiles_preserve_existing_keys_independently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model-config.json"
+            first = server.save_model_config_bundle(
+                {
+                    "profiles": [
+                        {
+                            "id": "primary",
+                            "displayName": "DeepSeek",
+                            "apiUrl": "https://a.test/chat",
+                            "apiKey": "key-a",
+                            "model": "deepseek-chat",
+                            "modelFamily": "deepseek",
+                            "enabled": True,
+                        },
+                        {
+                            "id": "secondary",
+                            "displayName": "Qwen",
+                            "apiUrl": "https://b.test/chat",
+                            "apiKey": "key-b",
+                            "model": "qwen-max",
+                            "modelFamily": "qwen",
+                            "enabled": True,
+                        },
+                        {
+                            "id": "tertiary",
+                            "displayName": "GPT",
+                            "apiUrl": "https://c.test/chat",
+                            "apiKey": "key-c",
+                            "model": "gpt-5",
+                            "modelFamily": "gpt",
+                            "enabled": False,
+                        },
+                    ],
+                    "policy": {
+                        "reviewMode": "auto",
+                        "defaultConsensus": "strict",
+                        "fieldOverrides": {"author": {"manualOnly": True}},
+                    },
+                },
+                path,
+            )
+            updated = server.save_model_config_bundle(
+                {
+                    "profiles": [
+                        {**first["profiles"][0], "apiKey": ""},
+                        {**first["profiles"][1], "apiKey": ""},
+                        {**first["profiles"][2], "apiKey": "replacement-c"},
+                    ],
+                    "policy": first["policy"],
+                },
+                path,
+            )
+            self.assertEqual(
+                [item["apiKey"] for item in updated["profiles"]],
+                ["key-a", "key-b", "replacement-c"],
+            )
+            self.assertEqual([item["id"] for item in server.active_model_profiles(path)], ["primary", "secondary"])
+            public = server.public_model_config(path)
+            self.assertEqual(public["policy"]["reviewMode"], "auto")
+            self.assertNotIn("apiKey", json.dumps(public))
+
+    def test_bundle_rejects_duplicate_or_unknown_profile_slots(self):
+        base = {
+            "displayName": "A",
+            "apiUrl": "https://a.test/chat",
+            "apiKey": "key-a",
+            "model": "model-a",
+            "modelFamily": "family-a",
+            "enabled": True,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model-config.json"
+            with self.assertRaises(server.ApiError):
+                server.save_model_config_bundle(
+                    {"profiles": [{**base, "id": "primary"}, {**base, "id": "primary"}]},
+                    path,
+                )
+            with self.assertRaises(server.ApiError):
+                server.save_model_config_bundle(
+                    {"profiles": [{**base, "id": "fourth"}]}, path
+                )
+
+    def test_legacy_single_profile_save_does_not_delete_other_slots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model-config.json"
+            server.save_model_config_bundle(
+                {
+                    "profiles": [
+                        {
+                            "id": profile_id,
+                            "displayName": profile_id,
+                            "apiUrl": f"https://{profile_id}.test/chat",
+                            "apiKey": f"key-{profile_id}",
+                            "model": f"model-{profile_id}",
+                            "modelFamily": profile_id,
+                            "enabled": True,
+                        }
+                        for profile_id in ("primary", "secondary")
+                    ]
+                },
+                path,
+            )
+            server.save_local_model_config(
+                {
+                    "apiUrl": "https://updated.test/chat",
+                    "apiKey": "",
+                    "model": "updated-model",
+                },
+                path,
+            )
+            bundle = server.load_model_config_bundle(path)
+            self.assertEqual([item["id"] for item in bundle["profiles"]], ["primary", "secondary"])
+            self.assertEqual(bundle["profiles"][0]["apiKey"], "key-primary")
+            self.assertEqual(bundle["profiles"][1]["apiKey"], "key-secondary")
+
     def test_model_url_accepts_https_and_loopback_http_only(self):
         self.assertEqual(
             server.normalize_model_url("https://api.example.com/v1/chat/completions"),
@@ -265,6 +600,44 @@ class SearchServiceTest(unittest.TestCase):
         self.assertEqual(len(reasoning["reason"]), 800)
         self.assertEqual(len(reasoning["evidenceQuote"]), 500)
         self.assertFalse(reasoning["evidenceVerified"])
+
+    def test_ai_evidence_uses_the_consensus_normalization_rule(self):
+        schema = [{"id": "quote", "label": "原文"}]
+        result = server.normalize_ai_proposal(
+            {
+                "fields": {"quote": "书, 心画也"},
+                "evidence": [
+                    {
+                        "fieldId": "quote",
+                        "quote": "书, 心画也",
+                        "location": {"page": "１２", "paragraph": 2},
+                    }
+                ],
+                "reasoning": [
+                    {
+                        "fieldId": "quote",
+                        "decision": "change",
+                        "reason": "原文直接命中。",
+                        "evidenceQuote": "书, 心画也",
+                    }
+                ],
+                "abstentions": [],
+            },
+            schema,
+            "书，  心画也。",
+        )
+        self.assertTrue(result["evidence"][0]["verified"])
+        self.assertEqual(
+            result["evidence"][0]["location"], {"page": "12", "paragraph": "2"}
+        )
+        self.assertTrue(result["reasoning"][0]["evidenceVerified"])
+
+    def test_ai_prompt_requests_structured_evidence_location(self):
+        messages = server.build_ai_messages(
+            {"sourceText": "苏轼论书", "pageNo": "12"},
+            [{"id": "author", "label": "书家", "prompt": "", "required": True, "evidenceRequired": True}],
+        )
+        self.assertIn('"location":{"page":"","paragraph":"","item":""}', messages[1]["content"])
 
     def test_ai_extraction_requires_server_configuration(self):
         with patch.dict(os.environ, {}, clear=True):
