@@ -46,7 +46,7 @@ function app({ width, disk = new Map(), hostname = "127.0.0.1", search = "" } = 
       alert: (message) => alerts.push(message), confirm: () => true
     }
   });
-  for (const module of ["schema", "import-workflow", "review-workflow", "export-workflow"]) {
+  for (const module of ["schema", "import-workflow", "review-workflow", "export-workflow", "ai-consensus"]) {
     vm.runInContext(fs.readFileSync(new URL("../src/" + module + ".js", import.meta.url), "utf8"), context);
   }
   const main = fs.readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
@@ -212,6 +212,50 @@ test("project settings separates schema and local model connection without stori
   assert.equal(a.disk.has("calligraphy-model-config"), false);
 });
 
+test("model settings renders three independent profiles and project policy without exposing keys", async () => {
+  const a = app();
+  a.run("state.templatePanelExpanded = true; state.settingsTab = 'model'; render = () => {};");
+  a.set("fetch", async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      supported: true,
+      configured: true,
+      profiles: [
+        { id: "primary", displayName: "DeepSeek", apiUrl: "https://a.test/chat", model: "deepseek-chat", modelFamily: "deepseek", enabled: true, source: "local-file", keyHint: "1111" },
+        { id: "secondary", displayName: "GPT", apiUrl: "https://b.test/chat", model: "gpt-5.1", modelFamily: "gpt", enabled: true, source: "local-file", keyHint: "2222" },
+        { id: "tertiary", displayName: "Qwen", apiUrl: "https://c.test/chat", model: "qwen-max", modelFamily: "qwen", enabled: true, source: "local-file", keyHint: "3333" }
+      ],
+      policy: { reviewMode: "assist", defaultConsensus: "standard", fieldOverrides: {} }
+    })
+  }));
+  await a.run("loadModelConfig()");
+  const markup = a.run("modelSettingsPanel()");
+  assert.match(markup, /data-model-profile="primary"/);
+  assert.match(markup, /data-model-profile="secondary"/);
+  assert.match(markup, /data-model-profile="tertiary"/);
+  assert.match(markup, /A 辅助审核/);
+  assert.match(markup, /至少 2 个模型家族/);
+  assert.doesNotMatch(markup, /value="[^"]*(1111|2222|3333)/);
+  assert.equal(a.get("state.cloud.config.consensusEnabled"), true);
+});
+
+test("legacy model response becomes the primary profile and leaves two safe empty slots", () => {
+  const a = app();
+  a.run(`applyPublicModelConfig({
+    supported: true, configured: true, source: "local-file",
+    apiUrl: "https://legacy.example.com/chat", model: "legacy-model", keyHint: "1234"
+  })`);
+  assert.deepEqual(a.get("state.modelSettings.profiles.map(({id, model, configured}) => ({id, model, configured}))"), [
+    { id: "primary", model: "legacy-model", configured: true },
+    { id: "secondary", model: "", configured: false },
+    { id: "tertiary", model: "", configured: false }
+  ]);
+  assert.equal(a.get("state.cloud.config.aiEnabled"), true);
+  assert.equal(a.get("state.cloud.config.consensusEnabled"), false);
+  assert.equal(JSON.stringify(a.get("state.modelSettings")).includes("apiKey"), false);
+});
+
 test("static deployment disables model persistence without hiding environment AI", async () => {
   const a = app();
   a.set("fetch", async () => ({ ok: false, status: 404, json: async () => ({}) }));
@@ -233,35 +277,91 @@ test("model configuration requests use the local API without persisting the key 
       json: async () => url.endsWith("/test")
         ? { ok: true, model: "model-b", elapsedMs: 21 }
         : options.method === "DELETE"
-          ? { supported: true, configured: true, source: "environment", apiUrl: "https://env.example.com/chat", model: "env-model", keyHint: "iron" }
-          : { supported: true, configured: true, source: "local-file", apiUrl: "https://api.example.com/chat", model: "model-b", keyHint: "cret" }
+          ? { supported: true, configured: false, profiles: [], policy: { reviewMode: "assist", defaultConsensus: "standard", fieldOverrides: {} } }
+          : { supported: true, configured: true, profiles: [
+              { id: "primary", displayName: "Model B", source: "local-file", apiUrl: "https://api.example.com/chat", model: "model-b", modelFamily: "family-b", enabled: true, configured: true, keyHint: "cret" }
+            ], policy: { reviewMode: "auto", defaultConsensus: "strict", fieldOverrides: { author: { policy: "strict" } } } }
     };
   });
   a.set("modelForm", {
+    id: "primary",
+    displayName: "Model B",
     apiUrl: "https://api.example.com/chat",
     apiKey: "temporary-secret",
-    model: "model-b"
+    model: "model-b",
+    modelFamily: "family-b",
+    enabled: "on"
   });
+  a.run("state.modelSettings.policy = { reviewMode: 'auto', defaultConsensus: 'strict', fieldOverrides: { author: { policy: 'strict' } } }");
   await a.run("testModelConfig(modelForm)");
   await a.run("saveModelConfig(modelForm)");
-  await a.run("deleteModelConfig()");
+  await a.run("deleteModelConfig('primary')");
   assert.deepEqual(requests.map((item) => [item.url, item.options.method]), [
     ["/api/model-config/test", "POST"],
     ["/api/model-config", "PUT"],
-    ["/api/model-config", "DELETE"]
+    ["/api/model-config?id=primary", "DELETE"]
   ]);
-  assert.equal(JSON.parse(requests[0].options.body).apiKey, "temporary-secret");
+  const testBody = JSON.parse(requests[0].options.body);
+  const saveBody = JSON.parse(requests[1].options.body);
+  assert.equal(testBody.id, "primary");
+  assert.equal(testBody.apiKey, "temporary-secret");
+  assert.equal(saveBody.profiles[0].apiKey, "temporary-secret");
+  assert.deepEqual(saveBody.policy, { reviewMode: "auto", defaultConsensus: "strict", fieldOverrides: { author: { policy: "strict" } } });
   assert.equal([...a.disk.values()].some((value) => value.includes("temporary-secret")), false);
   assert.equal(JSON.stringify(a.get("workspacePayload()")).includes("temporary-secret"), false);
   assert.equal(JSON.stringify(a.get("state.modelSettings")).includes("temporary-secret"), false);
 });
 
+test("project consensus policy saves without adding credentials to the bundle", async () => {
+  const a = app();
+  const requests = [];
+  a.run(`applyPublicModelConfig({ supported: true, profiles: [
+    { id: "primary", displayName: "A", apiUrl: "https://a.test/chat", model: "a", modelFamily: "family-a", enabled: true, configured: true, source: "local-file", keyHint: "1111" },
+    { id: "secondary", displayName: "B", apiUrl: "https://b.test/chat", model: "b", modelFamily: "family-b", enabled: true, configured: true, source: "local-file", keyHint: "2222" },
+    { id: "tertiary", displayName: "C", apiUrl: "https://c.test/chat", model: "c", modelFamily: "family-c", enabled: true, configured: true, source: "local-file", keyHint: "3333" }
+  ], policy: { reviewMode: "assist", defaultConsensus: "standard", fieldOverrides: { author: { policy: "strict" } } } })`);
+  a.set("requests", requests);
+  a.set("fetch", async (url, options = {}) => {
+    requests.push({ url, options });
+    const body = JSON.parse(options.body);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ supported: true, configured: true, profiles: body.profiles.map((profile) => ({ ...profile, configured: true, source: "local-file" })), policy: body.policy })
+    };
+  });
+  a.set("policyForm", { reviewMode: "auto", defaultConsensus: "strict" });
+  assert.equal(await a.run("saveModelPolicy(policyForm)"), true);
+  const body = JSON.parse(requests[0].options.body);
+  assert.deepEqual(body.policy, { reviewMode: "auto", defaultConsensus: "strict", fieldOverrides: { author: { policy: "strict" } } });
+  assert.equal(body.profiles.length, 3);
+  assert.equal(JSON.stringify(body).includes("apiKey"), false);
+});
+
+test("field risk overrides reuse schema fields and list only non-default rules", () => {
+  const a = app();
+  a.run(`applyPublicModelConfig({ supported: true, profiles: [], policy: {
+    reviewMode: "assist", defaultConsensus: "standard", fieldOverrides: { author: { policy: "strict" } }
+  } })`);
+  const markup = a.run("modelSettingsPanel()");
+  assert.match(markup, /data-field-override="author"/);
+  assert.doesNotMatch(markup, /data-field-override="scriptType"/);
+  assert.match(markup, /name="fieldOverrideId"/);
+  assert.match(markup, /value="scriptType"/);
+  assert.equal(a.run("setModelFieldOverride('scriptType', 'manual')"), true);
+  assert.deepEqual(a.get("state.modelSettings.policy.fieldOverrides.scriptType"), { manualOnly: true });
+  assert.equal(a.run("setModelFieldOverride('author', 'inherit')"), true);
+  assert.equal(a.run("state.modelSettings.policy.fieldOverrides.author"), undefined);
+});
+
 test("model settings uses the shared modal and bounded responsive controls", () => {
   const css = fs.readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
   assert.match(css, /\.settings-tabs\s*\{/);
-  assert.match(css, /\.model-settings-grid\s*\{/);
+  assert.match(css, /\.model-profile-table\s*\{/);
+  assert.match(css, /\.model-profile-row\s*\{/);
   assert.match(css, /minmax\(0,\s*1fr\)/);
   assert.match(css, /@media\s*\(max-width:\s*760px\)/);
+  assert.match(css, /\.model-profile-scroll\s*\{/);
 });
 
 test("table and review share four summary slots, three toolbar slots and the dock preference", () => {

@@ -3844,6 +3844,328 @@ mark {
   color: var(--red);
 }
 
+.model-profile-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: rgba(255, 254, 250, 0.72);
+}
+
+.model-profile-table {
+  min-width: 760px;
+  display: grid;
+}
+
+.model-profile-table-head,
+.model-profile-summary {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.9fr) minmax(160px, 1.35fr) minmax(120px, 1fr) minmax(90px, 0.72fr) minmax(84px, auto) 108px;
+  align-items: center;
+  gap: 12px;
+}
+
+.model-profile-table-head {
+  min-height: 34px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(244, 241, 234, 0.78);
+  color: var(--muted);
+  padding: 0 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.model-profile-row {
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.model-profile-row:last-child {
+  border-bottom: 0;
+}
+
+.model-profile-row.editing {
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+
+.model-profile-summary {
+  min-height: 58px;
+  padding: 9px 12px;
+}
+
+.model-profile-name,
+.model-profile-model,
+.model-profile-family,
+.model-profile-endpoint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-profile-name {
+  font-size: 13px;
+}
+
+.model-profile-model,
+.model-profile-family,
+.model-profile-endpoint {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.model-profile-endpoint b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.model-profile-endpoint i {
+  font-style: normal;
+}
+
+.model-profile-status {
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 4px 7px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.model-profile-status.ready {
+  border-color: rgba(31, 111, 104, 0.28);
+  background: rgba(31, 111, 104, 0.08);
+  color: var(--teal);
+}
+
+.model-profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.model-profile-actions button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0;
+}
+
+.model-profile-actions button:hover,
+.model-profile-actions button:focus-visible {
+  border-color: rgba(31, 111, 104, 0.5);
+  background: rgba(31, 111, 104, 0.08);
+  color: var(--teal);
+  outline: 0;
+}
+
+.model-profile-actions button.danger:hover,
+.model-profile-actions button.danger:focus-visible {
+  border-color: rgba(159, 63, 47, 0.4);
+  background: rgba(159, 63, 47, 0.06);
+  color: var(--red);
+}
+
+.model-profile-form {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid rgba(217, 208, 194, 0.72);
+  background: rgba(244, 241, 234, 0.38);
+  padding: 14px 16px 16px;
+}
+
+.model-profile-form-foot {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.model-profile-enabled {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.model-review-policy {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.model-policy-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.model-policy-heading h4 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 19px;
+}
+
+.model-policy-heading button {
+  min-height: 34px;
+  border: 1px solid var(--teal);
+  border-radius: 4px;
+  background: var(--teal);
+  color: #fff;
+  cursor: pointer;
+  padding: 0 12px;
+}
+
+.model-policy-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.model-policy-controls label {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-policy-controls select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  outline: 0;
+  background: #fffefa;
+  color: var(--ink);
+  padding: 0 10px;
+}
+
+.model-family-lock {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(165, 120, 36, 0.28);
+  border-radius: 4px;
+  background: rgba(165, 120, 36, 0.07);
+  color: var(--gold);
+  padding: 0 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.model-policy-overrides {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-policy-empty {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 9px;
+  line-height: 1.5;
+}
+
+.model-field-overrides {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.model-field-overrides span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  background: rgba(255, 254, 250, 0.72);
+  padding: 6px 8px;
+}
+
+.model-field-overrides i {
+  color: var(--red);
+  font-style: normal;
+}
+
+.model-field-overrides button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.model-field-overrides button:hover,
+.model-field-overrides button:focus-visible {
+  color: var(--red);
+  outline: 1px solid rgba(159, 63, 47, 0.32);
+}
+
+.model-policy-override-editor {
+  border-top: 1px dashed var(--line);
+  padding-top: 9px;
+}
+
+.model-policy-override-editor summary {
+  width: fit-content;
+  color: var(--teal);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.model-policy-override-editor > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.model-policy-override-editor label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.model-policy-override-editor select {
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fffefa;
+  color: var(--ink);
+  padding: 0 9px;
+}
+
+.model-policy-override-editor button {
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: #fffefa;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0 11px;
+}
+
 .modal-head {
   padding-bottom: 14px;
   border-bottom: 1px solid var(--line);
@@ -4644,13 +4966,40 @@ mark {
     grid-column: auto;
   }
 
-  .model-settings-meta {
+  .model-profile-table {
+    min-width: 580px;
+  }
+
+  .model-profile-table-head,
+  .model-profile-summary {
+    grid-template-columns: minmax(100px, 0.9fr) minmax(120px, 1.1fr) minmax(110px, 1fr) minmax(76px, auto) 102px;
+    gap: 9px;
+  }
+
+  .model-profile-family {
+    display: none;
+  }
+
+  .model-profile-endpoint i {
+    display: none;
+  }
+
+  .model-profile-form-foot,
+  .model-policy-controls,
+  .model-policy-override-editor > div {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .model-profile-form-foot .model-settings-actions,
+  .model-policy-heading {
+    display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .model-settings-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
+  .model-profile-form-foot .model-settings-actions button,
+  .model-policy-heading button {
+    width: 100%;
   }
 }
 

@@ -188,12 +188,10 @@ const state = {
     status: "idle",
     supported: null,
     configured: false,
-    source: "none",
-    apiUrl: "",
-    model: "",
-    keyHint: "",
-    draftApiUrl: "",
-    draftModel: "",
+    profiles: [],
+    policy: { reviewMode: "assist", defaultConsensus: "standard", fieldOverrides: {} },
+    activeProfileId: "primary",
+    busyProfileId: "",
     message: ""
   },
   researchQuery: "",
@@ -1968,72 +1966,291 @@ function modelSettingsSourceLabel(source) {
   return "未配置";
 }
 
+const MODEL_PROFILE_IDS = ["primary", "secondary", "tertiary"];
+const MODEL_PROFILE_LABELS = { primary: "模型 A", secondary: "模型 B", tertiary: "模型 C" };
+
+function emptyModelProfile(id) {
+  return {
+    id,
+    displayName: "",
+    apiUrl: "",
+    model: "",
+    modelFamily: "",
+    enabled: true,
+    configured: false,
+    source: "none",
+    keyHint: "",
+    lastTestedAt: "",
+    latencyMs: 0,
+    health: "unknown"
+  };
+}
+
+function normalizePublicModelProfile(value, id, fallback = {}) {
+  const profile = value && typeof value === "object" ? value : {};
+  const apiUrl = String(profile.apiUrl || "");
+  const model = String(profile.model || "");
+  const source = ["local-file", "environment"].includes(profile.source)
+    ? profile.source
+    : (["local-file", "environment"].includes(fallback.source) ? fallback.source : "none");
+  const configured = typeof profile.configured === "boolean"
+    ? profile.configured
+    : Boolean(apiUrl && model && (source !== "none" || fallback.configured));
+  return {
+    id,
+    displayName: String(profile.displayName || "").slice(0, 80),
+    apiUrl,
+    model,
+    modelFamily: String(profile.modelFamily || "").slice(0, 80),
+    enabled: profile.enabled !== false,
+    configured,
+    source,
+    keyHint: String(profile.keyHint || "").slice(-4),
+    lastTestedAt: String(profile.lastTestedAt || ""),
+    latencyMs: Number(profile.latencyMs) || 0,
+    health: String(profile.health || "unknown")
+  };
+}
+
+function normalizeModelPolicy(value) {
+  const policy = value && typeof value === "object" ? value : {};
+  const reviewMode = ["assist", "auto"].includes(policy.reviewMode) ? policy.reviewMode : "assist";
+  const defaultConsensus = ["loose", "standard", "strict"].includes(policy.defaultConsensus)
+    ? policy.defaultConsensus
+    : "standard";
+  const fieldOverrides = policy.fieldOverrides && typeof policy.fieldOverrides === "object" && !Array.isArray(policy.fieldOverrides)
+    ? Object.fromEntries(Object.entries(policy.fieldOverrides).filter(([, item]) => item && typeof item === "object"))
+    : {};
+  return { reviewMode, defaultConsensus, fieldOverrides };
+}
+
+function modelSettingsOverallSource() {
+  const configured = state.modelSettings.profiles.filter((profile) => profile.configured);
+  if (configured.some((profile) => profile.source === "local-file")) return "local-file";
+  if (configured.some((profile) => profile.source === "environment")) return "environment";
+  return "none";
+}
+
+function modelProfileDisplayName(profile) {
+  return profile.displayName || MODEL_PROFILE_LABELS[profile.id] || profile.id;
+}
+
+function modelProfileEndpoint(profile) {
+  if (!profile.apiUrl) return { host: "未设置", path: "" };
+  try {
+    const parsed = new URL(profile.apiUrl);
+    return { host: parsed.host, path: `${parsed.pathname}${parsed.search}` };
+  } catch (_error) {
+    return { host: profile.apiUrl, path: "" };
+  }
+}
+
+function modelProfileStatus(profile) {
+  if (!profile.configured) return "待配置";
+  if (!profile.enabled) return "已停用";
+  if (profile.health === "error") return "连接异常";
+  if (profile.health === "ok") return "连接正常";
+  return "已启用";
+}
+
+function modelProfileForm(profile, supported) {
+  const busy = state.modelSettings.busyProfileId === profile.id;
+  const disabled = !supported || busy;
+  const keyPlaceholder = profile.source === "local-file" ? "留空则沿用已保存密钥" : "请输入 API Key";
+  return `
+    <form class="model-profile-form" data-model-profile-form data-model-profile="${escapeHtml(profile.id)}">
+      <input type="hidden" name="id" value="${escapeHtml(profile.id)}" />
+      <div class="model-settings-grid">
+        <label>显示名称
+          <input name="displayName" autocomplete="off" value="${escapeHtml(profile.displayName)}" placeholder="${escapeHtml(MODEL_PROFILE_LABELS[profile.id])}" ${disabled ? "disabled" : ""} />
+        </label>
+        <label>模型家族
+          <input name="modelFamily" required autocomplete="off" spellcheck="false" value="${escapeHtml(profile.modelFamily)}" placeholder="deepseek / gpt / qwen" ${disabled ? "disabled" : ""} />
+        </label>
+        <label class="wide">接口地址
+          <input name="apiUrl" type="url" required autocomplete="url" spellcheck="false" value="${escapeHtml(profile.apiUrl)}" placeholder="https://api.example.com/v1/chat/completions" ${disabled ? "disabled" : ""} />
+        </label>
+        <label>API Key
+          <input name="apiKey" type="password" autocomplete="off" spellcheck="false" value="" placeholder="${escapeHtml(keyPlaceholder)}" ${disabled ? "disabled" : ""} />
+        </label>
+        <label>模型名
+          <input name="model" required autocomplete="off" spellcheck="false" value="${escapeHtml(profile.model)}" placeholder="deepseek-chat" ${disabled ? "disabled" : ""} />
+        </label>
+      </div>
+      <div class="model-profile-form-foot">
+        <label class="model-profile-enabled"><input name="enabled" type="checkbox" ${profile.enabled ? "checked" : ""} ${disabled ? "disabled" : ""} /> 启用此槽位</label>
+        <span>${profile.keyHint ? `已保存 · 尾号 ${escapeHtml(profile.keyHint)}` : "密钥未回显"}</span>
+        <div class="model-settings-actions">
+          <button type="button" data-model-test="${escapeHtml(profile.id)}" data-model-action-profile="${escapeHtml(profile.id)}" aria-label="测试 ${escapeHtml(modelProfileDisplayName(profile))} 连接" title="测试连接" ${disabled ? "disabled" : ""}>测试连接</button>
+          <button type="submit" data-model-save ${disabled ? "disabled" : ""} data-model-action-profile="${escapeHtml(profile.id)}">保存槽位</button>
+          <button type="button" data-model-cancel="${escapeHtml(profile.id)}" ${busy ? "disabled" : ""}>收起</button>
+        </div>
+      </div>
+    </form>
+  `;
+}
+
+function modelProfileRow(profile, supported) {
+  const endpoint = modelProfileEndpoint(profile);
+  const busy = state.modelSettings.busyProfileId === profile.id;
+  const editing = state.modelSettings.activeProfileId === profile.id;
+  const canDelete = supported && !busy && profile.source === "local-file";
+  return `
+    <article class="model-profile-row ${editing ? "editing" : ""}" data-model-profile="${escapeHtml(profile.id)}" role="row">
+      <div class="model-profile-summary">
+        <strong class="model-profile-name">${escapeHtml(modelProfileDisplayName(profile))}</strong>
+        <span class="model-profile-endpoint" title="${escapeHtml(profile.apiUrl || "未设置接口")}"><b>${escapeHtml(endpoint.host)}</b><i>${escapeHtml(endpoint.path)}</i></span>
+        <span class="model-profile-model">${escapeHtml(profile.model || "未设置模型")}</span>
+        <span class="model-profile-family">${escapeHtml(profile.modelFamily || "未指定家族")}</span>
+        <span class="model-profile-status ${profile.enabled && profile.configured ? "ready" : ""}">${escapeHtml(modelProfileStatus(profile))}</span>
+        <span class="model-profile-actions">
+          <button type="button" data-model-test="${escapeHtml(profile.id)}" data-model-action-profile="${escapeHtml(profile.id)}" aria-label="测试 ${escapeHtml(modelProfileDisplayName(profile))} 连接" title="测试连接" ${supported && profile.configured && !busy ? "" : "disabled"}>↯</button>
+          <button type="button" data-model-edit="${escapeHtml(profile.id)}" aria-label="编辑 ${escapeHtml(modelProfileDisplayName(profile))}" title="编辑模型" ${supported && !busy ? "" : "disabled"}>✎</button>
+          <button type="button" class="danger" data-model-delete="${escapeHtml(profile.id)}" data-model-action-profile="${escapeHtml(profile.id)}" aria-label="删除 ${escapeHtml(modelProfileDisplayName(profile))}" title="删除槽位" ${canDelete ? "" : "disabled"}>×</button>
+        </span>
+      </div>
+      ${editing ? modelProfileForm(profile, supported) : ""}
+    </article>
+  `;
+}
+
+function setModelFieldOverride(fieldId, mode) {
+  if (!schemaField(fieldId) || !["inherit", "loose", "standard", "strict", "manual"].includes(mode)) return false;
+  const fieldOverrides = { ...(state.modelSettings.policy.fieldOverrides || {}) };
+  if (mode === "inherit") delete fieldOverrides[fieldId];
+  else if (mode === "manual") fieldOverrides[fieldId] = { manualOnly: true };
+  else fieldOverrides[fieldId] = { policy: mode };
+  state.modelSettings.policy = { ...state.modelSettings.policy, fieldOverrides };
+  return true;
+}
+
+function modelFieldOverridesMarkup() {
+  const entries = Object.entries(state.modelSettings.policy.fieldOverrides || {});
+  const list = !entries.length
+    ? `<p class="model-policy-empty">暂无字段风险覆盖；所有字段沿用项目默认档位。</p>`
+    : `<div class="model-field-overrides">${entries.map(([fieldId, override]) => {
+    const field = schemaField(fieldId);
+    const label = field?.label || fieldId;
+    const policy = override.manualOnly ? "必须人工确认" : ({ loose: "宽松", standard: "标准", strict: "严格" }[override.policy] || "沿用默认");
+    return `<span data-field-override="${escapeHtml(fieldId)}"><strong>${escapeHtml(label)}</strong><i>${escapeHtml(policy)}</i><button type="button" data-model-override-remove="${escapeHtml(fieldId)}" aria-label="移除 ${escapeHtml(label)} 的风险覆盖" title="恢复默认策略">×</button></span>`;
+  }).join("")}</div>`;
+  const fields = orderedSchema();
+  return `${list}
+    <details class="model-policy-override-editor">
+      <summary>编辑字段覆盖</summary>
+      <div>
+        <label>字段
+          <select name="fieldOverrideId">
+            ${fields.map((field) => `<option value="${escapeHtml(field.id)}">${escapeHtml(field.label)} · ${escapeHtml(field.id)}</option>`).join("")}
+          </select>
+        </label>
+        <label>字段策略
+          <select name="fieldOverrideMode">
+            <option value="inherit">沿用项目默认</option>
+            <option value="loose">宽松</option>
+            <option value="standard">标准</option>
+            <option value="strict">严格</option>
+            <option value="manual">必须人工确认</option>
+          </select>
+        </label>
+        <button type="button" data-field-override-apply>应用覆盖</button>
+      </div>
+    </details>`;
+}
+
 function modelSettingsPanel() {
   const settings = state.modelSettings;
   const supported = settings.supported !== false;
-  const busy = ["loading", "testing", "saving", "deleting"].includes(settings.status);
-  const canDelete = supported && !busy && settings.source === "local-file";
-  const sourceLabel = modelSettingsSourceLabel(settings.source);
-  const keyPlaceholder = settings.source === "local-file"
-    ? "留空则沿用已保存密钥"
-    : "请输入 API Key";
+  const profiles = MODEL_PROFILE_IDS.map((id) => settings.profiles.find((profile) => profile.id === id) || emptyModelProfile(id));
+  const readyCount = profiles.filter((profile) => profile.configured && profile.enabled).length;
+  const sourceLabel = modelSettingsSourceLabel(modelSettingsOverallSource());
   const message = settings.supported === false
     ? "当前部署不支持网页配置，请使用服务端环境变量。"
-    : settings.message || (settings.configured ? `当前使用${sourceLabel}` : "填写配置后可先测试连接，再决定是否保存。 ");
+    : settings.message || (settings.configured ? `${readyCount} / 3 个模型可用 · ${sourceLabel}` : "逐个配置并测试三个模型槽位。");
   return `
     <section class="model-settings-panel" aria-label="模型连接">
       <div class="model-settings-heading">
         <div>
           <p class="kicker">Model Connection</p>
-          <h3>模型连接</h3>
+          <h3>多模型连接</h3>
         </div>
-        <span class="model-config-state ${settings.configured ? "ready" : ""}">${escapeHtml(settings.configured ? `${sourceLabel} · ${settings.model}` : sourceLabel)}</span>
+        <span class="model-config-state ${readyCount === 3 ? "ready" : ""}">${escapeHtml(`${readyCount} / 3 已启用`)}</span>
       </div>
-      <form class="model-settings-form" id="modelSettingsForm">
-        <div class="model-settings-grid">
-          <label class="wide">接口地址
-            <input name="apiUrl" type="url" required autocomplete="url" spellcheck="false" value="${escapeHtml(settings.draftApiUrl)}" placeholder="https://api.example.com/v1/chat/completions" ${supported ? "" : "disabled"} />
-          </label>
-          <label>API Key
-            <input name="apiKey" type="password" autocomplete="off" spellcheck="false" value="" placeholder="${escapeHtml(keyPlaceholder)}" ${supported ? "" : "disabled"} />
-          </label>
-          <label>模型名
-            <input name="model" required autocomplete="off" spellcheck="false" value="${escapeHtml(settings.draftModel)}" placeholder="deepseek-chat" ${supported ? "" : "disabled"} />
-          </label>
+      <div class="model-profile-scroll">
+        <div class="model-profile-table" role="table" aria-label="三个模型配置槽位">
+          <div class="model-profile-table-head" role="row">
+            <span>名称</span><span>接口</span><span>模型</span><span class="model-profile-family">家族</span><span>状态</span><span>操作</span>
+          </div>
+          ${profiles.map((profile) => modelProfileRow(profile, supported)).join("")}
         </div>
-        <div class="model-settings-meta">
-          <span>${escapeHtml(settings.apiUrl || "尚未保存接口地址")}</span>
-          <span>${settings.keyHint ? `已保存 · 尾号 ${escapeHtml(settings.keyHint)}` : "尚未保存密钥"}</span>
+      </div>
+      <p class="model-settings-message ${settings.status === "error" ? "error" : ""}" data-model-message data-status="${escapeHtml(settings.status)}" aria-live="polite">${escapeHtml(message.trim())}</p>
+      <form class="model-review-policy" id="modelPolicyForm">
+        <div class="model-policy-heading">
+          <div><p class="kicker">Consensus Policy</p><h4>项目共识策略</h4></div>
+          <button type="submit" data-model-policy-save ${supported ? "" : "disabled"}>保存策略</button>
         </div>
-        <p class="model-settings-message ${settings.status === "error" ? "error" : ""}" data-model-message data-status="${escapeHtml(settings.status)}" aria-live="polite">${escapeHtml(message.trim())}</p>
-        <div class="model-settings-actions">
-          <button type="button" data-model-test ${supported && !busy ? "" : "disabled"}>测试连接</button>
-          <button type="submit" data-model-save ${supported && !busy ? "" : "disabled"}>保存配置</button>
-          <button type="button" class="danger" data-model-delete ${canDelete ? "" : "disabled"}>删除配置</button>
+        <div class="model-policy-controls">
+          <label>项目审核模式
+            <select name="reviewMode" ${supported ? "" : "disabled"}>
+              <option value="assist" ${settings.policy.reviewMode === "assist" ? "selected" : ""}>A 辅助审核</option>
+              <option value="auto" ${settings.policy.reviewMode === "auto" ? "selected" : ""}>B 自动审核</option>
+            </select>
+          </label>
+          <label>默认共识档位
+            <select name="defaultConsensus" ${supported ? "" : "disabled"}>
+              <option value="loose" ${settings.policy.defaultConsensus === "loose" ? "selected" : ""}>宽松</option>
+              <option value="standard" ${settings.policy.defaultConsensus === "standard" ? "selected" : ""}>标准</option>
+              <option value="strict" ${settings.policy.defaultConsensus === "strict" ? "selected" : ""}>严格</option>
+            </select>
+          </label>
+          <span class="model-family-lock" aria-label="自动审核固定要求至少两个模型家族">🔒 至少 2 个模型家族</span>
         </div>
+        <div class="model-policy-overrides"><strong>字段风险覆盖</strong>${modelFieldOverridesMarkup()}</div>
       </form>
     </section>
   `;
 }
 
 function applyPublicModelConfig(payload, message = "") {
-  const configured = Boolean(payload?.configured);
-  const apiUrl = String(payload?.apiUrl || "");
-  const model = String(payload?.model || "");
+  const fallback = {
+    configured: Boolean(payload?.configured),
+    source: ["local-file", "environment"].includes(payload?.source) ? payload.source : "none"
+  };
+  const incoming = Array.isArray(payload?.profiles)
+    ? payload.profiles
+    : (payload?.apiUrl || payload?.model ? [{
+        id: "primary",
+        displayName: payload?.displayName || payload?.model,
+        apiUrl: payload?.apiUrl,
+        model: payload?.model,
+        modelFamily: payload?.modelFamily,
+        enabled: true,
+        configured: payload?.configured,
+        source: payload?.source,
+        keyHint: payload?.keyHint,
+        lastTestedAt: payload?.lastTestedAt,
+        latencyMs: payload?.latencyMs,
+        health: payload?.health
+      }] : []);
+  const profiles = MODEL_PROFILE_IDS.map((id) => {
+    const profile = incoming.find((item) => item?.id === id);
+    return profile ? normalizePublicModelProfile(profile, id, fallback) : emptyModelProfile(id);
+  });
+  const configured = profiles.some((profile) => profile.configured);
+  const aiEnabled = profiles.some((profile) => profile.configured && profile.enabled);
+  const consensusEnabled = profiles.every((profile) => profile.configured && profile.enabled);
   state.modelSettings = {
     ...state.modelSettings,
     status: "ready",
     supported: payload?.supported !== false,
     configured,
-    source: ["local-file", "environment"].includes(payload?.source) ? payload.source : "none",
-    apiUrl,
-    model,
-    keyHint: String(payload?.keyHint || "").slice(-4),
-    draftApiUrl: apiUrl,
-    draftModel: model,
+    profiles,
+    policy: normalizeModelPolicy(payload?.policy),
+    busyProfileId: "",
     message
   };
-  state.cloud.config = { ...(state.cloud.config || { enabled: false }), aiEnabled: configured };
+  state.cloud.config = { ...(state.cloud.config || { enabled: false }), aiEnabled, consensusEnabled };
 }
 
 function rerenderModelSettings() {
@@ -2041,22 +2258,18 @@ function rerenderModelSettings() {
   if (state.view === "detail") loadSelectedSource();
 }
 
-function setModelSettingsMessage(status, message) {
+function setModelSettingsMessage(status, message, profileId = "") {
   state.modelSettings.status = status;
   state.modelSettings.message = message;
+  state.modelSettings.busyProfileId = ["testing", "saving", "deleting"].includes(status) ? profileId : "";
   const node = document.querySelector("[data-model-message]");
   if (node) {
     node.textContent = message;
     node.dataset.status = status;
     node.classList.toggle("error", status === "error");
   }
-  const busy = ["testing", "saving", "deleting"].includes(status);
-  document.querySelectorAll("[data-model-test], [data-model-save], [data-model-delete]").forEach((button) => {
-    if (button.matches("[data-model-delete]")) {
-      button.disabled = busy || state.modelSettings.source !== "local-file";
-    } else {
-      button.disabled = busy || state.modelSettings.supported === false;
-    }
+  document.querySelectorAll("[data-model-action-profile]").forEach((button) => {
+    if (button.dataset.modelActionProfile === profileId) button.disabled = Boolean(state.modelSettings.busyProfileId);
   });
 }
 
@@ -2093,19 +2306,48 @@ async function loadModelConfig() {
   return state.modelSettings.supported !== false;
 }
 
-function modelConfigPayload(form) {
+function modelConfigPayload(form, profileId = "") {
+  if (!form) {
+    const profile = state.modelSettings.profiles.find((item) => item.id === profileId);
+    return profile ? { ...publicModelProfilePayload(profile), apiKey: "" } : null;
+  }
   const data = new FormData(form);
   return {
+    id: String(data.get("id") || profileId || state.modelSettings.activeProfileId || "primary").trim(),
+    displayName: String(data.get("displayName") || "").trim(),
     apiUrl: String(data.get("apiUrl") || "").trim(),
     apiKey: String(data.get("apiKey") || "").trim(),
-    model: String(data.get("model") || "").trim()
+    model: String(data.get("model") || "").trim(),
+    modelFamily: String(data.get("modelFamily") || "").trim(),
+    enabled: data.get("enabled") !== null
   };
 }
 
-async function testModelConfig(form) {
-  if (!form || state.modelSettings.supported === false) return false;
-  const payload = modelConfigPayload(form);
-  setModelSettingsMessage("testing", "正在测试连接...");
+function publicModelProfilePayload(profile) {
+  return {
+    id: profile.id,
+    displayName: profile.displayName,
+    apiUrl: profile.apiUrl,
+    model: profile.model,
+    modelFamily: profile.modelFamily,
+    enabled: profile.enabled !== false
+  };
+}
+
+function modelConfigBundle(changedProfile = null, policy = state.modelSettings.policy) {
+  const baseProfiles = MODEL_PROFILE_IDS.map((id) => state.modelSettings.profiles.find((profile) => profile.id === id) || emptyModelProfile(id));
+  const profiles = baseProfiles.map((profile) => profile.id === changedProfile?.id
+    ? { ...publicModelProfilePayload(profile), ...changedProfile }
+    : publicModelProfilePayload(profile));
+  const selected = profiles.filter((profile) => profile.id === changedProfile?.id || profile.apiUrl || profile.model);
+  return { version: 2, profiles: selected, policy: normalizeModelPolicy(policy) };
+}
+
+async function testModelConfig(form, profileId = "") {
+  if (state.modelSettings.supported === false) return false;
+  const payload = modelConfigPayload(form, profileId);
+  if (!payload) return false;
+  setModelSettingsMessage("testing", `正在测试 ${payload.displayName || MODEL_PROFILE_LABELS[payload.id] || payload.id}...`, payload.id);
   try {
     const response = await fetch("/api/model-config/test", {
       method: "POST",
@@ -2113,10 +2355,10 @@ async function testModelConfig(form) {
       body: JSON.stringify(payload)
     });
     const result = await modelConfigResponse(response);
-    setModelSettingsMessage("success", `连接成功 · ${String(result.model || payload.model)} · ${Number(result.elapsedMs) || 0} ms`);
+    setModelSettingsMessage("success", `连接成功 · ${String(result.model || payload.model)} · ${Number(result.elapsedMs) || 0} ms`, payload.id);
     return true;
   } catch (error) {
-    setModelSettingsMessage("error", error?.message || "模型连接测试失败");
+    setModelSettingsMessage("error", error?.message || "模型连接测试失败", payload.id);
     return false;
   }
 }
@@ -2124,34 +2366,59 @@ async function testModelConfig(form) {
 async function saveModelConfig(form) {
   if (!form || state.modelSettings.supported === false) return false;
   const payload = modelConfigPayload(form);
-  setModelSettingsMessage("saving", "正在保存配置...");
+  setModelSettingsMessage("saving", `正在保存 ${payload.displayName || MODEL_PROFILE_LABELS[payload.id] || payload.id}...`, payload.id);
   try {
     const response = await fetch("/api/model-config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(modelConfigBundle(payload))
     });
-    applyPublicModelConfig(await modelConfigResponse(response), "配置已保存，后续 AI 请求将使用当前模型。");
+    applyPublicModelConfig(await modelConfigResponse(response), "模型槽位已保存。");
     const keyInput = form.querySelector?.("[name='apiKey']");
     if (keyInput) keyInput.value = "";
     rerenderModelSettings();
     return true;
   } catch (error) {
-    setModelSettingsMessage("error", error?.message || "模型配置保存失败");
+    setModelSettingsMessage("error", error?.message || "模型配置保存失败", payload.id);
     return false;
   }
 }
 
-async function deleteModelConfig() {
-  if (state.modelSettings.source !== "local-file" || !window.confirm("删除本地模型配置并回退到环境变量？")) return false;
-  setModelSettingsMessage("deleting", "正在删除本地配置...");
+async function saveModelPolicy(form) {
+  if (state.modelSettings.supported === false) return false;
+  const data = form ? new FormData(form) : null;
+  const policy = normalizeModelPolicy({
+    ...state.modelSettings.policy,
+    reviewMode: data?.get("reviewMode") || state.modelSettings.policy.reviewMode,
+    defaultConsensus: data?.get("defaultConsensus") || state.modelSettings.policy.defaultConsensus
+  });
+  setModelSettingsMessage("saving", "正在保存项目共识策略...", "policy");
   try {
-    const response = await fetch("/api/model-config", { method: "DELETE" });
-    applyPublicModelConfig(await modelConfigResponse(response), "本地配置已删除。 ");
+    const response = await fetch("/api/model-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(modelConfigBundle(null, policy))
+    });
+    applyPublicModelConfig(await modelConfigResponse(response), "项目共识策略已保存。");
     rerenderModelSettings();
     return true;
   } catch (error) {
-    setModelSettingsMessage("error", error?.message || "模型配置删除失败");
+    setModelSettingsMessage("error", error?.message || "项目共识策略保存失败", "policy");
+    return false;
+  }
+}
+
+async function deleteModelConfig(profileId = state.modelSettings.activeProfileId) {
+  const profile = state.modelSettings.profiles.find((item) => item.id === profileId);
+  if (profile?.source !== "local-file" || !window.confirm(`删除「${modelProfileDisplayName(profile)}」槽位的本地配置？`)) return false;
+  setModelSettingsMessage("deleting", `正在删除 ${modelProfileDisplayName(profile)}...`, profileId);
+  try {
+    const response = await fetch(`/api/model-config?id=${encodeURIComponent(profileId)}`, { method: "DELETE" });
+    applyPublicModelConfig(await modelConfigResponse(response), "模型槽位已删除。");
+    rerenderModelSettings();
+    return true;
+  } catch (error) {
+    setModelSettingsMessage("error", error?.message || "模型配置删除失败", profileId);
     return false;
   }
 }
@@ -2169,7 +2436,7 @@ function templateDetailsModal() {
           <div>
             <h2>项目设置</h2>
             <p>${escapeHtml(modelTab ? "配置本地模型连接；密钥不会写入浏览器或工作区数据。" : current.description)}</p>
-            <p>${escapeHtml(modelTab ? modelSettingsSourceLabel(state.modelSettings.source) : `${current.custom ? "我的模板" : "内置模板"} · ${visibleCount} / ${totalCount} 字段显示`)}</p>
+            <p>${escapeHtml(modelTab ? modelSettingsSourceLabel(modelSettingsOverallSource()) : `${current.custom ? "我的模板" : "内置模板"} · ${visibleCount} / ${totalCount} 字段显示`)}</p>
           </div>
           <button type="button" data-template-panel-close aria-label="关闭项目设置" title="关闭">×</button>
         </div>
@@ -5482,8 +5749,9 @@ function openTemplatePanel() {
 }
 
 function closeTemplatePanel() {
-  const keyInput = document.querySelector("#modelSettingsForm [name='apiKey']");
-  if (keyInput) keyInput.value = "";
+  document.querySelectorAll("[data-model-profile-form] [name='apiKey']").forEach((keyInput) => {
+    keyInput.value = "";
+  });
   state.templatePanelExpanded = false;
   render();
   if (state.view === "detail") loadSelectedSource();
@@ -5683,19 +5951,54 @@ function attachGlobalEvents() {
     });
   });
 
-  const modelSettingsForm = document.querySelector("#modelSettingsForm");
-  modelSettingsForm?.addEventListener("input", (event) => {
-    if (event.target.name === "apiUrl") state.modelSettings.draftApiUrl = event.target.value;
-    if (event.target.name === "model") state.modelSettings.draftModel = event.target.value;
+  document.querySelectorAll("[data-model-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.modelSettings.activeProfileId = button.dataset.modelEdit;
+      render();
+    });
   });
-  modelSettingsForm?.addEventListener("submit", (event) => {
+  document.querySelectorAll("[data-model-cancel]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (state.modelSettings.activeProfileId === button.dataset.modelCancel) state.modelSettings.activeProfileId = "";
+      render();
+    });
+  });
+  document.querySelectorAll("[data-model-profile-form]").forEach((form) => {
+    form.addEventListener("input", (event) => {
+      if (event.target.name === "apiKey") return;
+      const profile = state.modelSettings.profiles.find((item) => item.id === form.dataset.modelProfile);
+      if (!profile || !["displayName", "apiUrl", "model", "modelFamily", "enabled"].includes(event.target.name)) return;
+      profile[event.target.name] = event.target.name === "enabled" ? event.target.checked : event.target.value;
+    });
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      saveModelConfig(event.currentTarget);
+    });
+  });
+  document.querySelectorAll("[data-model-test]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const form = button.closest("form[data-model-profile-form]");
+      testModelConfig(form, button.dataset.modelTest);
+    });
+  });
+  document.querySelectorAll("[data-model-delete]").forEach((button) => {
+    button.addEventListener("click", () => deleteModelConfig(button.dataset.modelDelete));
+  });
+  document.querySelector("#modelPolicyForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    saveModelConfig(event.currentTarget);
+    saveModelPolicy(event.currentTarget);
   });
-  document.querySelector("[data-model-test]")?.addEventListener("click", (event) => {
-    testModelConfig(event.currentTarget.form);
+  document.querySelector("[data-field-override-apply]")?.addEventListener("click", (event) => {
+    const editor = event.currentTarget.closest(".model-policy-override-editor");
+    const fieldId = editor?.querySelector("[name='fieldOverrideId']")?.value || "";
+    const mode = editor?.querySelector("[name='fieldOverrideMode']")?.value || "inherit";
+    if (setModelFieldOverride(fieldId, mode)) render();
   });
-  document.querySelector("[data-model-delete]")?.addEventListener("click", deleteModelConfig);
+  document.querySelectorAll("[data-model-override-remove]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (setModelFieldOverride(button.dataset.modelOverrideRemove, "inherit")) render();
+    });
+  });
 
   document.querySelector("[data-template-select]")?.addEventListener("change", (event) => {
     applyTemplate(event.target.value);
