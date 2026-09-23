@@ -18,7 +18,11 @@
     const abstentions = Array.isArray(value.abstentions) ? value.abstentions.slice(0, 30).map((item) => ({
       fieldId: text(item?.fieldId).slice(0, 64), reason: text(item?.reason).slice(0, 500)
     })) : [];
-    return { fields, evidence, reasoning, abstentions };
+    const answerSources = value.answerSources && typeof value.answerSources === "object"
+      ? Object.fromEntries(Object.entries(value.answerSources).slice(0, 100)
+        .filter(([, source]) => ["direct", "repair"].includes(source))
+        .map(([id, source]) => [text(id).slice(0, 64), source])) : {};
+    return { fields, evidence, reasoning, abstentions, answerSources };
   }
 
   function normalizeConsensusResponse(payload = {}) {
@@ -36,12 +40,21 @@
       elapsedMs: Number(item?.elapsedMs) || 0
     })) : [];
     const sourceFields = payload.fields && typeof payload.fields === "object" ? payload.fields : {};
+    const fieldReasons = new Set(["accepted", "abstention", "model_count", "missing_value", "disagreement", "insufficient_evidence", "rule_failure", "system_verified", "system_mismatch"]);
+    const comparisonModes = new Set(["exact", "quote", "script_type", "confidence", "token_set", "advisory"]);
     const fields = Object.fromEntries(Object.entries(sourceFields).map(([id, field]) => [id, {
       status: ["unanimous", "split", "blocked"].includes(field?.status) ? field.status : "blocked",
       value: text(field?.value).slice(0, 2000),
       votes: Array.isArray(field?.votes) ? field.votes.slice(0, 3).map((value) => text(value).slice(0, 2000)) : [],
       policy: ["loose", "standard", "strict"].includes(field?.policy) ? field.policy : "standard",
-      verifiedEvidence: Number(field?.verifiedEvidence) || 0
+      verifiedEvidence: Number(field?.verifiedEvidence) || 0,
+      evidenceRequired: typeof field?.evidenceRequired === "boolean" ? field.evidenceRequired : undefined,
+      voteCount: Math.max(0, Math.min(3, Number(field?.voteCount) || 0)),
+      abstentionCount: Math.max(0, Math.min(3, Number(field?.abstentionCount) || 0)),
+      reason: fieldReasons.has(field?.reason) ? field.reason : "rule_failure",
+      comparisonMode: comparisonModes.has(field?.comparisonMode) ? field.comparisonMode : "exact",
+      blocking: field?.blocking !== false,
+      validationSource: field?.validationSource === "system" ? "system" : "model"
     }]));
     const decisions = ["adopt_fields", "needs_human_review", "auto_approve_record"];
     return {

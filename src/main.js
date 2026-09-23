@@ -40,15 +40,15 @@ const schemaTemplates = [
     name: "书论风格评价抽取模板",
     description: "适合书论、书法品评、风格术语和原文证据整理。",
     fields: [
-      { id: "author", label: "书家", type: "text", prompt: "抽取被评价或被讨论的书家姓名。若原文没有明确书家，留空并在待复核问题中说明。", required: true, evidenceRequired: true, visible: true },
-      { id: "scriptType", label: "书体", type: "text", prompt: "抽取书体或可能书体，如楷书、草书、隶书等；无法确定时写“未标注”。", required: false, evidenceRequired: true, visible: true },
-      { id: "quote", label: "原文摘录", type: "longtext", prompt: "摘录能够支持判断的最小原文片段，优先保留完整评价短语。", required: true, evidenceRequired: true, visible: true },
+      { id: "author", label: "书家", type: "text", prompt: "抽取被评价或被讨论的书家姓名。若原文没有明确书家，留空并在待复核问题中说明。", required: true, evidenceRequired: true, comparisonMode: "exact", visible: true },
+      { id: "scriptType", label: "书体", type: "text", prompt: "抽取书体或可能书体，如楷书、草书、隶书等；无法确定时写“未标注”。", required: false, evidenceRequired: true, comparisonMode: "script_type", visible: true },
+      { id: "quote", label: "原文摘录", type: "longtext", prompt: "摘录能够支持判断的最小原文片段，优先保留完整评价短语。", required: true, evidenceRequired: true, comparisonMode: "quote", visible: true },
       { id: "pageNo", label: "页码", type: "text", prompt: "记录原文页码或页序，用于回到 page_*.txt。", required: true, evidenceRequired: false, visible: true },
       { id: "sourceFile", label: "原文文件", type: "text", prompt: "记录对应原文文件名，例如 page_191.txt。", required: true, evidenceRequired: false, visible: false },
-      { id: "confidence", label: "证据等级", type: "select", prompt: "判断摘录是否足以支持入表，建议使用 高/中/低/待复核。", required: false, evidenceRequired: true, visible: true },
-      { id: "gate", label: "门禁", type: "text", prompt: "判断该条是否可入主表、需补证、或应排除。", required: false, evidenceRequired: false, visible: true },
-      { id: "issue", label: "待复核问题", type: "longtext", prompt: "记录 OCR、页码、归属、解释歧义等需要人工处理的问题。", required: false, evidenceRequired: false, visible: false },
-      { id: "note", label: "备注", type: "longtext", prompt: "记录人工判断、补充说明或后续处理建议。", required: false, evidenceRequired: false, visible: false }
+      { id: "confidence", label: "证据等级", type: "select", prompt: "判断摘录是否足以支持入表，建议使用 高/中/低/待复核；该判断无需另附一层证据。", required: false, evidenceRequired: false, comparisonMode: "confidence", visible: true },
+      { id: "gate", label: "门禁", type: "text", prompt: "沿用 checkpoint-* 标签判断门禁；多个标签用分号分隔。", required: false, evidenceRequired: false, comparisonMode: "token_set", visible: true },
+      { id: "issue", label: "待复核问题", type: "longtext", prompt: "记录 OCR、页码、归属、解释歧义等需要人工处理的问题。", required: false, evidenceRequired: false, comparisonMode: "advisory", visible: false },
+      { id: "note", label: "备注", type: "longtext", prompt: "记录人工判断、补充说明或后续处理建议。", required: false, evidenceRequired: false, comparisonMode: "advisory", visible: false }
     ]
   },
   {
@@ -144,7 +144,7 @@ const state = {
   schemaVersion: SCHEMA_VERSION,
   promptVersion: PROMPT_VERSION,
   lastSavedAt: "",
-  view: ["#detail", "#review"].includes(location.hash) ? "detail" : "home",
+  view: location.hash === "#ingest" ? "ingest" : ["#detail", "#review"].includes(location.hash) ? "detail" : "home",
   detailMode: location.hash === "#review" ? "review" : "table",
   filter: "all",
   activeProblemTagFilter: "all",
@@ -181,6 +181,11 @@ const state = {
   railCollapsed: Boolean(compactWorkbench?.matches),
   tableFocus: false,
   tableHeaderCollapsed: false,
+  batchMode: false,
+  batchSelectedIds: new Set(),
+  batchJob: null,
+  batchIssueOpen: false,
+  batchReviewRowId: "",
   confidenceSort: "desc",
   templatePanelExpanded: false,
   settingsTab: "schema",
@@ -243,12 +248,13 @@ const state = {
 };
 
 function applyRouteFromHash() {
-  state.view = ["#detail", "#review"].includes(location.hash) ? "detail" : "home";
+  state.view = location.hash === "#ingest" ? "ingest" : ["#detail", "#review"].includes(location.hash) ? "detail" : "home";
   state.detailMode = location.hash === "#review" ? "review" : "table";
 }
 
 function viewKey(view = state.view, detailMode = state.detailMode) {
   if (view === "home") return "home";
+  if (view === "ingest") return "ingest";
   return detailMode === "review" ? "review" : "table";
 }
 
@@ -270,7 +276,7 @@ function navigateToView(nextView, nextDetailMode = state.detailMode) {
   state.view = nextView;
   state.detailMode = nextDetailMode;
   if (nextView === "detail") applyDetailModeDefaults(nextDetailMode);
-  const nextHash = state.view === "detail" ? (state.detailMode === "review" ? "#review" : "#detail") : "#home";
+  const nextHash = state.view === "ingest" ? "#ingest" : state.view === "detail" ? (state.detailMode === "review" ? "#review" : "#detail") : "#home";
   state.suppressHashMotion = location.hash !== nextHash;
   location.hash = nextHash;
 }
@@ -859,6 +865,7 @@ async function loadCloudWorkspaceData() {
   state.undoAction = null;
   state.originalRows = state.rows.map(cloneRow);
   state.uploadedPages = new Map(pages.map((page) => [page.source_file, page.body || ""]));
+  if (state.workspaceId !== state.cloud.workspace.id) resetBatchUiState();
   state.workspaceId = state.cloud.workspace.id;
   try {
     const localSnapshot = localStorage.getItem(storageKey());
@@ -1014,6 +1021,7 @@ function loadWorkspace(id = localStorage.getItem(WORKSPACE_POINTER_KEY)) {
     const serialized = localStorage.getItem(storageKey(id));
     const payload = JSON.parse(serialized || "null");
     if (!payload || !Array.isArray(payload.rows)) return false;
+    if (state.workspaceId !== id) resetBatchUiState();
     state.workspaceId = id;
     state.datasetName = payload.datasetName || "本地隔离工作区";
     state.schemaTemplateId = payload.schemaTemplateId || state.schemaTemplateId || "calligraphy-style";
@@ -1067,6 +1075,7 @@ function clearWorkspace() {
   }
   if (localStorage.getItem(WORKSPACE_POINTER_KEY) === id) localStorage.removeItem(WORKSPACE_POINTER_KEY);
   localStorage.removeItem("calligraphy-review-state-v1");
+  resetBatchUiState();
   state.workspaceId = newWorkspaceId();
   state.datasetName = "空白隔离工作区";
   state.schemaTemplateId = "calligraphy-style";
@@ -1546,6 +1555,66 @@ function visibleRows() {
     return filterPass && focusPass && queryPass;
   });
   return sortRowsByConfidence(rows);
+}
+
+function batchSelectedRows() {
+  return state.rows.filter((row) => state.batchSelectedIds.has(row.id));
+}
+
+function resetBatchUiState() {
+  if (state.batchJob?.running) state.batchJob.stopRequested = true;
+  state.batchMode = false;
+  state.batchSelectedIds = new Set();
+  state.batchJob = null;
+  state.batchIssueOpen = false;
+  state.batchReviewRowId = "";
+}
+
+function setBatchMode(enabled) {
+  const next = Boolean(enabled);
+  if (!next && state.batchJob?.running) return false;
+  state.batchMode = next;
+  if (!next) {
+    state.batchSelectedIds = new Set();
+    state.batchJob = null;
+    state.batchIssueOpen = false;
+    state.batchReviewRowId = "";
+  }
+  return true;
+}
+
+function reconcileBatchSelection() {
+  const existing = new Set(state.rows.map((row) => row.id));
+  state.batchSelectedIds = new Set([...state.batchSelectedIds].filter((id) => existing.has(id)));
+  return state.batchSelectedIds.size;
+}
+
+function toggleBatchSelection(rowId, checked) {
+  if (!state.rows.some((row) => row.id === rowId)) return false;
+  const next = new Set(state.batchSelectedIds);
+  if (checked) next.add(rowId);
+  else next.delete(rowId);
+  state.batchSelectedIds = next;
+  return true;
+}
+
+function setVisibleBatchSelection(checked) {
+  const next = new Set(state.batchSelectedIds);
+  visibleRows().forEach((row) => {
+    if (checked) next.add(row.id);
+    else next.delete(row.id);
+  });
+  state.batchSelectedIds = next;
+  return state.batchSelectedIds.size;
+}
+
+function visibleBatchSelectionState(rows = visibleRows()) {
+  const selected = rows.filter((row) => state.batchSelectedIds.has(row.id)).length;
+  return {
+    selected,
+    all: Boolean(rows.length) && selected === rows.length,
+    mixed: selected > 0 && selected < rows.length,
+  };
 }
 
 function selectedRow() {
@@ -2651,12 +2720,15 @@ function resultTable(rows) {
   }
 
   const tableFields = visibleTableFields();
+  const selection = visibleBatchSelectionState(rows);
+  const selectionLocked = Boolean(state.batchJob?.running);
+  const batchMode = Boolean(state.batchMode);
   return `
     <div class="table-shell">
       <table>
         <thead>
           <tr>
-            <th>回检</th>
+            ${batchMode ? `<th class="batch-select-col"><input type="checkbox" data-batch-select-visible aria-label="选择当前筛选条目" aria-checked="${selection.mixed ? "mixed" : String(selection.all)}" ${selection.all ? "checked" : ""} ${selectionLocked ? "disabled" : ""} /></th>` : ""}
             <th class="review-col">审校</th>
             <th>字段</th>
             <th>等级</th>
@@ -2668,8 +2740,8 @@ function resultTable(rows) {
           ${rows.map((row, index) => {
             const quality = sourceQuality(row, false);
             return `
-            <tr class="${row.id === state.selectedId ? "selected" : ""} ${sourceNeedsReview(row) ? "abnormal" : ""} ${row.flagged ? "flagged" : ""} ${!rowValidation(row).ok ? "invalid" : ""} confidence-row confidence-${quality.tone}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
-              <td><button type="button" class="icon-control" data-row-id="${escapeHtml(row.id)}" aria-label="查看 ${escapeHtml(row.id)}" title="查看条目">›</button></td>
+            <tr class="${row.id === state.selectedId ? "selected" : ""} ${state.batchSelectedIds.has(row.id) ? "batch-selected" : ""} ${sourceNeedsReview(row) ? "abnormal" : ""} ${row.flagged ? "flagged" : ""} ${!rowValidation(row).ok ? "invalid" : ""} confidence-row confidence-${quality.tone}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
+              ${batchMode ? `<td class="batch-select-col"><input type="checkbox" data-batch-select="${escapeHtml(row.id)}" aria-label="选择 ${escapeHtml(row.id)}" ${state.batchSelectedIds.has(row.id) ? "checked" : ""} ${selectionLocked ? "disabled" : ""} /><button type="button" class="row-open-control" data-row-open data-row-id="${escapeHtml(row.id)}" aria-label="查看 ${escapeHtml(row.id)}" title="查看条目">›</button></td>` : ""}
               <td class="review-cell">${reviewCell(row)}</td>
               <td>${validationBadge(row)}</td>
               <td>${confidencePill(row)}</td>
@@ -2856,7 +2928,7 @@ function consensusHistoryDetails(event) {
     <summary>查看判定依据</summary>
     <div class="consensus-history-meta"><span>run ${escapeHtml(snapshot.runId || "-")}</span><span>快照 v${escapeHtml(snapshot.snapshotVersion || 1)}</span><span>${escapeHtml(snapshot.decision || "needs_human_review")}</span></div>
     ${snapshot.blockers?.length ? `<ul>${snapshot.blockers.map((item) => `<li>${escapeHtml(consensusBlockerLabel(item))}</li>`).join("")}</ul>` : ""}
-    <dl>${fields.map(([fieldId, result]) => `<dt>${escapeHtml(schemaField(fieldId)?.label || fieldId)}</dt><dd>${escapeHtml(result.status || "blocked")} · ${escapeHtml(result.value || "空")} · 证据 ${Number(result.verifiedEvidence) || 0}/3</dd>`).join("")}</dl>
+    <dl>${fields.map(([fieldId, result]) => `<dt>${escapeHtml(schemaField(fieldId)?.label || fieldId)}</dt><dd>${escapeHtml(result.status || "blocked")} · ${escapeHtml(result.value || "空")} · ${escapeHtml(consensusEvidenceLabel(schemaField(fieldId), result))}</dd>`).join("")}</dl>
     <p>${(snapshot.models || []).map((item) => `${item.profile?.displayName || item.profileId || "模型"}：${item.status === "success" ? `${item.elapsedMs || 0} ms` : item.error || "失败"}`).map(escapeHtml).join(" · ")}</p>
   </details>`;
 }
@@ -3129,8 +3201,8 @@ function aiInputSignature(row) {
     schemaVersion: state.schemaVersion,
     promptVersion: state.promptVersion,
     currentFields: Object.fromEntries(schema.map((field) => [field.id, String(fieldValue(row, field.id) || "")])),
-    schema: schema.map(({ id, label, type, prompt, required, evidenceRequired, visible, order }) => ({
-      id, label, type, prompt, required, evidenceRequired, visible, order
+    schema: schema.map(({ id, label, type, prompt, required, evidenceRequired, comparisonMode, visible, order }) => ({
+      id, label, type, prompt, required, evidenceRequired, comparisonMode, visible, order
     }))
   });
 }
@@ -3146,7 +3218,7 @@ function isConsensusProposal(proposal = state.aiProposal) {
   return Boolean(proposal && typeof proposal.fields === "object" && Array.isArray(proposal.models) && proposal.runId);
 }
 
-function consensusRequestPayload(row, sourceText) {
+function consensusRequestPayload(row, sourceText, options = {}) {
   return {
     runId: `run-${Date.now()}-${state.workspaceId}-${row.id}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80),
     workspaceId: state.workspaceId,
@@ -3155,13 +3227,27 @@ function consensusRequestPayload(row, sourceText) {
     sourceFile: row.sourceFile,
     pageNo: row.pageNo,
     promptVersion: state.promptVersion,
-    reviewMode: state.modelSettings.policy.reviewMode,
+    reviewMode: options.reviewMode || state.modelSettings.policy.reviewMode,
     defaultConsensus: state.modelSettings.policy.defaultConsensus,
     fieldOverrides: state.modelSettings.policy.fieldOverrides || {},
     aliases: state.modelSettings.policy.aliases || {},
     currentFields: Object.fromEntries(orderedSchema().map((field) => [field.id, String(fieldValue(row, field.id) || "")])),
-    schema: orderedSchema().map(({ id, label, prompt, required, evidenceRequired }) => ({ id, label, prompt, required, evidenceRequired }))
+    schema: orderedSchema().map(({ id, label, prompt, required, evidenceRequired, comparisonMode }) => ({
+      id, label, prompt, required, evidenceRequired, comparisonMode,
+      validationMode: ["pageNo", "sourceFile"].includes(id) ? "system" : "model"
+    }))
   };
+}
+
+async function requestConsensusForRow(row, sourceText, options = {}) {
+  const response = await fetch("./api/ai/consensus", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(consensusRequestPayload(row, sourceText, options)),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `模型服务返回 ${response.status}`);
+  return window.CalligraphyAiConsensus.normalizeConsensusResponse(payload);
 }
 
 function initializeConsensusJudgments(consensus) {
@@ -3332,16 +3418,36 @@ function aiFieldReviewCard(item) {
 }
 
 function consensusStatusLabel(item) {
-  if (item.consensus.status === "unanimous") return "3/3";
-  if (item.consensus.status === "split") return `${Math.max(2, item.voteCount || 0)}/3`;
-  return "异常";
+  if (item.consensus.validationSource === "system") {
+    return item.consensus.status === "unanimous" ? "程序通过" : "程序异常";
+  }
+  if (item.consensus.status === "unanimous") return "已通过";
+  if (item.consensus.blocking === false) return "仅供参考";
+  if (item.consensus.status === "split") return "有分歧";
+  return {
+    abstention: "有弃答",
+    insufficient_evidence: "证据不足",
+    model_count: "结果不全",
+    missing_value: "无有效值",
+    disagreement: "有分歧"
+  }[item.consensus.reason] || "未通过";
 }
 
 function consensusPolicyLabel(policy) {
   return { loose: "宽松", standard: "标准", strict: "严格" }[policy] || "标准";
 }
 
-function consensusBlockerLabel(blocker) {
+function consensusEvidenceLabel(field, consensus) {
+  const required = consensus?.evidenceRequired ?? Boolean(field?.evidenceRequired);
+  const verified = Number(consensus?.verifiedEvidence) || 0;
+  if (!required) return "证据非必需";
+  if (consensus?.policy === "strict") return `证据 ${verified}/3`;
+  if (verified > 0) return "证据已核验";
+  if (consensus?.policy === "loose") return "证据可选";
+  return "证据未核验";
+}
+
+function consensusBlockerLabel(blocker, fields = state.aiProposal?.fields || {}) {
   const value = String(blocker || "");
   const labels = {
     model_count: "未获得三个完整模型结果",
@@ -3351,7 +3457,17 @@ function consensusBlockerLabel(blocker) {
   if (labels[value]) return labels[value];
   const [fieldId, reason] = value.split(":");
   const fieldLabel = schemaField(fieldId)?.label || fieldId;
-  const reasonLabel = { manual_only: "必须人工确认", split: "结果分歧", blocked: "未通过规则" }[reason] || reason || "已阻断";
+  const fieldResult = fields[fieldId] || {};
+  const blockedReason = {
+    abstention: `有 ${Number(fieldResult.abstentionCount) || 1} 个模型弃答`,
+    insufficient_evidence: "未找到可核验的原文证据",
+    model_count: "模型结果不完整",
+    missing_value: "没有有效建议",
+    disagreement: "模型结果分歧",
+    system_mismatch: "系统记录不一致",
+    rule_failure: "未通过规则"
+  }[fieldResult.reason] || "未通过规则";
+  const reasonLabel = { manual_only: "必须人工确认", split: "结果分歧", blocked: blockedReason }[reason] || reason || "已阻断";
   return `${fieldLabel}：${reasonLabel}`;
 }
 
@@ -3371,8 +3487,12 @@ function consensusFieldCard(item) {
         <dt>建议</dt><dd>${escapeHtml(after || "空")}</dd>
       </dl>
       <div class="ai-consensus-field-meta">
-        <span>${consensusPolicyLabel(consensus.policy)}策略</span>
-        <span>证据命中 ${Number(consensus.verifiedEvidence) || 0}/3</span>
+        ${consensus.validationSource === "system" ? `<span>程序校验</span>` : `
+          <span>投票 ${Number(consensus.voteCount) || item.voteCount || 0}/3</span>
+          ${Number(consensus.abstentionCount) ? `<span>弃答 ${Number(consensus.abstentionCount)}/3</span>` : ""}
+          <span>${escapeHtml(consensusEvidenceLabel(field, consensus))}</span>
+          <span>${consensusPolicyLabel(consensus.policy)}策略</span>
+        `}
       </div>
       <div class="ai-judgment" role="group" aria-label="${escapeHtml(field.label)}人工裁定">
         ${["accept", "reject", "uncertain"].map((value) => `<button type="button" data-ai-judgment="${value}" data-field-id="${escapeHtml(field.id)}" aria-pressed="${String(judgment === value)}" aria-label="${labels[value]}${escapeHtml(field.label)}建议" title="${labels[value]}${escapeHtml(field.label)}建议" ${value === "accept" && consensus.status !== "unanimous" ? "disabled" : ""}>${symbols[value]}</button>`).join("")}
@@ -3388,6 +3508,8 @@ function modelReasoningMarkup(model) {
   const evidenceByField = new Map((Array.isArray(model.proposal.evidence) ? model.proposal.evidence : [])
     .map((item) => [item.fieldId, item]));
   const reasoning = Array.isArray(model.proposal.reasoning) ? model.proposal.reasoning : [];
+  const answerSources = model.proposal.answerSources && typeof model.proposal.answerSources === "object"
+    ? model.proposal.answerSources : {};
   if (!reasoning.length) return `<p class="ai-model-empty">模型未提供字段理由。</p>`;
   return `<div class="ai-model-reasoning">${reasoning.map((item) => {
     const evidence = evidenceByField.get(item.fieldId) || {};
@@ -3395,7 +3517,8 @@ function modelReasoningMarkup(model) {
     const verified = Boolean(item.evidenceVerified || evidence.verified);
     const location = evidence.location && typeof evidence.location === "object"
       ? Object.values(evidence.location).filter(Boolean).join(" · ") : "";
-    return `<article><strong>${escapeHtml(schemaField(item.fieldId)?.label || item.fieldId)}</strong><p>${escapeHtml(item.reason || "未提供理由")}</p>${quote ? `<blockquote>${escapeHtml(quote)}</blockquote><small class="${verified ? "verified" : "unverified"}">${verified ? "原文命中" : "未命中"}${location ? ` · ${escapeHtml(location)}` : ""}</small>` : `<small class="missing">未提供证据</small>`}</article>`;
+    const repairLabel = answerSources[item.fieldId] === "repair" ? `<small class="ai-repair-label">补答</small>` : "";
+    return `<article><strong>${escapeHtml(schemaField(item.fieldId)?.label || item.fieldId)}</strong>${repairLabel}<p>${escapeHtml(item.reason || "未提供理由")}</p>${quote ? `<blockquote>${escapeHtml(quote)}</blockquote><small class="${verified ? "verified" : "unverified"}">${verified ? "原文命中" : "未命中"}${location ? ` · ${escapeHtml(location)}` : ""}</small>` : `<small class="missing">未提供证据</small>`}</article>`;
   }).join("")}</div>`;
 }
 
@@ -3415,7 +3538,7 @@ function consensusModelDetails(consensus) {
 
 function consensusSuggestionContent(row, proposal, reviewedFields) {
   const successful = proposal.models.filter((item) => item.status === "success").length;
-  const manual = reviewedFields.filter((item) => item.consensus.status !== "unanimous").length;
+  const manual = reviewedFields.filter((item) => item.consensus.blocking !== false && item.consensus.status !== "unanimous").length;
   const mode = state.modelSettings.policy.reviewMode === "auto" ? "B 自动审核" : "A 辅助审核";
   return `
     <div class="ai-consensus-summary">
@@ -3426,7 +3549,7 @@ function consensusSuggestionContent(row, proposal, reviewedFields) {
     </div>
     <div class="ai-run-meta"><span>run ${escapeHtml(proposal.runId)}</span><span>快照 v${escapeHtml(proposal.snapshotVersion || 1)}</span></div>
     <div class="ai-consensus-fields">${reviewedFields.map(consensusFieldCard).join("")}</div>
-    ${proposal.blockers.length ? `<section class="ai-consensus-blockers"><strong>判定阻断</strong><ul>${proposal.blockers.map((item) => `<li>${escapeHtml(consensusBlockerLabel(item))}</li>`).join("")}</ul></section>` : `<p class="ai-consensus-pass">所有字段已满足当前共识规则。</p>`}
+    ${proposal.blockers.length ? `<section class="ai-consensus-blockers"><strong>判定阻断</strong><ul>${proposal.blockers.map((item) => `<li>${escapeHtml(consensusBlockerLabel(item, proposal.fields))}</li>`).join("")}</ul></section>` : `<p class="ai-consensus-pass">所有字段已满足当前共识规则。</p>`}
     ${state.aiRetryError ? `<p class="ai-retry-error" role="alert">${escapeHtml(state.aiRetryError)}</p>` : ""}
     ${consensusModelDetails(proposal)}
   `;
@@ -3619,7 +3742,7 @@ async function performAiExtraction(rowId) {
   };
   try {
     const consensusEnabled = Boolean(state.cloud.config?.consensusEnabled);
-    const requestPayload = consensusEnabled ? consensusRequestPayload(row, sourceText) : {
+    const requestPayload = consensusEnabled ? null : {
       workspaceId: state.workspaceId,
       rowId: row.id,
       sourceText,
@@ -3627,22 +3750,28 @@ async function performAiExtraction(rowId) {
       pageNo: row.pageNo,
       promptVersion: state.promptVersion,
       currentFields: Object.fromEntries(orderedSchema().map((field) => [field.id, String(fieldValue(row, field.id) || "")])),
-      schema: orderedSchema().map(({ id, label, prompt, required, evidenceRequired }) => ({ id, label, prompt, required, evidenceRequired }))
+      schema: orderedSchema().map(({ id, label, prompt, required, evidenceRequired }) => ({
+        id, label, prompt, required, evidenceRequired,
+        validationMode: ["pageNo", "sourceFile"].includes(id) ? "system" : "model"
+      }))
     };
-    const response = await fetch(consensusEnabled ? "./api/ai/consensus" : "./api/ai/extract", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestPayload)
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || `模型服务返回 ${response.status}`);
+    let payload;
+    if (consensusEnabled) {
+      payload = await requestConsensusForRow(row, sourceText);
+    } else {
+      const response = await fetch("./api/ai/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload)
+      });
+      payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `模型服务返回 ${response.status}`);
+    }
     if (!isCurrent()) {
       discardChangedInputs();
       return false;
     }
-    state.aiProposal = consensusEnabled
-      ? window.CalligraphyAiConsensus.normalizeConsensusResponse(payload)
-      : normalizedAiResponse(payload);
+    state.aiProposal = consensusEnabled ? payload : normalizedAiResponse(payload);
     state.aiFieldJudgments = consensusEnabled ? initializeConsensusJudgments(state.aiProposal) : {};
     state.aiStatus = "ready";
     if (consensusEnabled && state.aiProposal.decision === "auto_approve_record" && state.modelSettings.policy.reviewMode === "auto") {
@@ -3728,7 +3857,12 @@ function consensusAuditSnapshot(consensus) {
       value: result.value,
       policy: result.policy,
       verifiedEvidence: Number(result.verifiedEvidence) || 0,
-      votes: [...(result.votes || [])]
+      evidenceRequired: Boolean(result.evidenceRequired ?? schemaField(fieldId)?.evidenceRequired),
+      votes: [...(result.votes || [])],
+      voteCount: Number(result.voteCount) || 0,
+      abstentionCount: Number(result.abstentionCount) || 0,
+      reason: result.reason || "",
+      validationSource: result.validationSource || "model"
     }]));
   const models = (consensus?.models || []).map((item) => ({
     profileId: item.profileId,
@@ -3745,7 +3879,9 @@ function consensusAuditSnapshot(consensus) {
       fields: Object.fromEntries(Object.entries(item.proposal.fields || {}).filter(([fieldId]) => Boolean(schemaField(fieldId)))),
       reasoning: Array.isArray(item.proposal.reasoning) ? item.proposal.reasoning : [],
       evidence: Array.isArray(item.proposal.evidence) ? item.proposal.evidence : [],
-      abstentions: Array.isArray(item.proposal.abstentions) ? item.proposal.abstentions : []
+      abstentions: Array.isArray(item.proposal.abstentions) ? item.proposal.abstentions : [],
+      answerSources: Object.fromEntries(Object.entries(item.proposal.answerSources || {})
+        .filter(([fieldId, source]) => Boolean(schemaField(fieldId)) && ["direct", "repair"].includes(source)))
     } : null
   }));
   return {
@@ -3958,10 +4094,13 @@ function modeSummaryPanel(rows) {
 }
 
 function tableViewActions() {
+  const batchModeLabel = state.batchJob?.running ? "批量任务运行中" : state.batchMode ? "退出多选" : "进入多选";
+  const batchModeButton = `<button type="button" class="icon-control ${state.batchMode ? "active" : ""}" data-batch-mode aria-pressed="${String(state.batchMode)}" aria-label="${batchModeLabel}" title="${batchModeLabel}" ${state.batchJob?.running ? "disabled" : ""}>☑</button>`;
   if (state.detailMode === "review") {
     return `
       <div class="table-view-actions review-view-actions" aria-label="回检视图控制">
         <button type="button" class="active icon-control" data-confidence-sort aria-pressed="true" aria-label="${confidenceSortLabel()}" title="${confidenceSortLabel()}">${state.confidenceSort === "desc" ? "⇣" : "⇡"}</button>
+        ${batchModeButton}
         <button type="button" data-quality-batch-review title="将当前筛选条目标记为待复核" ${visibleRows().length ? "" : "disabled"}>批量复核</button>
         <button type="button" data-problem-export ${state.rows.length ? "" : "disabled"}>导出问题</button>
       </div>
@@ -3971,10 +4110,58 @@ function tableViewActions() {
   return `
     <div class="table-view-actions" aria-label="表格视图控制">
       <button type="button" class="active icon-control" data-confidence-sort aria-pressed="true" aria-label="${confidenceSortLabel()}" title="${confidenceSortLabel()}">${state.confidenceSort === "desc" ? "⇣" : "⇡"}</button>
+      ${batchModeButton}
       <button type="button" class="icon-control ${state.tableFocus ? "active" : ""}" data-table-focus aria-pressed="${String(state.tableFocus)}" aria-label="${focusLabel}" title="${focusLabel}" ${state.aiPanelOpen ? "disabled" : ""}>⛶</button>
       <button type="button" class="icon-control ${state.tableHeaderCollapsed ? "active" : ""}" data-table-head-toggle aria-pressed="${String(state.tableHeaderCollapsed)}" aria-label="${state.tableHeaderCollapsed ? "显示表头" : "收起表头"}" title="${state.tableHeaderCollapsed ? "显示表头" : "收起表头"}">▤</button>
     </div>
   `;
+}
+
+function batchActionBar() {
+  if (!state.batchMode) return "";
+  const rows = batchSelectedRows();
+  const job = state.batchJob;
+  if (!rows.length && !job) return "";
+  if (job) {
+    const actionable = (job.results || []).filter((item) => item.category !== "approved");
+    const currentRow = state.rows.find((row) => row.id === job.currentId);
+    return `
+      <section class="batch-action-bar batch-job-bar ${job.running ? "is-running" : "is-complete"}" aria-live="polite" aria-label="批量处理进度">
+        <div class="batch-job-summary">
+          <strong>${job.running ? "处理中" : job.stopped ? "已停止" : "处理完成"} ${job.completed} / ${job.total}</strong>
+          <span>通过 ${job.approved}</span><span>待复核 ${job.review}</span><span>失败 ${job.failed}</span>
+          ${job.running
+            ? '<button type="button" class="icon-control danger" data-batch-stop aria-label="停止剩余任务" title="停止剩余任务">■</button>'
+            : '<button type="button" class="icon-control" data-batch-job-close aria-label="关闭处理结果" title="关闭处理结果">×</button>'}
+        </div>
+        ${job.running && job.currentId ? `<p class="batch-current-row">正在核验 ${escapeHtml(job.currentId)}${currentRow ? ` · ${escapeHtml(fieldValue(currentRow, "author") || "未标注")}` : ""}</p>` : ""}
+        ${actionable.length ? `
+          <details class="batch-result-details" open>
+            <summary>需要处理 ${actionable.length} 条</summary>
+            <div class="batch-result-list">
+              ${actionable.map((item) => `
+                <button type="button" class="batch-result-item ${escapeHtml(item.category)}" data-batch-result-row="${escapeHtml(item.rowId)}" aria-label="查看 ${escapeHtml(item.rowId)} 的${item.category === "failed" ? "失败" : "待复核"}原因">
+                  <span class="batch-result-title"><i>${item.category === "failed" ? "失败" : "待复核"}</i><strong>${escapeHtml(item.rowId)}</strong>${item.rowLabel ? `<em>${escapeHtml(item.rowLabel)}</em>` : ""}</span>
+                  <span class="batch-result-reason">${escapeHtml(item.reason)}</span>
+                  ${item.details?.length ? `<span class="batch-result-details-text">${item.details.map(escapeHtml).join(" · ")}</span>` : ""}
+                  <span class="batch-result-open">查看条目 ›</span>
+                </button>`).join("")}
+            </div>
+          </details>` : (!job.running ? '<p class="batch-result-pass">本批次没有需要人工处理的条目。</p>' : "")}
+      </section>`;
+  }
+  return `
+    <section class="batch-action-bar" aria-label="批量处理">
+      <strong>已选 ${rows.length} 条</strong>
+      <div class="batch-action-buttons">
+        <button type="button" class="icon-control" data-batch-ai aria-label="三模型核验" title="三模型核验">AI</button>
+        <button type="button" class="icon-control" data-batch-confirm aria-label="批量确认" title="批量确认">✓</button>
+        <button type="button" class="icon-control" data-batch-issue aria-label="批量标记问题" title="批量标记问题">!</button>
+        <button type="button" class="icon-control" data-batch-export aria-label="导出选中条目" title="导出选中条目">⇩</button>
+        <button type="button" class="icon-control danger" data-batch-delete aria-label="删除选中条目" title="删除选中条目">×</button>
+        <button type="button" class="icon-control" data-batch-clear aria-label="清空选择" title="清空选择">⊘</button>
+      </div>
+    </section>`;
 }
 
 function detailPanel(row) {
@@ -4221,6 +4408,7 @@ function reviewChangeCheckpoint(rows = []) {
     rows: [...state.rows], trashRows: [...state.trashRows],
     reviewState: JSON.parse(JSON.stringify(state.reviewState)), undoAction: state.undoAction,
     manifest: state.manifest, selectedId: state.selectedId, editingId: state.editingId,
+    batchSelectedIds: new Set(state.batchSelectedIds), batchIssueOpen: state.batchIssueOpen,
     resolutionRowId: state.resolutionRowId, queueIds: visibleRows().map((item) => item.id)
   };
 }
@@ -4234,6 +4422,447 @@ function restoreReviewCheckpoint(checkpoint) {
   for (const key of ["rows", "trashRows", "reviewState", "undoAction", "manifest", "selectedId", "editingId", "resolutionRowId"]) {
     state[key] = checkpoint[key];
   }
+  state.batchSelectedIds = new Set(checkpoint.batchSelectedIds || []);
+  state.batchIssueOpen = Boolean(checkpoint.batchIssueOpen);
+}
+
+function finishBatchChange(rows, checkpoint, type, reason) {
+  state.manifest = buildManifest(state.rows);
+  reconcileBatchSelection();
+  if (!state.rows.some((row) => row.id === state.selectedId)) state.selectedId = visibleRows()[0]?.id || "";
+  if (!saveWorkspace()) {
+    restoreReviewCheckpoint(checkpoint);
+    return false;
+  }
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  rows.forEach((row) => syncRowChangeToCloud(row, type, reason, []));
+  render();
+  loadSelectedSource();
+  return true;
+}
+
+function batchConfirmSelected() {
+  const rows = batchSelectedRows();
+  if (!rows.length) return false;
+  const checkpoint = reviewChangeCheckpoint(rows);
+  const at = new Date().toISOString();
+  rows.forEach((row) => {
+    row.reviewed = true;
+    row.reviewedAt = at;
+    addHistory(row, { type: "batch-confirm", actor: "human", reason: "批量人工确认当前条目。", changes: [] });
+    state.reviewState.confirmedIds = state.reviewState.confirmedIds.filter((id) => id !== row.id);
+    state.reviewState.confirmedIds.push(row.id);
+    state.reviewState.edits[row.id] = editableSnapshot(row);
+  });
+  state.undoAction = null;
+  return finishBatchChange(rows, checkpoint, "batch-confirm", "批量人工确认当前条目。");
+}
+
+function batchDeleteSelected() {
+  const rows = batchSelectedRows();
+  if (!rows.length) return false;
+  if (!window.confirm(`将选中的 ${rows.length} 条移入回收站？`)) return false;
+  const checkpoint = reviewChangeCheckpoint(rows);
+  const ids = new Set(rows.map((row) => row.id));
+  rows.forEach((row) => {
+    row.deleted = true;
+    row.deletedAt = new Date().toISOString();
+    addHistory(row, { type: "batch-delete", actor: "human", reason: "批量移入回收站。", changes: [] });
+    if (!state.reviewState.deletedIds.includes(row.id)) state.reviewState.deletedIds.push(row.id);
+    state.reviewState.confirmedIds = state.reviewState.confirmedIds.filter((id) => id !== row.id);
+  });
+  state.trashRows = [...state.trashRows, ...rows];
+  state.rows = state.rows.filter((row) => !ids.has(row.id));
+  state.batchSelectedIds = new Set([...state.batchSelectedIds].filter((id) => !ids.has(id)));
+  state.undoAction = null;
+  return finishBatchChange(rows, checkpoint, "batch-delete", "批量移入回收站。");
+}
+
+function batchIssueModal() {
+  if (!state.batchIssueOpen) return "";
+  const rows = batchSelectedRows();
+  const tags = window.CalligraphySchema?.problemTags || [];
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="批量标记问题">
+      <form class="edit-modal workflow-modal batch-issue-modal" id="batchIssueForm">
+        <div class="modal-head"><div><h2>批量标记问题</h2><p>将应用到 ${rows.length} 条选中记录</p></div><button type="button" data-batch-issue-close aria-label="关闭" title="关闭">×</button></div>
+        <label>问题标签<select name="problemTag" required>${tags.map((tag) => `<option value="${escapeHtml(tag.key)}">${escapeHtml(tag.label)}</option>`).join("")}</select></label>
+        <label>补充说明<textarea name="problemNote" rows="4" maxlength="1000" placeholder="可选：记录需要人工核对的原因"></textarea></label>
+        <div class="modal-actions"><button type="button" data-batch-issue-close>取消</button><button type="submit" ${rows.length ? "" : "disabled"}>应用到选中条目</button></div>
+      </form>
+    </div>`;
+}
+
+function batchMarkIssue(form) {
+  const rows = batchSelectedRows();
+  if (!rows.length) return false;
+  const data = new FormData(form);
+  const tag = String(data.get("problemTag") || "");
+  const tagDefinition = (window.CalligraphySchema?.problemTags || []).find((item) => item.key === tag);
+  if (!tagDefinition) return false;
+  const note = String(data.get("problemNote") || "").trim();
+  const checkpoint = reviewChangeCheckpoint(rows);
+  rows.forEach((row) => {
+    const before = normalizeProblemTags(row);
+    row.problemTags = [...new Set([...before, tag])];
+    row.flagged = true;
+    row.reviewed = false;
+    row.status = "待复核";
+    row.bucket = "review";
+    row.edited = true;
+    row.problemResolution = { status: "open", at: new Date().toISOString(), reason: note || `批量标记：${tagDefinition.label}` };
+    appendIssue(row, note || `批量标记：${tagDefinition.label}`);
+    row.annotations = normalizeAnnotations(row);
+    row.annotations.push({
+      id: `annotation-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      type: tag === "page_issue" ? "page" : tag === "author_issue" ? "attribution" : "other",
+      fieldId: "",
+      fieldLabel: "整条记录",
+      body: note || `批量标记：${tagDefinition.label}`,
+      at: new Date().toISOString(),
+    });
+    addHistory(row, {
+      type: "batch-issue",
+      actor: "human",
+      reason: `批量标记问题：${tagDefinition.label}${note ? `；${note}` : ""}`,
+      changes: [{ fieldId: "problemTags", before: before.join(";"), after: row.problemTags.join(";") }],
+    });
+    state.reviewState.confirmedIds = state.reviewState.confirmedIds.filter((id) => id !== row.id);
+    state.reviewState.edits[row.id] = editableSnapshot(row);
+  });
+  state.batchIssueOpen = false;
+  state.undoAction = null;
+  return finishBatchChange(rows, checkpoint, "batch-issue", "批量标记问题。");
+}
+
+function persistBatchConsensusResult(row, consensus, category, reason) {
+  const checkpoint = reviewChangeCheckpoint(row);
+  const applyFields = category === "approved" || (category === "review" && consensus?.decision === "adopt_fields");
+  const changes = applyFields ? applyUnanimousConsensusFields(row, consensus) : [];
+  row.aiDraft = { ...(row.aiDraft || {}), ...Object.fromEntries(changes.map((change) => [change.fieldId, change.after])) };
+  row.modelVersion = consensus ? consensusModelVersion(consensus) : row.modelVersion;
+  row.promptVersion = state.promptVersion;
+  row.edited = row.edited || changes.length > 0;
+  if (category === "approved") {
+    row.reviewed = true;
+    row.reviewedAt = new Date().toISOString();
+    row.problemResolution = { status: "resolved", at: row.reviewedAt, reason: "批量三模型共识自动判过。" };
+  } else {
+    row.reviewed = false;
+    delete row.reviewedAt;
+    row.status = "待复核";
+    row.bucket = "review";
+    row.problemResolution = { status: "pending_review", at: new Date().toISOString(), reason };
+    appendIssue(row, reason);
+  }
+  addHistory(row, {
+    type: category === "approved" ? "ai-consensus-auto-approve" : category === "failed" ? "ai-consensus-batch-error" : "ai-consensus-batch-review",
+    actor: "system",
+    reason,
+    consensusRun: consensus ? consensusAuditSnapshot(consensus) : undefined,
+    changes,
+  });
+  state.reviewState.confirmedIds = state.reviewState.confirmedIds.filter((id) => id !== row.id);
+  if (row.reviewed) state.reviewState.confirmedIds.push(row.id);
+  state.reviewState.edits[row.id] = editableSnapshot(row);
+  state.manifest = buildManifest(state.rows);
+  if (!saveWorkspace()) {
+    restoreReviewCheckpoint(checkpoint);
+    return false;
+  }
+  syncRowChangeToCloud(row, category === "approved" ? "ai-consensus-auto-approve" : "ai-consensus-batch-review", reason, changes);
+  return true;
+}
+
+function batchAiOutcome(category, reason, details = []) {
+  return {
+    category,
+    reason: String(reason || "批量核验未返回原因。"),
+    details: [...new Set((details || []).map((item) => String(item || "").trim()).filter(Boolean))],
+  };
+}
+
+function batchConsensusIssueDetails(consensus) {
+  const modelErrors = (consensus?.models || [])
+    .filter((item) => item.status !== "success")
+    .map((item) => `${item.profile?.displayName || item.profileId || "模型"}：${item.error || "调用失败"}`);
+  const blockers = (consensus?.blockers || []).map((item) => consensusBlockerLabel(item, consensus?.fields || {}));
+  return [...new Set([...modelErrors, ...blockers].filter(Boolean))];
+}
+
+function saveBatchAiOutcome(row, consensus, category, reason, details = []) {
+  const saved = persistBatchConsensusResult(row, consensus, category, reason);
+  if (saved) return batchAiOutcome(category, reason, details);
+  return batchAiOutcome("failed", `${reason}；结果未能保存到当前工作区。`, details);
+}
+
+async function runBatchAiRow(row, job) {
+  const sourceText = aiSourceForRow(row);
+  if (!sourceText) {
+    const reason = "三模型批处理失败：当前条目没有可用原文。";
+    return saveBatchAiOutcome(row, null, "failed", reason);
+  }
+  const signature = aiInputSignature(row);
+  try {
+    const consensus = await requestConsensusForRow(row, sourceText, { reviewMode: "auto" });
+    if (job.workspaceId !== state.workspaceId) return batchAiOutcome("failed", "核验完成时工作区已切换，结果未写入。");
+    if (!state.rows.includes(row)) return batchAiOutcome("failed", "核验完成时条目已不存在，结果未写入。");
+    if (signature !== aiInputSignature(row)) {
+      const reason = "三模型返回期间条目已变化，未覆盖新编辑。请人工复核。";
+      return saveBatchAiOutcome(row, consensus, "review", reason);
+    }
+    const modelFailed = consensus.models.some((item) => item.status !== "success");
+    if (modelFailed) {
+      const details = batchConsensusIssueDetails(consensus);
+      const reason = details.length
+        ? `三模型批处理失败：${details.join("；")}`
+        : "三模型批处理存在模型失败，已转入人工复核。";
+      return saveBatchAiOutcome(row, consensus, "failed", reason, details);
+    }
+    if (consensus.decision === "auto_approve_record") {
+      return saveBatchAiOutcome(row, consensus, "approved", "批量三模型共识自动判过。");
+    }
+    const details = batchConsensusIssueDetails(consensus);
+    const reason = consensus.decision === "adopt_fields"
+      ? "已采纳一致字段，其余字段待人工复核。"
+      : "三模型未形成可自动判过的完整共识。";
+    return saveBatchAiOutcome(row, consensus, "review", reason, details);
+  } catch (error) {
+    const reason = `三模型批处理失败：${error?.message || "模型调用失败"}`;
+    return saveBatchAiOutcome(row, null, "failed", reason);
+  }
+}
+
+function batchReviewItems() {
+  return (state.batchJob?.results || []).filter((item) => item.category !== "approved");
+}
+
+function batchReviewResult(rowId = state.batchReviewRowId) {
+  return batchReviewItems().find((item) => item.rowId === rowId) || null;
+}
+
+function batchReviewAudit(row) {
+  return normalizeHistory(row).slice().reverse().find((event) => event.consensusRun)?.consensusRun || null;
+}
+
+function batchReviewDecisionLabel(decision) {
+  return {
+    auto_approve_record: "已自动判过",
+    adopt_fields: "部分字段可采纳",
+    needs_human_review: "需要人工复核"
+  }[decision] || "未形成结论";
+}
+
+function batchReviewConsensusFields(row, audit) {
+  const fields = orderedSchema().filter((field) => audit?.fields?.[field.id]);
+  if (!fields.length) return `<p class="batch-review-empty">本次运行没有留下可比较的字段建议。</p>`;
+  return `<div class="batch-review-field-list">${fields.map((field) => {
+    const result = audit.fields[field.id] || {};
+    const current = String(fieldValue(row, field.id) || "");
+    const suggested = String(result.value || "");
+    const status = consensusStatusLabel({ consensus: result });
+    const tone = result.status === "unanimous" ? "pass" : result.status === "split" ? "split" : "blocked";
+    return `<article class="batch-review-field ${tone}">
+      <header><strong>${escapeHtml(field.label)}</strong><span>${escapeHtml(status)}</span></header>
+      <dl><dt>当前</dt><dd>${escapeHtml(current || "空")}</dd><dt>AI 建议</dt><dd>${escapeHtml(suggested || "空")}</dd></dl>
+      <p>${escapeHtml(consensusEvidenceLabel(field, result))}${result.votes?.length ? ` · ${escapeHtml(result.votes.join(" ｜ "))}` : ""}</p>
+    </article>`;
+  }).join("")}</div>`;
+}
+
+function batchReviewModelDetails(audit) {
+  const models = audit?.models || [];
+  if (!models.length) return `<p class="batch-review-empty">模型调用失败或未保存模型方案，可依据左侧原文和上方失败原因处理。</p>`;
+  return `<div class="batch-review-model-list">${models.map((model, index) => {
+    const name = model.profile?.displayName || model.profileId || "模型";
+    const proposalFields = Object.entries(model.proposal?.fields || {});
+    return `<details class="batch-review-model" ${index === 0 ? "open" : ""}>
+      <summary>
+        <span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(model.profile?.model || "未记录模型")} · ${escapeHtml(model.profile?.modelFamily || "未知家族")}</small></span>
+        <em class="${escapeHtml(model.status || "error")}">${model.status === "success" ? `${Number(model.elapsedMs) || 0} ms` : "调用失败"}</em>
+      </summary>
+      <div class="batch-review-model-body">
+        ${model.status !== "success" ? `<p class="ai-model-error">${escapeHtml(model.error || "模型返回异常")}</p>` : ""}
+        ${proposalFields.length ? `<dl class="batch-review-model-fields">${proposalFields.map(([fieldId, value]) => `<dt>${escapeHtml(schemaField(fieldId)?.label || fieldId)}</dt><dd>${escapeHtml(value || "空")}</dd>`).join("")}</dl>` : ""}
+        ${model.status === "success" ? modelReasoningMarkup(model) : ""}
+      </div>
+    </details>`;
+  }).join("")}</div>`;
+}
+
+function batchReviewModal() {
+  const row = state.rows.find((item) => item.id === state.batchReviewRowId);
+  if (!row) return "";
+  const result = batchReviewResult(row.id);
+  const audit = batchReviewAudit(row);
+  const items = batchReviewItems();
+  const index = items.findIndex((item) => item.rowId === row.id);
+  const author = fieldValue(row, "author") || "未标注书家";
+  const scriptType = fieldValue(row, "scriptType") || "未标注书体";
+  const quote = fieldValue(row, "quote") || "";
+  const blockers = audit?.blockers || [];
+  const canMoveBack = index > 0;
+  const canMoveForward = index >= 0 && index < items.length - 1;
+  return `<div class="batch-review-backdrop" role="dialog" aria-modal="true" aria-labelledby="batchReviewTitle">
+    <section class="batch-review-workspace">
+      <header class="batch-review-head">
+        <div class="batch-review-heading">
+          <span class="batch-review-kicker">批量异常审校</span>
+          <h2 id="batchReviewTitle" tabindex="-1">${escapeHtml(author)} · ${escapeHtml(row.id)}</h2>
+          <p>${escapeHtml(scriptType)} · ${escapeHtml(row.sourceFile || "无原文文件")} · 第 ${escapeHtml(row.pageNo || "-")} 页</p>
+        </div>
+        <div class="batch-review-progress" aria-label="异常条目进度">
+          <button type="button" class="icon-control" data-batch-review-step="-1" ${canMoveBack ? "" : "disabled"} aria-label="上一条异常" title="上一条异常">‹</button>
+          <strong>${index >= 0 ? index + 1 : 1} / ${Math.max(items.length, 1)}</strong>
+          <button type="button" class="icon-control" data-batch-review-step="1" ${canMoveForward ? "" : "disabled"} aria-label="下一条异常" title="下一条异常">›</button>
+          <button type="button" class="icon-control batch-review-close" data-batch-review-close aria-label="关闭全屏审校" title="关闭全屏审校">×</button>
+        </div>
+      </header>
+      <div class="batch-review-alert ${escapeHtml(result?.category || "review")}">
+        <strong>${result?.category === "failed" ? "运行失败" : "存在出入"}</strong>
+        <p>${escapeHtml(result?.reason || "此条需要人工复核。")}</p>
+        ${result?.details?.length ? `<ul>${result.details.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+      </div>
+      <div class="batch-review-body">
+        <section class="batch-review-pane batch-review-record" aria-labelledby="batchReviewRecordTitle">
+          <header><span>01</span><div><h3 id="batchReviewRecordTitle">条目与原文</h3><p>当前记录和可回溯的原文位置</p></div></header>
+          <div class="batch-review-pane-scroll">
+            <blockquote>${escapeHtml(quote || "无摘录")}</blockquote>
+            <div class="batch-review-source"><strong>原文上下文</strong>${highlightedSource(row)}</div>
+            <dl class="batch-review-current-fields">${orderedSchema().map((field) => `<dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(fieldValue(row, field.id) || "未标注")}</dd>`).join("")}</dl>
+          </div>
+        </section>
+        <section class="batch-review-pane batch-review-consensus" aria-labelledby="batchReviewConsensusTitle">
+          <header><span>02</span><div><h3 id="batchReviewConsensusTitle">AI 共识</h3><p>逐字段对照当前值与综合建议</p></div></header>
+          <div class="batch-review-pane-scroll">
+            ${audit ? `<div class="batch-review-decision"><span>综合结论</span><strong>${escapeHtml(batchReviewDecisionLabel(audit.decision))}</strong><small>run ${escapeHtml(audit.runId || "-")} · 快照 v${escapeHtml(audit.snapshotVersion || 1)}</small></div>` : `<p class="batch-review-empty">本次失败发生在形成共识之前，没有可用的共识快照。</p>`}
+            ${blockers.length ? `<div class="batch-review-blockers"><strong>需要人工处理</strong><ul>${blockers.map((item) => `<li>${escapeHtml(consensusBlockerLabel(item, audit.fields || {}))}</li>`).join("")}</ul></div>` : ""}
+            ${batchReviewConsensusFields(row, audit)}
+          </div>
+        </section>
+        <section class="batch-review-pane batch-review-models" aria-labelledby="batchReviewModelsTitle">
+          <header><span>03</span><div><h3 id="batchReviewModelsTitle">AI 助手方案</h3><p>展开查看各模型的建议、理由与证据</p></div></header>
+          <div class="batch-review-pane-scroll">${batchReviewModelDetails(audit)}</div>
+        </section>
+      </div>
+      <footer class="batch-review-actions">
+        <button type="button" data-batch-review-close>返回批量结果</button>
+        <button type="button" data-batch-review-edit>修改字段</button>
+        <button type="button" class="primary" data-batch-review-confirm>${row.reviewed ? "已确认，查看下一条" : "确认此条并继续"}</button>
+      </footer>
+    </section>
+  </div>`;
+}
+
+function closeBatchReview() {
+  if (!state.batchReviewRowId) return false;
+  state.batchReviewRowId = "";
+  render();
+  return true;
+}
+
+function moveBatchReview(step) {
+  const items = batchReviewItems();
+  const current = items.findIndex((item) => item.rowId === state.batchReviewRowId);
+  const next = items[current + Number(step)];
+  if (!next) return false;
+  return openBatchResult(next.rowId);
+}
+
+function confirmBatchReview() {
+  const row = state.rows.find((item) => item.id === state.batchReviewRowId);
+  if (!row) return false;
+  if (!row.reviewed && !confirmRow(row.id)) return false;
+  if (!moveBatchReview(1)) render();
+  return true;
+}
+
+function openBatchResult(rowId) {
+  const row = state.rows.find((item) => item.id === rowId);
+  if (!row) return false;
+  if (!visibleRows().some((item) => item.id === rowId)) {
+    state.filter = "all";
+    state.query = "";
+    state.qualityFocus = null;
+  }
+  state.selectedId = rowId;
+  state.batchReviewRowId = rowId;
+  state.detailCollapsed = false;
+  state.sourceText = "";
+  state.sourceStatus = "idle";
+  resetResearchForRow(row);
+  resetAiForRow(row);
+  try {
+    localStorage.setItem(storageKey() + ":selection", rowId);
+  } catch {
+    state.saveError = "当前位置未保存";
+  }
+  render();
+  document.querySelector("#batchReviewTitle")?.focus({ preventScroll: true });
+  loadSelectedSource();
+  return true;
+}
+
+function stopBatchAiReview() {
+  if (!state.batchJob?.running) return false;
+  state.batchJob.stopRequested = true;
+  return true;
+}
+
+async function startBatchAiReview() {
+  const rows = batchSelectedRows();
+  if (!rows.length || state.batchJob?.running || !state.cloud.config?.consensusEnabled) return false;
+  const modelCount = state.modelSettings.profiles.filter((profile) => profile.enabled && profile.configured).length;
+  if (!modelCount) return false;
+  if (!window.confirm(`将对 ${rows.length} 条记录执行三模型核验，预计调用 ${rows.length * modelCount} 次模型。完整共识将自动判过，是否继续？`)) return false;
+  const job = {
+    id: `batch-${Date.now().toString(36)}`,
+    workspaceId: state.workspaceId,
+    rowIds: rows.map((row) => row.id),
+    total: rows.length,
+    completed: 0,
+    approved: 0,
+    review: 0,
+    failed: 0,
+    currentId: "",
+    running: true,
+    stopRequested: false,
+    stopped: false,
+    results: [],
+  };
+  state.batchJob = job;
+  render();
+  for (const rowId of job.rowIds) {
+    if (job.stopRequested || job.workspaceId !== state.workspaceId) {
+      job.stopped = true;
+      break;
+    }
+    const row = state.rows.find((item) => item.id === rowId);
+    if (!row) {
+      job.results.push({ rowId, rowLabel: "", ...batchAiOutcome("failed", "条目已不存在，无法继续核验。") });
+      job.failed += 1;
+      job.completed += 1;
+      continue;
+    }
+    job.currentId = row.id;
+    const outcome = await runBatchAiRow(row, job);
+    job.results.push({
+      rowId: row.id,
+      rowLabel: fieldValue(row, "author") || fieldValue(row, orderedSchema({ includeHidden: false })[0]?.id) || "未标注",
+      ...outcome,
+    });
+    job.completed += 1;
+    if (outcome.category === "approved") job.approved += 1;
+    else if (outcome.category === "review") job.review += 1;
+    else job.failed += 1;
+    if (job.workspaceId === state.workspaceId) render();
+  }
+  job.running = false;
+  job.currentId = "";
+  job.stopped = job.stopped || job.stopRequested;
+  if (job.workspaceId === state.workspaceId) render();
+  return true;
 }
 
 function rememberUndo(row, label) {
@@ -4770,16 +5399,21 @@ function exportMainTableCsv() {
   openExportPanel();
 }
 
-function openExportPanel() {
+function openExportPanel(scope = "all") {
   state.exportOpen = true;
-  state.exportScope = "all";
+  state.exportScope = scope === "selected" && batchSelectedRows().length ? "selected" : "all";
   state.exportMode = "draft";
   state.exportMessage = "";
   render();
 }
 
 function deliveryRows() {
+  if (state.exportScope === "selected") return batchSelectedRows();
   return state.exportScope === "view" ? visibleRows() : state.rows;
+}
+
+function deliveryScopeLabel() {
+  return state.exportScope === "selected" ? "选中条目" : state.exportScope === "view" ? "当前筛选" : "全部主表";
 }
 
 function deliveryFacts(rows) {
@@ -4811,7 +5445,7 @@ function createFormalRelease() {
     metadata: {
       id, version, workspaceId: state.workspaceId, datasetName: state.datasetName,
       createdAt: new Date().toISOString(), actor: state.cloud.user?.email || "本地用户",
-      scope: state.exportScope, scopeLabel: state.exportScope === "view" ? "当前筛选" : "全部主表",
+      scope: state.exportScope, scopeLabel: deliveryScopeLabel(),
       selection: { filter: state.filter, query: state.query, qualityFocus: state.qualityFocus },
       schemaVersion: state.schemaVersion, rulesVersion: "delivery-v1",
       filename: "书论成果-v" + String(version).padStart(3, "0") + "-" + id.slice(0, 8)
@@ -4852,7 +5486,7 @@ function downloadWorkingDraft() {
   const rows = deliveryRows();
   if (!rows.length) return;
   const csv = window.CalligraphyExportWorkflow.buildMainExport(exportableRows(rows), exportFields());
-  const scope = state.exportScope === "view" ? "当前筛选" : "全部主表";
+  const scope = deliveryScopeLabel();
   downloadBlob("工作草稿-" + scope + "-" + new Date().toISOString().slice(0, 10) + ".csv", "\uFEFF" + csv + "\r\n", "text/csv;charset=utf-8");
 }
 
@@ -4885,7 +5519,7 @@ function deliveryModal() {
             <label><input type="radio" name="deliveryMode" value="draft" ${!formal ? "checked" : ""}>工作草稿</label>
             <label><input type="radio" name="deliveryMode" value="formal" ${formal ? "checked" : ""}>正式成果</label>
           </fieldset>
-          <label>范围<select name="deliveryScope"><option value="all" ${state.exportScope === "all" ? "selected" : ""}>全部主表</option><option value="view" ${state.exportScope === "view" ? "selected" : ""}>当前筛选</option></select></label>
+          <label>范围<select name="deliveryScope"><option value="all" ${state.exportScope === "all" ? "selected" : ""}>全部主表</option><option value="view" ${state.exportScope === "view" ? "selected" : ""}>当前筛选</option>${batchSelectedRows().length ? `<option value="selected" ${state.exportScope === "selected" ? "selected" : ""}>选中条目</option>` : ""}</select></label>
         </div>
         <div class="import-counts"><span><b>${rows.length}</b>所选条目</span><span><b>${assessment.blocked}</b>阻塞条目</span><span><b>${rows.length - assessment.blocked}</b>通过检查</span></div>
         <div class="delivery-checks">${assessment.checks.map((check) => `<button type="button" data-delivery-blocker="${check.key}" ${check.count ? "" : "disabled"}><span>${check.label}</span><strong>${check.count}</strong></button>`).join("")}</div>
@@ -5763,7 +6397,7 @@ function renderShell(content) {
   const workspaceEntryClass = state.workspaceEntryMotion ? "workspace-entering" : "";
   const sectionLabel = currentSectionLabel();
   app.innerHTML = `
-    <main class="app-shell ${state.view === "home" ? "home-shell" : ""} ${state.view === "detail" ? `detail-shell detail-mode-${state.detailMode}` : ""} ${state.tableFocus ? "table-focus-shell" : ""} ${motionClass} ${workspaceEntryClass}" ${state.primaryNavOpen ? "inert" : ""}>
+    <main class="app-shell ${state.view === "home" ? "home-shell" : ""} ${state.view === "ingest" ? "ingest-shell" : ""} ${state.view === "detail" ? `detail-shell detail-mode-${state.detailMode}` : ""} ${state.tableFocus ? "table-focus-shell" : ""} ${motionClass} ${workspaceEntryClass}" ${state.primaryNavOpen ? "inert" : ""}>
       <header class="topbar compact">
         <div class="brand-cluster">
           <button type="button" class="brand-mark-trigger" data-primary-nav-toggle aria-label="打开工作区导航" title="打开工作区导航" aria-expanded="${String(state.primaryNavOpen)}">
@@ -5789,6 +6423,7 @@ function renderShell(content) {
         <nav class="drawer-nav">
           <button type="button" class="${state.view === "home" ? "active" : ""}" data-view="home" ${state.view === "home" ? "aria-current='page'" : ""}>工作台</button>
           <button type="button" data-home-focus="file">材料库</button>
+          <button type="button" class="${state.view === "ingest" ? "active" : ""}" data-view="ingest" ${state.view === "ingest" ? "aria-current='page'" : ""}>古籍入库</button>
           <button type="button" class="${state.view === "detail" && state.detailMode === "table" ? "active" : ""}" data-view="detail" data-detail-mode="table" ${state.view === "detail" && state.detailMode === "table" ? "aria-current='page'" : ""}>统一主表</button>
           <button type="button" class="${state.view === "detail" && state.detailMode === "review" ? "active" : ""}" data-view="detail" data-detail-mode="review" ${state.view === "detail" && state.detailMode === "review" ? "aria-current='page'" : ""}>回检修订</button>
           <button type="button" data-home-focus="export" ${state.rows.length || state.exportVersions.length ? "" : "disabled"}>成果导出</button>
@@ -5796,10 +6431,12 @@ function renderShell(content) {
         </nav>
       </aside>
     </div>
+    ${batchReviewModal()}
     ${editModal()}
     ${importMappingModal()}
     ${importConflictModal()}
     ${workflowModal()}
+    ${batchIssueModal()}
     ${deliveryModal()}
     ${dashboardImportSink()}
     ${templateDetailsModal()}
@@ -5839,6 +6476,7 @@ function renderHome() {
 }
 
 function renderDetail() {
+  reconcileBatchSelection();
   const rows = visibleRows();
   const row = selectedRow();
   state.selectedId = row?.id || "";
@@ -5902,6 +6540,7 @@ function renderDetail() {
         </div>
         ${modeSummaryPanel(rows)}
         ${resultsControlPanel(rows)}
+        ${batchActionBar()}
         ${resultTable(rows)}
       </section>
       ${detailPanel(row)}
@@ -5909,6 +6548,11 @@ function renderDetail() {
     </section>
   `);
   attachDetailEvents();
+}
+
+function renderAncientIngest() {
+  renderShell(window.AncientIngestUI?.render?.() || `<section class="ingest-loading">古籍入库模块加载失败</section>`);
+  window.AncientIngestUI?.attach?.();
 }
 
 function verifyDemoCredentials(account, password) {
@@ -6112,6 +6756,7 @@ function render() {
   const detail = document.querySelector(".detail-dock-body");
   const scroll = sameRow ? { x: table?.scrollLeft || 0, y: table?.scrollTop || 0, detail: detail?.scrollTop || 0 } : null;
   if (state.view === "home") renderHome();
+  else if (state.view === "ingest") renderAncientIngest();
   else renderDetail();
   if (preserveSearch) {
     document.querySelector("#searchInput")?.replaceWith(search);
@@ -6150,6 +6795,7 @@ function activateWorkspaceTool(tool) {
 
 function currentSectionLabel() {
   if (state.view === "home") return "工作台";
+  if (state.view === "ingest") return "古籍入库";
   return state.detailMode === "review" ? "回检修订" : "统一主表";
 }
 
@@ -6204,6 +6850,20 @@ function attachGlobalEvents() {
   document.querySelectorAll("[data-dashboard-queue]").forEach((button) => button.addEventListener("click", () => inspectDashboardQueue(button.dataset.dashboardQueue)));
   document.querySelector("#fileInput")?.addEventListener("change", (event) => processFiles([...event.currentTarget.files]));
   document.querySelector("[data-export-close]")?.addEventListener("click", () => { state.exportOpen = false; render(); });
+  document.querySelectorAll("[data-batch-review-close]").forEach((button) => button.addEventListener("click", closeBatchReview));
+  document.querySelectorAll("[data-batch-review-step]").forEach((button) => button.addEventListener("click", () => {
+    moveBatchReview(Number(button.dataset.batchReviewStep));
+  }));
+  document.querySelector("[data-batch-review-edit]")?.addEventListener("click", () => openEdit(state.batchReviewRowId));
+  document.querySelector("[data-batch-review-confirm]")?.addEventListener("click", confirmBatchReview);
+  document.querySelectorAll("[data-batch-issue-close]").forEach((button) => button.addEventListener("click", () => {
+    state.batchIssueOpen = false;
+    render();
+  }));
+  document.querySelector("#batchIssueForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    batchMarkIssue(event.currentTarget);
+  });
   document.querySelector("#deliveryForm")?.addEventListener("change", (event) => {
     const data = new FormData(event.currentTarget);
     state.exportScope = String(data.get("deliveryScope") || "all");
@@ -6435,6 +7095,18 @@ function shouldIgnoreShortcut(event) {
 }
 
 function handleWorkbenchShortcut(event) {
+  if (state.batchReviewRowId && event.key === "Escape" && !state.editingId) {
+    event.preventDefault();
+    closeBatchReview();
+    return;
+  }
+  if (state.batchReviewRowId) return;
+  if (state.batchIssueOpen && event.key === "Escape") {
+    event.preventDefault();
+    state.batchIssueOpen = false;
+    render();
+    return;
+  }
   if (state.aiPanelOpen && event.key === "Escape") {
     event.preventDefault();
     event.stopPropagation?.();
@@ -6446,12 +7118,18 @@ function handleWorkbenchShortcut(event) {
     setPrimaryNav(false);
     return;
   }
+  if (state.batchMode && event.key === "Escape" && !state.batchJob?.running) {
+    event.preventDefault();
+    setBatchMode(false);
+    render();
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "k") {
     event.preventDefault();
     document.querySelector("[data-global-search]")?.focus({ preventScroll: true });
     return;
   }
-  if (state.view !== "detail" || event.isComposing || state.templatePanelExpanded || state.conflictsOpen || state.exportOpen || state.pendingImport || state.resolutionRowId || state.trashOpen || state.workspaceListOpen || state.editingId || shouldIgnoreShortcut(event)) return;
+  if (state.view !== "detail" || event.isComposing || state.templatePanelExpanded || state.conflictsOpen || state.exportOpen || state.batchIssueOpen || state.pendingImport || state.resolutionRowId || state.trashOpen || state.workspaceListOpen || state.editingId || shouldIgnoreShortcut(event)) return;
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
     event.preventDefault();
     undoLastAction();
@@ -6482,6 +7160,9 @@ function attachDetailEvents() {
   document.querySelector("[data-table-head-toggle]")?.addEventListener("click", toggleTableHeader);
   document.querySelector("[data-confidence-sort]")?.addEventListener("click", toggleConfidenceSort);
   document.querySelector("[data-table-focus]")?.addEventListener("click", toggleTableFocus);
+  document.querySelector("[data-batch-mode]")?.addEventListener("click", () => {
+    if (setBatchMode(!state.batchMode)) render();
+  });
 
   document.querySelectorAll("[data-filter]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -6510,6 +7191,13 @@ function attachDetailEvents() {
   document.querySelector("#searchInput")?.addEventListener("compositionend", updateSearch);
 
   document.querySelector(".table-shell")?.addEventListener("click", (event) => {
+    const batchSelect = event.target.closest("[data-batch-select]");
+    if (batchSelect) {
+      event.stopPropagation();
+      toggleBatchSelection(batchSelect.dataset.batchSelect, batchSelect.checked);
+      render();
+      return;
+    }
     const action = event.target.closest("[data-row-action]");
     if (action) {
       event.stopPropagation();
@@ -6520,6 +7208,36 @@ function attachDetailEvents() {
     if (!item) return;
     selectResult(item.dataset.rowId);
   });
+
+  const visibleSelector = document.querySelector("[data-batch-select-visible]");
+  if (visibleSelector) {
+    visibleSelector.indeterminate = visibleBatchSelectionState().mixed;
+    visibleSelector.addEventListener("change", (event) => {
+      setVisibleBatchSelection(event.target.checked);
+      render();
+    });
+  }
+  document.querySelector("[data-batch-clear]")?.addEventListener("click", () => {
+    state.batchSelectedIds = new Set();
+    render();
+  });
+  document.querySelector("[data-batch-confirm]")?.addEventListener("click", batchConfirmSelected);
+  document.querySelector("[data-batch-ai]")?.addEventListener("click", startBatchAiReview);
+  document.querySelector("[data-batch-stop]")?.addEventListener("click", stopBatchAiReview);
+  document.querySelector("[data-batch-job-close]")?.addEventListener("click", () => {
+    state.batchJob = null;
+    state.batchReviewRowId = "";
+    render();
+  });
+  document.querySelectorAll("[data-batch-result-row]").forEach((button) => {
+    button.addEventListener("click", () => openBatchResult(button.dataset.batchResultRow));
+  });
+  document.querySelector("[data-batch-issue]")?.addEventListener("click", () => {
+    state.batchIssueOpen = true;
+    render();
+  });
+  document.querySelector("[data-batch-export]")?.addEventListener("click", () => openExportPanel("selected"));
+  document.querySelector("[data-batch-delete]")?.addEventListener("click", batchDeleteSelected);
 
   document.querySelector(".review-screen")?.addEventListener("click", (event) => {
     const open = event.target.closest("[data-ai-panel-open]");
@@ -6738,6 +7456,7 @@ function confirmPendingImport() {
   const before = Object.fromEntries(keys.map((key) => [key, state[key]]));
   const isNew = pending.mode === "new";
   if (isNew) {
+    resetBatchUiState();
     state.workspaceId = newWorkspaceId();
     state.datasetName = pending.workspace?.datasetName || pending.name;
     state.reviewState = { ...reviewDefaults(), ...(pending.workspace?.reviewState || {}) };
@@ -6898,6 +7617,7 @@ async function loadSelectedSource(options = {}) {
 
 async function loadBundledSampleData() {
   try {
+    const requestedIngest = location.hash === "#ingest" || state.view === "ingest";
     const requestedReviewMode = location.hash === "#review" || state.detailMode === "review";
     const embedded = window.CALLIGRAPHY_EMBEDDED_SAMPLE;
     let csvText = embedded?.csv || "";
@@ -6936,10 +7656,10 @@ async function loadBundledSampleData() {
       logEntry("success", "旧版第三轮综合总表", `已自动载入 ${rows.length} 行真实样本。`, { rows: rows.length, step: "样本导入" }),
       logEntry("success", "原文页缓存", `已载入 ${state.uploadedPages.size} 个 page_*.txt 原文页。`, { count: state.uploadedPages.size, step: "原文页" })
     ];
-    state.view = "detail";
+    state.view = requestedIngest ? "ingest" : "detail";
     state.detailMode = requestedReviewMode ? "review" : "table";
     applyDetailModeDefaults(state.detailMode);
-    location.hash = state.detailMode === "review" ? "#review" : "#detail";
+    location.hash = requestedIngest ? "#ingest" : state.detailMode === "review" ? "#review" : "#detail";
     return true;
   } catch (error) {
     state.uploadLog = [logEntry("warn", "真实样本", error.message, { step: "样本导入" })];
@@ -6949,12 +7669,17 @@ async function loadBundledSampleData() {
 
 async function init() {
   initButtonTooltips();
+  window.AncientIngestUI?.configure?.({
+    rerender: () => render(),
+    importFiles: (files) => processFiles(files),
+  });
   await initCloudRuntime();
   restoreRememberedEmail();
   restoreLocalDemoSession();
   const loadedCloudWorkspace = await loadCloudWorkspaceData();
   const loadedWorkspace = loadedCloudWorkspace || loadWorkspace();
   if (!loadedWorkspace) {
+    resetBatchUiState();
     state.workspaceId = newWorkspaceId();
     state.schemaTemplateId = "calligraphy-style";
     state.schema = defaultSchema(state.schemaTemplateId);

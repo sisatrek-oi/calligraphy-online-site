@@ -117,6 +117,119 @@ class SearchServiceTest(unittest.TestCase):
         self.assertEqual(first["decision"], "auto_approve_record")
         self.assertEqual(first["snapshotVersion"], 1)
 
+    def test_consensus_validates_source_metadata_without_model_votes(self):
+        profiles = self.consensus_profiles()
+
+        def fake_runner(_payload, profile):
+            return {
+                "profileId": profile["id"],
+                "status": "success",
+                "profile": server.public_model_profile(profile),
+                "proposal": self.consensus_proposal(),
+                "elapsedMs": 1,
+            }
+
+        payload = {
+            "runId": "system-fields-run",
+            "sourceText": "苏轼论书",
+            "sourceFile": "page_12.txt",
+            "pageNo": "12",
+            "currentFields": {
+                "author": "苏轼",
+                "pageNo": "12",
+                "sourceFile": "page_12.txt",
+            },
+            "schema": [
+                {"id": "author", "required": True, "evidenceRequired": True},
+                {"id": "pageNo", "required": True, "validationMode": "system"},
+                {"id": "sourceFile", "required": True, "validationMode": "system"},
+            ],
+            "reviewMode": "auto",
+            "defaultConsensus": "standard",
+        }
+        with (
+            patch.object(server, "active_model_profiles", return_value=profiles),
+            patch.object(server, "run_model_with_profile", side_effect=fake_runner),
+        ):
+            result = server.run_model_consensus(payload)
+
+        self.assertEqual(result["decision"], "auto_approve_record")
+        self.assertEqual(result["fields"]["pageNo"]["status"], "unanimous")
+        self.assertEqual(result["fields"]["pageNo"]["validationSource"], "system")
+        self.assertEqual(result["fields"]["pageNo"]["voteCount"], 0)
+        self.assertEqual(result["fields"]["sourceFile"]["value"], "page_12.txt")
+
+    def test_missing_source_metadata_is_reported_as_a_system_blocker(self):
+        payload = {
+            "sourceText": "苏轼论书",
+            "sourceFile": "page_12.txt",
+            "pageNo": "",
+            "currentFields": {"pageNo": ""},
+            "schema": [{"id": "pageNo", "required": True, "validationMode": "system"}],
+            "reviewMode": "assist",
+            "defaultConsensus": "standard",
+            "fieldOverrides": {},
+            "aliases": {},
+        }
+        result = server.finalize_consensus(payload, [])
+        self.assertEqual(result["fields"]["pageNo"]["status"], "blocked")
+        self.assertEqual(result["fields"]["pageNo"]["reason"], "missing_value")
+        self.assertEqual(result["fields"]["pageNo"]["validationSource"], "system")
+        self.assertIn("pageNo:blocked", result["blockers"])
+
+    def test_schema_assigns_field_specific_comparison_modes(self):
+        schema = server.normalize_ai_schema([
+            {"id": "quote"},
+            {"id": "scriptType"},
+            {"id": "confidence"},
+            {"id": "gate"},
+            {"id": "issue"},
+            {"id": "note"},
+            {"id": "author"},
+        ])
+        modes = {field["id"]: field["comparisonMode"] for field in schema}
+        self.assertEqual(modes, {
+            "quote": "quote",
+            "scriptType": "script_type",
+            "confidence": "confidence",
+            "gate": "token_set",
+            "issue": "advisory",
+            "note": "advisory",
+            "author": "exact",
+        })
+
+    def test_finalize_uses_semantic_comparison_and_ignores_advisory_wording(self):
+        current_quote = "落简挥毫，有郢匠乘风之势"
+        payload = server.normalize_consensus_payload({
+            "sourceText": current_quote,
+            "currentFields": {"quote": current_quote, "note": "原备注"},
+            "schema": [{"id": "quote", "required": True}, {"id": "note"}],
+            "reviewMode": "auto",
+            "defaultConsensus": "loose",
+        }, "semantic-run")
+        profiles = self.consensus_profiles()
+        quotes = [current_quote, "落简挥毫, 有郢匠乘风之势", current_quote + "。"]
+        notes = ["可直接保留", "建议保留", "保留即可"]
+        ordered = [{
+            "profileId": profile["id"],
+            "status": "success",
+            "profile": server.public_model_profile(profile),
+            "proposal": {
+                "fields": {"quote": quotes[index], "note": notes[index]},
+                "evidence": [],
+                "reasoning": [],
+                "abstentions": [],
+            },
+            "elapsedMs": 1,
+        } for index, profile in enumerate(profiles)]
+        result = server.finalize_consensus(payload, ordered)
+        self.assertEqual(result["fields"]["quote"]["status"], "unanimous")
+        self.assertEqual(result["fields"]["quote"]["value"], current_quote)
+        self.assertEqual(result["fields"]["note"]["status"], "blocked")
+        self.assertFalse(result["fields"]["note"]["blocking"])
+        self.assertEqual(result["blockers"], [])
+        self.assertEqual(result["decision"], "auto_approve_record")
+
     def test_retry_replaces_only_one_model_and_appends_snapshot(self):
         profiles = self.consensus_profiles()
 
@@ -179,6 +292,91 @@ class SearchServiceTest(unittest.TestCase):
                 )
         self.assertEqual(error.exception.status, 502)
         self.assertIn("格式", str(error.exception))
+
+    def test_model_proposal_uses_kimi_non_thinking_mode(self):
+        profile = {
+            **self.consensus_profiles()[0],
+            "model": "kimi-k2.6",
+            "modelFamily": "kimi",
+        }
+        provider = io.BytesIO(
+            json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": json.dumps(
+                                    {
+                                        "fields": {"author": "苏轼"},
+                                        "evidence": [],
+                                        "reasoning": {"author": "原文直指"},
+                                        "abstentions": [],
+                                    }
+                                )
+                            }
+                        }
+                    ]
+                }
+            ).encode()
+        )
+        with patch.object(server.urllib.request, "urlopen", return_value=provider) as urlopen:
+            server.request_model_proposal(
+                {
+                    "sourceText": "苏轼论书",
+                    "schema": [{"id": "author", "required": True}],
+                },
+                profile,
+            )
+        request_body = json.loads(urlopen.call_args.args[0].data)
+        self.assertNotIn("temperature", request_body)
+        self.assertEqual(request_body["thinking"], {"type": "disabled"})
+        self.assertEqual(request_body["max_tokens"], 1200)
+
+    def test_model_proposal_repairs_missing_fields_once(self):
+        profile = self.consensus_profiles()[0]
+        first = io.BytesIO(json.dumps({"choices": [{"message": {"content": json.dumps({
+            "fields": {},
+            "evidence": {},
+            "reasoning": {},
+            "abstentions": [{"fieldId": "author", "reason": "证据不足"}],
+        }, ensure_ascii=False)}}]}).encode())
+        second = io.BytesIO(json.dumps({"choices": [{"message": {"content": json.dumps({
+            "fields": {"author": "苏轼"},
+            "evidence": {"author": "苏轼"},
+            "reasoning": {"author": "原文直指"},
+            "abstentions": [],
+        }, ensure_ascii=False)}}]}).encode())
+
+        with patch.object(server.urllib.request, "urlopen", side_effect=[first, second]) as urlopen:
+            result = server.request_model_proposal({
+                "sourceText": "苏轼论书",
+                "currentFields": {"author": "王羲之"},
+                "schema": [{"id": "author", "label": "书家", "required": True}],
+            }, profile)
+
+        self.assertEqual(urlopen.call_count, 2)
+        self.assertEqual(result["fields"], {"author": "苏轼"})
+        self.assertEqual(result["answerSources"], {"author": "repair"})
+        self.assertEqual(result["abstentions"], [])
+        repair_body = json.loads(urlopen.call_args_list[1].args[0].data.decode("utf-8"))
+        self.assertEqual(repair_body["max_tokens"], 400)
+        self.assertIn("只补答以下字段", repair_body["messages"][1]["content"])
+
+    def test_model_proposal_fails_when_repair_still_omits_a_field(self):
+        profile = self.consensus_profiles()[0]
+        incomplete = lambda: io.BytesIO(json.dumps({"choices": [{"message": {"content": json.dumps({
+            "fields": {}, "evidence": {}, "reasoning": {}, "abstentions": [],
+        })}}]}).encode())
+
+        with patch.object(server.urllib.request, "urlopen", side_effect=[incomplete(), incomplete()]):
+            with self.assertRaises(server.ApiError) as error:
+                server.request_model_proposal({
+                    "sourceText": "苏轼论书",
+                    "currentFields": {"author": "王羲之"},
+                    "schema": [{"id": "author", "label": "书家", "required": True}],
+                }, profile)
+
+        self.assertEqual(str(error.exception), "模型补答后仍缺少字段：书家")
 
     def test_model_proposal_maps_provider_errors_to_safe_messages(self):
         profile = self.consensus_profiles()[0]
@@ -436,6 +634,30 @@ class SearchServiceTest(unittest.TestCase):
             request = urlopen.call_args.args[0]
             self.assertEqual(request.get_header("Authorization"), "Bearer draft-secret")
 
+    def test_model_connection_uses_kimi_non_thinking_mode(self):
+        response = io.BytesIO(
+            json.dumps({"choices": [{"message": {"content": "OK"}}]}).encode()
+        )
+        with patch.object(server.urllib.request, "urlopen", return_value=response) as urlopen:
+            server.test_model_connection(
+                {
+                    "apiUrl": "https://api.moonshot.cn/v1/chat/completions",
+                    "apiKey": "draft-secret",
+                    "model": "kimi-k2.6",
+                    "modelFamily": "kimi",
+                }
+            )
+        request_body = json.loads(urlopen.call_args.args[0].data)
+        self.assertNotIn("temperature", request_body)
+        self.assertEqual(request_body["thinking"], {"type": "disabled"})
+
+    def test_qwen_requests_disable_thinking_mode(self):
+        options = server.model_request_options({
+            "model": "qwen-plus",
+            "modelFamily": "qwen",
+        })
+        self.assertEqual(options, {"temperature": 0, "enable_thinking": False})
+
     def test_ai_extraction_uses_saved_model_config(self):
         provider = io.BytesIO(
             json.dumps(
@@ -445,9 +667,9 @@ class SearchServiceTest(unittest.TestCase):
                             "message": {
                                 "content": json.dumps(
                                     {
-                                        "fields": {},
-                                        "evidence": [],
-                                        "reasoning": [],
+                                        "fields": {"quote": "原文"},
+                                        "evidence": {"quote": "原文"},
+                                        "reasoning": {"quote": "原文直接命中"},
                                         "abstentions": [],
                                     }
                                 )
@@ -526,8 +748,11 @@ class SearchServiceTest(unittest.TestCase):
 
     def test_ai_extraction_filters_unknown_fields_and_verifies_evidence(self):
         provider_body = json.dumps({"choices": [{"message": {"content": json.dumps({
-            "fields": {"author": "王羲之", "unknown": "drop"},
-            "evidence": [{"fieldId": "author", "quote": "王羲之"}],
+            "fields": {"author": "王羲之", "script": "草书", "unknown": "drop"},
+            "evidence": [
+                {"fieldId": "author", "quote": "王羲之"},
+                {"fieldId": "script", "quote": "草书"},
+            ],
             "reasoning": [
                 {
                     "fieldId": "author",
@@ -543,9 +768,9 @@ class SearchServiceTest(unittest.TestCase):
                 },
                 {
                     "fieldId": "script",
-                    "decision": "guess",
-                    "reason": "无效决策必须丢弃。",
-                    "evidenceQuote": "王羲之",
+                    "decision": "change",
+                    "reason": "原文直接出现书体。",
+                    "evidenceQuote": "草书",
                 },
                 {
                     "fieldId": "author",
@@ -569,20 +794,29 @@ class SearchServiceTest(unittest.TestCase):
             result = server.run_model_extraction(payload)
         request_body = json.loads(urlopen.call_args.args[0].data.decode("utf-8"))
         self.assertEqual(request_body["thinking"], {"type": "disabled"})
-        self.assertEqual(request_body["max_tokens"], 2400)
+        self.assertEqual(request_body["max_tokens"], 1200)
         user_prompt = request_body["messages"][1]["content"]
         self.assertIn('"reasoning"', user_prompt)
-        self.assertIn("每个字段都必须输出一条 reasoning", user_prompt)
-        self.assertIn("即使保留当前值，也要说明保留理由", user_prompt)
-        self.assertEqual(result["proposal"]["fields"], {"author": "王羲之"})
+        self.assertIn("20字内理由", user_prompt)
+        self.assertIn("不得使用 abstain", user_prompt)
+        self.assertEqual(result["proposal"]["fields"], {"author": "王羲之", "script": "草书"})
         self.assertTrue(result["proposal"]["evidence"][0]["verified"])
-        self.assertEqual(result["proposal"]["reasoning"], [{
+        self.assertEqual(result["proposal"]["reasoning"][0], {
             "fieldId": "author",
             "decision": "change",
             "reason": "原文直接出现书家姓名。",
             "evidenceQuote": "王羲之",
             "evidenceVerified": True,
-        }])
+        })
+        self.assertEqual(result["proposal"]["reasoning"][1], {
+            "fieldId": "script",
+            "decision": "change",
+            "reason": "原文直接出现书体。",
+            "evidenceQuote": "草书",
+            "evidenceVerified": True,
+        })
+        self.assertEqual(result["proposal"]["abstentions"], [])
+        self.assertEqual(result["proposal"]["answerSources"], {"author": "direct", "script": "direct"})
         self.assertEqual(result["meta"]["promptVersion"], 2)
 
     def test_ai_reasoning_limits_text_and_marks_unmatched_evidence(self):
@@ -600,6 +834,74 @@ class SearchServiceTest(unittest.TestCase):
         self.assertEqual(len(reasoning["reason"]), 800)
         self.assertEqual(len(reasoning["evidenceQuote"]), 500)
         self.assertFalse(reasoning["evidenceVerified"])
+
+    def test_ai_normalization_ignores_abstention_when_model_already_gave_a_value(self):
+        schema = [{"id": "author", "label": "书家"}]
+        result = server.normalize_ai_proposal({
+            "fields": {"author": "王羲之"},
+            "evidence": [{"fieldId": "author", "quote": "王羲之"}],
+            "reasoning": [{
+                "fieldId": "author",
+                "decision": "keep",
+                "reason": "当前值看起来合理。",
+                "evidenceQuote": "王羲之",
+            }],
+            "abstentions": [{"fieldId": "author", "reason": "归属证据不足。"}],
+        }, schema, "王羲之善草书。")
+
+        self.assertEqual(result["fields"], {"author": "王羲之"})
+        self.assertTrue(result["evidence"][0]["verified"])
+        self.assertEqual(result["reasoning"], [{
+            "fieldId": "author",
+            "decision": "keep",
+            "reason": "当前值看起来合理。",
+            "evidenceQuote": "王羲之",
+            "evidenceVerified": True,
+        }])
+        self.assertEqual(result["abstentions"], [])
+
+    def test_ai_normalization_does_not_turn_abstention_into_a_vote(self):
+        schema = [{"id": "author", "label": "书家"}]
+        result = server.normalize_ai_proposal({
+            "fields": {},
+            "evidence": [],
+            "reasoning": [{
+                "fieldId": "author",
+                "decision": "abstain",
+                "reason": "归属证据不足。",
+                "evidenceQuote": "",
+            }],
+            "abstentions": [{"fieldId": "author", "reason": "归属证据不足。"}],
+        }, schema, "王羲之善草书。", {"author": "王羲之"})
+
+        self.assertEqual(result["fields"], {})
+        self.assertEqual(result["reasoning"], [])
+        self.assertEqual(result["answerSources"], {})
+        self.assertEqual(result["abstentions"], [])
+
+    def test_ai_normalization_accepts_compact_evidence_and_reasoning_maps(self):
+        result = server.normalize_ai_proposal({
+            "fields": {"author": "王羲之"},
+            "evidence": {"author": "王羲之"},
+            "reasoning": {"author": "原文直指"},
+            "abstentions": [],
+        }, [{"id": "author", "label": "书家"}], "王羲之善草书。", {"author": "王羲之"})
+
+        self.assertEqual(result["fields"], {"author": "王羲之"})
+        self.assertEqual(result["evidence"][0]["quote"], "王羲之")
+        self.assertTrue(result["evidence"][0]["verified"])
+        self.assertEqual(result["reasoning"][0]["decision"], "keep")
+        self.assertEqual(result["reasoning"][0]["reason"], "原文直指")
+        self.assertEqual(result["answerSources"], {"author": "direct"})
+
+    def test_ai_schema_accepts_an_omitted_legacy_abstentions_array(self):
+        result = server.validate_ai_proposal_schema({
+            "fields": {"author": "王羲之"},
+            "evidence": [],
+            "reasoning": [],
+        })
+
+        self.assertEqual(result["abstentions"], [])
 
     def test_ai_evidence_uses_the_consensus_normalization_rule(self):
         schema = [{"id": "quote", "label": "原文"}]
@@ -632,15 +934,33 @@ class SearchServiceTest(unittest.TestCase):
         )
         self.assertTrue(result["reasoning"][0]["evidenceVerified"])
 
-    def test_ai_prompt_requests_structured_evidence_location(self):
+    def test_ai_prompt_uses_compact_evidence_map_and_keeps_source_page(self):
         messages = server.build_ai_messages(
             {"sourceText": "苏轼论书", "pageNo": "12"},
             [{"id": "author", "label": "书家", "prompt": "", "required": True, "evidenceRequired": True}],
         )
-        self.assertIn('"location":{"page":"","paragraph":"","item":""}', messages[1]["content"])
+        self.assertIn('"evidence":{"字段ID":"原文最短逐字证据或空串"}', messages[1]["content"])
+        self.assertIn("页码：12", messages[1]["content"])
+
+    def test_ai_prompt_preserves_checkpoint_gate_for_legacy_workspace_schema(self):
+        payload = {
+            "sourceText": "苏轼论书",
+            "currentFields": {"gate": "checkpoint-source; checkpoint-final"},
+        }
+        schema = [{
+            "id": "gate",
+            "label": "门禁",
+            "prompt": "判断该条是否可入主表、需补证、或应排除。",
+            "required": False,
+            "evidenceRequired": False,
+        }]
+        messages = server.build_ai_messages(payload, schema)
+        repair = server.build_ai_repair_messages(payload, schema)
+        for content in (messages[1]["content"], repair[1]["content"]):
+            self.assertIn("必须沿用当前值中的 checkpoint-* 标签", content)
 
     def test_ai_extraction_requires_server_configuration(self):
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.object(server, "active_model_config", return_value=None):
             with self.assertRaises(server.ApiError) as error:
                 server.run_model_extraction({"sourceText": "原文", "schema": [{"id": "quote"}]})
         self.assertEqual(error.exception.status, 503)
@@ -655,7 +975,8 @@ class SearchServiceTest(unittest.TestCase):
 
     def test_ai_extraction_falls_back_to_prompt_version_1_for_nonnumeric_input(self):
         provider_body = json.dumps({"choices": [{"message": {"content": json.dumps({
-            "fields": {}, "evidence": [], "reasoning": [], "abstentions": []
+            "fields": {"author": "作者"}, "evidence": {"author": ""},
+            "reasoning": {"author": "根据原文判断"}, "abstentions": []
         })}}]}).encode("utf-8")
         payload = {"sourceText": "原文", "schema": [{"id": "author", "label": "书家"}], "promptVersion": "not-a-number"}
         env = {"MODEL_API_URL": "https://api.deepseek.com/chat/completions", "MODEL_API_KEY": "secret", "MODEL_NAME": "test-model"}
@@ -666,6 +987,28 @@ class SearchServiceTest(unittest.TestCase):
     def test_public_config_exposes_ai_capability_for_legacy_local_config(self):
         with patch.object(server.Path, "exists", return_value=True), patch.object(server.Path, "read_text", return_value='{"enabled": false}'), patch.dict(os.environ, {}, clear=True):
             self.assertEqual(server.public_cloud_config(), {"enabled": False, "aiEnabled": False})
+
+    def test_ancient_ingest_extraction_keeps_only_literal_style_evidence(self):
+        profile = self.consensus_profiles()[0]
+        model_output = {
+            "records": [
+                {"author": "王羲之", "scriptType": "草书", "quote": "剖析张公之草", "confidence": "强", "issue": "", "note": "草书比较"},
+                {"author": "王献之", "scriptType": "行草", "quote": "模型改写而非原文", "confidence": "中", "issue": "", "note": ""},
+            ]
+        }
+        with (
+            patch.object(server, "active_model_config", return_value=profile),
+            patch.object(server, "request_raw_model_json", return_value=model_output),
+        ):
+            rows = server.extract_ingest_evidence(
+                "王羲之剖析张公之草，而浓纤折衷。",
+                {"printedPage": 192, "sourceFile": "page_192.txt"},
+                {"id": "abcdef123456", "sourceName": "书论.pdf"},
+            )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["书家"], "王羲之")
+        self.assertEqual(rows[0]["原文命中"], "exact")
+        self.assertEqual(rows[0]["page_no"], "192")
 
 
 if __name__ == "__main__":

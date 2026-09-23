@@ -375,7 +375,324 @@ test("model settings uses the shared modal and bounded responsive controls", () 
   assert.match(css, /\.model-profile-scroll\s*\{/);
 });
 
-test("table and review share four summary slots, three toolbar slots and the dock preference", () => {
+test("batch selection preserves navigation and reconciles explicit rows", () => {
+  const a = app();
+  loadSample(a);
+  const selectedId = a.get("state.selectedId");
+  const firstId = a.get("state.rows[0].id");
+  assert.equal(a.run(`toggleBatchSelection("${firstId}", true)`), true);
+  assert.equal(a.get("state.selectedId"), selectedId);
+  assert.deepEqual(a.get("[...state.batchSelectedIds]"), [firstId]);
+
+  a.run("state.query = 'SD-0014'; setVisibleBatchSelection(true)");
+  assert.deepEqual(new Set(a.get("[...state.batchSelectedIds]")), new Set([firstId, "SD-0014"]));
+  a.run("state.query = ''; state.rows = state.rows.filter(row => row.id !== state.batchSelectedIds.values().next().value); reconcileBatchSelection()");
+  assert.deepEqual(a.get("[...state.batchSelectedIds]"), ["SD-0014"]);
+});
+
+test("batch selection column appears only while multi-select mode is active", () => {
+  const a = app();
+  loadSample(a);
+  const normalMarkup = a.run("resultTable(visibleRows().slice(0, 2))");
+  assert.doesNotMatch(normalMarkup, /data-batch-select-visible/);
+  assert.doesNotMatch(normalMarkup, /data-batch-select=/);
+
+  assert.equal(a.run("setBatchMode(true)"), true);
+  const batchMarkup = a.run("resultTable(visibleRows().slice(0, 2))");
+  assert.match(batchMarkup, /data-batch-select-visible/);
+  assert.equal((batchMarkup.match(/data-batch-select=/g) || []).length, 2);
+  assert.match(batchMarkup, /data-row-open/);
+  assert.match(batchMarkup, /aria-label="选择当前筛选条目"/);
+});
+
+test("multi-select mode has an accessible toolbar toggle and clears selection on exit", () => {
+  const a = app();
+  loadSample(a);
+  assert.match(a.run("tableViewActions()"), /data-batch-mode/);
+  assert.match(a.run("tableViewActions()"), /aria-label="进入多选"/);
+  a.run("setBatchMode(true); toggleBatchSelection(state.rows[0].id, true)");
+  assert.equal(a.get("state.batchMode"), true);
+  assert.equal(a.get("state.batchSelectedIds.size"), 1);
+  assert.equal(a.run("setBatchMode(false)"), true);
+  assert.equal(a.get("state.batchMode"), false);
+  assert.equal(a.get("state.batchSelectedIds.size"), 0);
+});
+
+test("batch toolbar stays in document flow and scrolls on narrow screens", () => {
+  const css = fs.readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const baseRule = css.match(/\.batch-action-bar\s*\{[^}]+\}/s)?.[0] || "";
+  assert.match(baseRule, /position:\s*sticky/);
+  assert.doesNotMatch(baseRule, /position:\s*fixed/);
+  assert.match(css, /@media\s*\(max-width:\s*760px\)[\s\S]*?\.batch-action-bar\s*\{[\s\S]*?overflow-x:\s*auto/);
+});
+
+test("batch toolbar exposes all selected-row actions with accessible labels", () => {
+  const a = app();
+  loadSample(a);
+  assert.equal(a.run("batchActionBar()"), "");
+  a.run("setBatchMode(true); toggleBatchSelection(state.rows[0].id, true)");
+  const markup = a.run("batchActionBar()");
+  for (const label of ["三模型核验", "批量确认", "批量标记问题", "导出选中条目", "删除选中条目", "清空选择"]) {
+    assert.match(markup, new RegExp('aria-label="' + label + '"'));
+  }
+  assert.match(markup, /已选 1 条/);
+});
+
+test("batch confirm changes only selected rows and rolls back failed persistence", () => {
+  const a = app();
+  loadSample(a);
+  a.run("state.rows.forEach(row => { row.reviewed = false; row.reviewedAt = ''; }); state.reviewState.confirmedIds = []");
+  const ids = a.get("state.rows.slice(0, 2).map(row => row.id)");
+  a.set("batchIds", ids);
+  a.run("batchIds.forEach(id => toggleBatchSelection(id, true))");
+  const untouched = a.get("state.rows.slice(2)");
+  assert.equal(a.run("batchConfirmSelected()"), true);
+  assert.equal(a.get("state.rows.slice(0, 2).every(row => row.reviewed)"), true);
+  assert.deepEqual(a.get("state.rows.slice(2)"), untouched);
+  assert.equal(a.get("state.rows[0].history.at(-1).type"), "batch-confirm");
+
+  a.run("state.rows.slice(0, 2).forEach(row => { row.reviewed = false; row.reviewedAt = ''; }); state.reviewState.confirmedIds = []");
+  const before = reviewSnapshot(a);
+  a.failWrites(true);
+  assert.equal(a.run("batchConfirmSelected()"), false);
+  assert.deepEqual(reviewSnapshot(a), before);
+});
+
+test("batch delete moves selected rows to trash and clears their selection", () => {
+  const a = app();
+  loadSample(a);
+  const ids = a.get("state.rows.slice(0, 2).map(row => row.id)");
+  a.set("batchIds", ids);
+  a.run("batchIds.forEach(id => toggleBatchSelection(id, true))");
+  assert.equal(a.run("batchDeleteSelected()"), true);
+  assert.equal(a.get("state.rows.some(row => batchIds.includes(row.id))"), false);
+  assert.equal(a.get("state.trashRows.filter(row => batchIds.includes(row.id)).length"), 2);
+  assert.deepEqual(a.get("[...state.batchSelectedIds]"), []);
+  assert.equal(a.get("state.trashRows[0].history.at(-1).type"), "batch-delete");
+});
+
+test("batch issue marks only selected rows and rolls back failed persistence", () => {
+  const a = app();
+  loadSample(a);
+  const ids = a.get("state.rows.slice(0, 2).map(row => row.id)");
+  a.set("batchIds", ids);
+  a.set("issueForm", { problemTag: "manual_review", problemNote: "需核对归属" });
+  a.run("batchIds.forEach(id => toggleBatchSelection(id, true))");
+  const untouched = a.get("state.rows.slice(2)");
+  assert.equal(a.run("batchMarkIssue(issueForm)"), true);
+  assert.equal(a.get("state.rows.slice(0, 2).every(row => row.problemTags.includes('manual_review'))"), true);
+  assert.equal(a.get("state.rows.slice(0, 2).every(row => row.annotations.at(-1).body === '需核对归属')"), true);
+  assert.equal(a.get("state.rows[0].history.at(-1).type"), "batch-issue");
+  assert.deepEqual(a.get("state.rows.slice(2)"), untouched);
+
+  a.set("issueForm", { problemTag: "page_issue", problemNote: "页码待核" });
+  const before = reviewSnapshot(a);
+  a.failWrites(true);
+  assert.equal(a.run("batchMarkIssue(issueForm)"), false);
+  assert.deepEqual(reviewSnapshot(a), before);
+});
+
+test("selected export scope contains only explicitly selected rows", () => {
+  const a = app();
+  loadSample(a);
+  const ids = a.get("state.rows.slice(0, 2).map(row => row.id)");
+  a.set("batchIds", ids);
+  a.run("batchIds.forEach(id => toggleBatchSelection(id, true)); openExportPanel('selected')");
+  assert.equal(a.get("state.exportScope"), "selected");
+  assert.deepEqual(a.get("deliveryRows().map(row => row.id)"), ids);
+  assert.match(a.run("deliveryModal()"), /value="selected" selected/);
+  a.run("downloadWorkingDraft()");
+  const exportText = a.get("downloads.at(-1).content");
+  assert.equal(ids.every((id) => exportText.includes(id)), true);
+  const remainingIds = a.get("state.rows.slice(2).map(row => row.id)");
+  assert.equal(remainingIds.some((id) => exportText.includes(id)), false);
+});
+
+test("batch AI runs selected rows sequentially and separates approval from review", async () => {
+  const a = app();
+  loadSample(a);
+  const ids = a.get("state.rows.slice(0, 2).map(row => row.id)");
+  a.set("batchIds", ids);
+  a.run(`
+    batchIds.forEach(id => toggleBatchSelection(id, true));
+    state.cloud.config = { aiEnabled: true, consensusEnabled: true };
+    state.modelSettings.profiles = ['primary','secondary','tertiary'].map(id => ({id, enabled:true, configured:true}));
+  `);
+  const requests = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  a.set("fetch", async (endpoint, options) => {
+    const body = JSON.parse(options.body);
+    requests.push({ endpoint, body });
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 4));
+    inFlight -= 1;
+    const approve = body.rowId === ids[0];
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        runId: "run-" + body.rowId,
+        status: "complete",
+        decision: approve ? "auto_approve_record" : "needs_human_review",
+        blockers: approve ? [] : ["required_field_disagreement"],
+        fields: approve ? { author: { status: "unanimous", value: "王羲之", votes: ["王羲之", "王羲之", "王羲之"], policy: "standard", verifiedEvidence: 3 } } : {},
+        models: ["primary", "secondary", "tertiary"].map((profileId) => ({ profileId, status: "success", profile: { id: profileId, model: profileId }, proposal: { fields: {}, evidence: [], reasoning: [], abstentions: [] }, elapsedMs: 5 }))
+      })
+    };
+  });
+  assert.equal(await a.run("startBatchAiReview()"), true);
+  assert.equal(maxInFlight, 1);
+  assert.deepEqual(requests.map((item) => item.body.rowId), ids);
+  assert.equal(requests.every((item) => item.body.reviewMode === "auto"), true);
+  assert.equal(a.get("state.rows.find(row => row.id === batchIds[0]).reviewed"), true);
+  assert.equal(a.get("state.rows.find(row => row.id === batchIds[1]).reviewed"), false);
+  assert.equal(a.get("state.rows.find(row => row.id === batchIds[1]).problemResolution.status"), "pending_review");
+  assert.deepEqual(a.get("({completed:state.batchJob.completed,approved:state.batchJob.approved,review:state.batchJob.review,failed:state.batchJob.failed,running:state.batchJob.running})"), { completed: 2, approved: 1, review: 1, failed: 0, running: false });
+});
+
+test("batch AI continues after one request failure and obeys stop requests", async () => {
+  const a = app();
+  loadSample(a);
+  const ids = a.get("state.rows.slice(0, 3).map(row => row.id)");
+  a.set("batchIds", ids);
+  a.run(`
+    batchIds.forEach(id => toggleBatchSelection(id, true));
+    state.cloud.config = { aiEnabled: true, consensusEnabled: true };
+    state.modelSettings.profiles = ['primary','secondary','tertiary'].map(id => ({id, enabled:true, configured:true}));
+  `);
+  let calls = 0;
+  a.set("fetch", async (_endpoint, options) => {
+    calls += 1;
+    const body = JSON.parse(options.body);
+    if (calls === 1) return { ok: false, status: 502, json: async () => ({ error: "模型服务超时" }) };
+    a.run("stopBatchAiReview()");
+    return { ok: true, status: 200, json: async () => ({ runId: "run-" + body.rowId, status: "complete", decision: "needs_human_review", blockers: [], fields: {}, models: [] }) };
+  });
+  assert.equal(await a.run("startBatchAiReview()"), true);
+  assert.equal(calls, 2);
+  assert.deepEqual(a.get("({completed:state.batchJob.completed,failed:state.batchJob.failed,stopped:state.batchJob.stopped,running:state.batchJob.running})"), { completed: 2, failed: 1, stopped: true, running: false });
+  assert.equal(a.get("state.rows.find(row => row.id === batchIds[0]).problemResolution.status"), "pending_review");
+});
+
+test("batch AI keeps actionable row-level reasons for failures and review items", async () => {
+  const a = app();
+  loadSample(a);
+  const ids = a.get("state.rows.slice(0, 2).map(row => row.id)");
+  a.set("batchIds", ids);
+  a.run(`
+    setBatchMode(true);
+    batchIds.forEach(id => toggleBatchSelection(id, true));
+    state.cloud.config = { aiEnabled: true, consensusEnabled: true };
+    state.modelSettings.profiles = ['primary','secondary','tertiary'].map(id => ({id, enabled:true, configured:true}));
+  `);
+  let calls = 0;
+  a.set("fetch", async () => {
+    calls += 1;
+    if (calls === 1) return { ok: false, status: 504, json: async () => ({ error: "Qwen 请求超时" }) };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        runId: "run-review",
+        status: "complete",
+        decision: "needs_human_review",
+        blockers: ["author:split"],
+        fields: { author: { status: "split", value: "", votes: ["王羲之", "王献之", "王羲之"], reason: "disagreement", blocking: true } },
+        models: ["primary", "secondary", "tertiary"].map((profileId) => ({ profileId, status: "success", profile: { id: profileId, displayName: profileId, model: profileId }, proposal: { fields: {}, evidence: [], reasoning: [], abstentions: [] } }))
+      })
+    };
+  });
+  assert.equal(await a.run("startBatchAiReview()"), true);
+  assert.deepEqual(a.get("state.batchJob.results.map(item => item.category)"), ["failed", "review"]);
+  assert.match(a.get("state.batchJob.results[0].reason"), /Qwen 请求超时/);
+  assert.deepEqual(a.get("state.batchJob.results[1].details"), ["书家：结果分歧"]);
+  const markup = a.run("batchActionBar()");
+  assert.match(markup, /需要处理 2 条/);
+  assert.match(markup, new RegExp(`data-batch-result-row="${ids[0]}"`));
+  assert.match(markup, /Qwen 请求超时/);
+  assert.match(markup, /书家：结果分歧/);
+});
+
+test("opening a batch result clears hiding filters and focuses its detail", () => {
+  const a = app();
+  loadSample(a);
+  const targetId = a.get("state.rows[1].id");
+  a.set("targetId", targetId);
+  a.run("state.filter = 'flagged'; state.query = 'not-present'; state.qualityFocus = { fieldId: 'author', mode: 'empty' }; state.detailCollapsed = true");
+  assert.equal(a.run("openBatchResult(targetId)"), true);
+  assert.equal(a.get("state.filter"), "all");
+  assert.equal(a.get("state.query"), "");
+  assert.equal(a.get("state.qualityFocus"), null);
+  assert.equal(a.get("state.selectedId"), targetId);
+  assert.equal(a.get("state.batchReviewRowId"), targetId);
+  assert.equal(a.get("state.detailCollapsed"), false);
+});
+
+test("batch result opens a full-screen review workspace with source, consensus and model proposals", () => {
+  const a = app();
+  loadSample(a);
+  const targetId = a.get("state.rows[0].id");
+  a.set("targetId", targetId);
+  a.run(`
+    const row = state.rows.find(item => item.id === targetId);
+    state.batchJob = {
+      results: [{ rowId: targetId, rowLabel: row.author, category: 'review', reason: '三个模型对书体判断有出入。', details: ['书体：结果分歧'] }]
+    };
+    row.history.push({
+      type: 'ai-consensus-assist', at: new Date().toISOString(),
+      consensusRun: {
+        runId: 'run-fullscreen', snapshotVersion: 1, decision: 'needs_human_review', blockers: ['scriptType:split'],
+        fields: {
+          author: { status: 'unanimous', value: row.author, votes: [row.author, row.author, row.author], verifiedEvidence: 2, evidenceRequired: true },
+          scriptType: { status: 'split', value: row.scriptType, votes: [row.scriptType, '行书', row.scriptType], reason: 'disagreement', blocking: true, evidenceRequired: true }
+        },
+        models: ['DeepSeek', '千问', 'Kimi'].map((displayName, index) => ({
+          profileId: 'model-' + index, status: 'success', elapsedMs: 1200 + index,
+          profile: { displayName, model: 'model-' + index, modelFamily: displayName },
+          proposal: { fields: { author: row.author, scriptType: row.scriptType }, reasoning: [{ fieldId: 'scriptType', reason: displayName + ' 的书体判断', evidenceQuote: row.quote, evidenceVerified: true }], evidence: [], abstentions: [], answerSources: {} }
+        }))
+      }
+    });
+    openBatchResult(targetId);
+    state.sourceText = sourcePages[row.sourceFile] || row.quote;
+    state.sourceStatus = 'ready';
+  `);
+  const markup = a.run("batchReviewModal()");
+  assert.match(markup, /batch-review-workspace/);
+  assert.match(markup, /aria-modal="true"/);
+  assert.match(markup, /条目与原文/);
+  assert.match(markup, /AI 共识/);
+  assert.match(markup, /AI 助手方案/);
+  assert.match(markup, /书体：结果分歧/);
+  assert.match(markup, /DeepSeek/);
+  assert.match(markup, /千问/);
+  assert.match(markup, /Kimi/);
+  assert.match(markup, /data-batch-review-confirm/);
+});
+
+test("batch review navigation stays inside actionable results and closes cleanly", () => {
+  const a = app();
+  loadSample(a);
+  const ids = a.get("state.rows.slice(0, 3).map(row => row.id)");
+  a.set("batchIds", ids);
+  a.run(`
+    state.batchJob = { results: [
+      { rowId: batchIds[0], category: 'failed', reason: '调用失败', details: [] },
+      { rowId: batchIds[1], category: 'approved', reason: '自动判过', details: [] },
+      { rowId: batchIds[2], category: 'review', reason: '存在出入', details: [] }
+    ] };
+    openBatchResult(batchIds[0]);
+  `);
+  assert.equal(a.run("moveBatchReview(1)"), true);
+  assert.equal(a.get("state.batchReviewRowId"), ids[2]);
+  assert.equal(a.run("moveBatchReview(1)"), false);
+  assert.equal(a.run("closeBatchReview()"), true);
+  assert.equal(a.get("state.batchReviewRowId"), "");
+});
+
+test("table and review share four summary slots, four toolbar slots and the dock preference", () => {
   const a = app();
   loadSample(a);
   for (const mode of ['table', 'review']) {
@@ -383,7 +700,7 @@ test("table and review share four summary slots, three toolbar slots and the doc
     a.run("state.detailMode = mode; state.detailCollapsed = true; applyDetailModeDefaults(mode)");
     assert.equal(a.get('state.detailCollapsed'), true);
     assert.equal((a.run('modeSummaryPanel(visibleRows())').match(/<span>/g) || []).length, 4);
-    assert.equal((a.run('tableViewActions()').match(/<button /g) || []).length, 3);
+    assert.equal((a.run('tableViewActions()').match(/<button /g) || []).length, 4);
   }
   assert.match(a.run('tableViewActions()'), /data-quality-batch-review/);
   assert.doesNotMatch(a.run('modeSummaryPanel(visibleRows())'), /data-quality-batch-review/);
@@ -472,9 +789,12 @@ function consensusReadyApp({ decision = "adopt_fields", reviewMode = "assist", b
     snapshotVersion: 1,
     decision,
     blockers,
-    fields: { author: { status: "unanimous", value: "苏轼", policy: "standard", verifiedEvidence: 3, votes: ["苏轼", "苏轼", "苏轼"] } },
+    fields: {
+      author: { status: "unanimous", value: "苏轼", policy: "standard", verifiedEvidence: 3, votes: ["苏轼", "苏轼", "苏轼"], voteCount: 3, validationSource: "model", reason: "accepted" },
+      pageNo: { status: "unanimous", value: "161", policy: "standard", verifiedEvidence: 0, votes: [], voteCount: 0, validationSource: "system", reason: "system_verified" }
+    },
     models: [
-      { profileId: "primary", status: "success", elapsedMs: 20, profile: { id: "primary", displayName: "A", model: "a", modelFamily: "family-a", apiKey: "must-not-survive" }, proposal: { fields: { author: "苏轼" }, reasoning: [{ fieldId: "author", decision: "change", reason: "原文直指", evidenceQuote: "苏轼", evidenceVerified: true, apiKey: "must-not-survive" }], evidence: [{ fieldId: "author", quote: "苏轼", verified: true }], abstentions: [] } },
+      { profileId: "primary", status: "success", elapsedMs: 20, profile: { id: "primary", displayName: "A", model: "a", modelFamily: "family-a", apiKey: "must-not-survive" }, proposal: { fields: { author: "苏轼" }, answerSources: { author: "repair" }, reasoning: [{ fieldId: "author", decision: "change", reason: "原文直指", evidenceQuote: "苏轼", evidenceVerified: true, apiKey: "must-not-survive" }], evidence: [{ fieldId: "author", quote: "苏轼", verified: true }], abstentions: [] } },
       { profileId: "secondary", status: "success", elapsedMs: 24, profile: { id: "secondary", displayName: "B", model: "b", modelFamily: "family-b" }, proposal: { fields: { author: "苏轼" }, reasoning: [], evidence: [], abstentions: [] } },
       { profileId: "tertiary", status: "success", elapsedMs: 28, profile: { id: "tertiary", displayName: "C", model: "c", modelFamily: "family-c" }, proposal: { fields: { author: "苏轼" }, reasoning: [], evidence: [], abstentions: [] } }
     ]
@@ -497,11 +817,23 @@ test("consensus panel keeps the existing aside and collapses individual model de
   const a = consensusReadyApp();
   const markup = a.run("aiReviewPanel(selectedRow())");
   assert.match(markup, /class="ai-review-panel/);
-  assert.match(markup, />3\/3</);
+  assert.match(markup, />已通过</);
+  assert.match(markup, />投票 3\/3</);
+  assert.match(markup, />程序通过</);
+  assert.match(markup, />程序校验</);
+  assert.match(markup, />补答</);
   assert.equal((markup.match(/<details class="ai-model-details"/g) || []).length, 3);
   assert.match(markup, /data-ai-retry-profile="primary"/);
   assert.match(markup, /title="仅重试该模型"/);
   assert.doesNotMatch(markup, /modal-backdrop|drawer-backdrop/);
+});
+
+test("advisory field disagreement is labeled as reference instead of manual blocking", () => {
+  const a = consensusReadyApp();
+  a.set("advisoryItem", {
+    consensus: { status: "blocked", reason: "disagreement", blocking: false, validationSource: "model" }
+  });
+  assert.equal(a.run("consensusStatusLabel(advisoryItem)"), "仅供参考");
 });
 
 test("consensus generation uses the new endpoint and retry calls only one profile", async () => {
@@ -537,6 +869,9 @@ test("consensus generation uses the new endpoint and retry calls only one profil
   const body = JSON.parse(requests[0].options.body);
   assert.equal(body.reviewMode, "assist");
   assert.equal(body.defaultConsensus, "standard");
+  assert.equal(body.schema.find((field) => field.id === "author").validationMode, "model");
+  assert.equal(body.schema.find((field) => field.id === "pageNo").validationMode, "system");
+  assert.equal(body.schema.find((field) => field.id === "sourceFile").validationMode, "system");
   assert.equal(a.get("state.aiFieldJudgments.author"), "accept");
   const originalModels = a.get("state.aiProposal.models.map(item => item.profileId)");
   assert.equal(await a.run("retryConsensusModel('secondary')"), true);
@@ -735,6 +1070,7 @@ test("assist mode adopts unanimous fields but leaves the record unreviewed with 
   assert.equal(a.get("fieldValue(selectedRow(), 'author')"), "苏轼");
   assert.equal(a.get("selectedRow().history.at(-1).type"), "ai-consensus-assist");
   assert.equal(a.get("selectedRow().history.at(-1).consensusRun.runId"), "run-test");
+  assert.equal(a.get("selectedRow().history.at(-1).consensusRun.models[0].proposal.answerSources.author"), "repair");
   assert.equal(JSON.stringify(a.get("selectedRow().history.at(-1).consensusRun")).includes("must-not-survive"), false);
 });
 
