@@ -1,18 +1,25 @@
-function publicCloudConfig() {
-  const supabaseUrl = process.env.SUPABASE_URL || "";
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
-  const explicitEnabled = process.env.CLOUD_SYNC_ENABLED;
+import { activeModelProfiles } from "./_model-config.js";
+import { isAiAuthRequired } from "./_auth.js";
+
+export function publicCloudConfig(env = process.env) {
+  const supabaseUrl = env.SUPABASE_URL || "";
+  const supabaseAnonKey = env.SUPABASE_ANON_KEY || "";
+  const explicitEnabled = env.CLOUD_SYNC_ENABLED;
   const enabled = explicitEnabled ? explicitEnabled === "true" : Boolean(supabaseUrl && supabaseAnonKey);
+  const modelProfiles = activeModelProfiles(env);
 
   return {
     enabled,
-    aiEnabled: Boolean(process.env.MODEL_API_URL && process.env.MODEL_API_KEY && process.env.MODEL_NAME),
+    aiEnabled: modelProfiles.length > 0,
+    aiAuthRequired: isAiAuthRequired(env),
+    consensusEnabled: modelProfiles.length === 3,
+    ancientIngestEnabled: false,
     supabaseUrl,
     supabaseAnonKey,
-    rememberEmail: process.env.REMEMBER_EMAIL_ENABLED !== "false",
-    defaultTeamName: process.env.DEFAULT_TEAM_NAME || "书论研究团队",
-    defaultProjectName: process.env.DEFAULT_PROJECT_NAME || "书论整理项目",
-    defaultWorkspaceName: process.env.DEFAULT_WORKSPACE_NAME || "书论统一主表",
+    rememberEmail: env.REMEMBER_EMAIL_ENABLED !== "false",
+    defaultTeamName: env.DEFAULT_TEAM_NAME || "书论研究团队",
+    defaultProjectName: env.DEFAULT_PROJECT_NAME || "书论整理项目",
+    defaultWorkspaceName: env.DEFAULT_WORKSPACE_NAME || "书论统一主表",
   };
 }
 

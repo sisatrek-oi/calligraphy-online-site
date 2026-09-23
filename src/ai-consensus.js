@@ -63,6 +63,7 @@
       startedAt: text(payload.startedAt),
       completedAt: text(payload.completedAt),
       snapshotVersion: Math.max(1, Number(payload.snapshotVersion) || 1),
+      retryToken: text(payload.retryToken).slice(0, 1500000),
       decision: decisions.includes(payload.decision) ? payload.decision : "needs_human_review",
       fields,
       models,

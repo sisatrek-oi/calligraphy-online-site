@@ -5738,6 +5738,7 @@ mark {
 .ingest-title > div:last-child span { color: #6d726c; font-size: 12px; }
 
 .ingest-loading,
+.ingest-local-only-card,
 .ingest-job-placeholder {
   min-height: 220px;
   display: grid;
@@ -5749,6 +5750,21 @@ mark {
 
 .ingest-job-placeholder strong { color: #3e443e; font-size: 15px; }
 .ingest-job-placeholder span { font-size: 12px; }
+.ingest-local-only { place-items: center; overflow: auto; }
+.ingest-local-only-card {
+  width: min(680px, 100%);
+  min-height: 0;
+  padding: clamp(28px, 6vw, 58px);
+  border: 1px solid #bcc5bc;
+  border-radius: 10px;
+  background: #fbfcfa;
+  box-shadow: 0 10px 30px rgba(35, 47, 38, .08);
+  text-align: left;
+}
+.ingest-local-only-card > span { color: #326b43; font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; }
+.ingest-local-only-card h2 { margin: 4px 0 8px; color: #283129; font: 600 clamp(23px, 4vw, 34px)/1.2 "Songti SC", "Noto Serif CJK SC", serif; }
+.ingest-local-only-card p { margin: 0; color: #606861; font-size: 14px; line-height: 1.8; }
+.ingest-local-only-card code { padding: 2px 5px; border-radius: 3px; background: #edf1ed; color: #285f3b; }
 .ingest-alert { margin: 16px 0 0; padding: 10px 12px; border-left: 3px solid #a64134; background: #fff0ed; color: #7f2f26; font-size: 13px; }
 
 .ingest-band {

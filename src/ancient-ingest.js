@@ -68,7 +68,19 @@
     return payload;
   }
 
+  function isLocalRuntime() {
+    const hostname = String(window.location?.hostname || "").toLowerCase();
+    return !hostname || ["localhost", "127.0.0.1", "::1"].includes(hostname);
+  }
+
   async function load({ quiet = false } = {}) {
+    if (!isLocalRuntime()) {
+      clearTimeout(pollTimer);
+      state.status = "local-only";
+      state.error = "";
+      host.rerender();
+      return;
+    }
     if (!quiet) {
       state.status = "loading";
       state.error = "";
@@ -275,6 +287,14 @@
   }
 
   function render() {
+    if (state.status === "local-only") {
+      return `<section class="ingest-page ingest-local-only"><div class="ingest-local-only-card">
+        <span>LOCAL WORKFLOW</span>
+        <h2>古籍入库需要本地服务</h2>
+        <p>这一步会读取本地 PDF、调用 OCR，并把逐页文本与中间表写入工作区，因此不在 Vercel 线上版运行。</p>
+        <p>线上版仍可正常使用主表、团队同步、检索和 AI 共识。需要处理 PDF 时，请在本机启动 <code>python3 server.py</code>后打开此页。</p>
+      </div></section>`;
+    }
     if (state.status === "idle" || state.status === "loading") {
       return `<section class="ingest-page"><div class="ingest-loading">正在扫描 inbox 与 OCR 运行时…</div></section>`;
     }

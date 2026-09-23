@@ -3222,6 +3222,7 @@ function consensusRequestPayload(row, sourceText, options = {}) {
   return {
     runId: `run-${Date.now()}-${state.workspaceId}-${row.id}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80),
     workspaceId: state.workspaceId,
+    cloudWorkspaceId: state.cloud.workspace?.id || "",
     rowId: row.id,
     sourceText,
     sourceFile: row.sourceFile,
@@ -3239,10 +3240,18 @@ function consensusRequestPayload(row, sourceText, options = {}) {
   };
 }
 
+async function aiRequestHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (!state.cloud.config?.aiAuthRequired) return headers;
+  const token = await state.cloud.store?.accessToken?.();
+  if (!token) throw new Error("请先登录后使用 AI");
+  return { ...headers, Authorization: `Bearer ${token}` };
+}
+
 async function requestConsensusForRow(row, sourceText, options = {}) {
   const response = await fetch("./api/ai/consensus", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: state.cloud.config?.aiAuthRequired ? await aiRequestHeaders() : { "Content-Type": "application/json" },
     body: JSON.stringify(consensusRequestPayload(row, sourceText, options)),
   });
   const payload = await response.json().catch(() => ({}));
@@ -3744,6 +3753,7 @@ async function performAiExtraction(rowId) {
     const consensusEnabled = Boolean(state.cloud.config?.consensusEnabled);
     const requestPayload = consensusEnabled ? null : {
       workspaceId: state.workspaceId,
+      cloudWorkspaceId: state.cloud.workspace?.id || "",
       rowId: row.id,
       sourceText,
       sourceFile: row.sourceFile,
@@ -3761,7 +3771,7 @@ async function performAiExtraction(rowId) {
     } else {
       const response = await fetch("./api/ai/extract", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: state.cloud.config?.aiAuthRequired ? await aiRequestHeaders() : { "Content-Type": "application/json" },
         body: JSON.stringify(requestPayload)
       });
       payload = await response.json().catch(() => ({}));
@@ -3802,10 +3812,15 @@ async function retryConsensusModel(profileId, row = selectedRow()) {
   state.aiRetryError = "";
   updateAiDom(row);
   try {
-    const response = await fetch(`./api/ai/consensus/${encodeURIComponent(runId)}/retry/${encodeURIComponent(profileId)}`, {
+    const response = await fetch("./api/ai/consensus/retry", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{}"
+      headers: state.cloud.config?.aiAuthRequired ? await aiRequestHeaders() : { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...consensusRequestPayload(row, aiSourceForRow(row)),
+        runId,
+        profileId,
+        retryToken: state.aiProposal.retryToken,
+      })
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `模型服务返回 ${response.status}`);

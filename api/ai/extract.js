@@ -1,3 +1,6 @@
+import { activeModelProfiles } from "../_model-config.js";
+import { requireAiAccess } from "../_auth.js";
+
 const MAX_SOURCE_LENGTH = 40000;
 const MAX_FIELDS = 30;
 const MAX_REASON_LENGTH = 800;
@@ -141,7 +144,8 @@ export async function runExtraction(payload, options = {}) {
   const modelResponse = await fetcher(apiUrl, {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(providerPayload(apiUrl, model, buildMessages(payload, schema)))
+    body: JSON.stringify(providerPayload(apiUrl, model, buildMessages(payload, schema))),
+    signal: options.signal || AbortSignal.timeout(45000)
   });
   if (!modelResponse.ok) throw Object.assign(new Error(`模型服务返回 ${modelResponse.status}`), { status: 502 });
   const modelPayload = await modelResponse.json();
@@ -163,7 +167,11 @@ export default async function handler(request, response) {
     return;
   }
   try {
-    sendJson(response, 200, await runExtraction(requestBody(request)));
+    const body = requestBody(request);
+    await requireAiAccess(request, body);
+    const profile = activeModelProfiles()[0];
+    if (!profile) throw Object.assign(new Error("模型服务尚未配置"), { status: 503 });
+    sendJson(response, 200, await runExtraction(body, profile));
   } catch (error) {
     sendJson(response, Number(error?.status) || 502, { error: error?.message || "模型调用失败" });
   }

@@ -20,6 +20,12 @@
       return data.user;
     }
 
+    async function accessToken() {
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      return data.session?.access_token || "";
+    }
+
     async function listTeams() {
       const { data, error } = await client
         .from("teams")
@@ -239,6 +245,7 @@
     return {
       canRole,
       currentUser,
+      accessToken,
       signInWithEmail,
       signOut,
       listTeams,

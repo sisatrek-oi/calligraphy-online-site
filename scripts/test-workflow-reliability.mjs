@@ -841,7 +841,9 @@ test("consensus generation uses the new endpoint and retry calls only one profil
   loadSample(a);
   const requests = [];
   a.run(`
-    state.cloud.config = { enabled: false, aiEnabled: true, consensusEnabled: true };
+    state.cloud.config = { enabled: true, aiEnabled: true, consensusEnabled: true, aiAuthRequired: true };
+    state.cloud.store = { accessToken: async () => "signed-in-session-token" };
+    state.cloud.workspace = { id: "11111111-2222-4333-8444-555555555555" };
     state.modelSettings.policy = { reviewMode: "assist", defaultConsensus: "standard", fieldOverrides: {} };
     state.sourceText = sourcePages[selectedRow().sourceFile];
     state.sourceStatus = "ready";
@@ -849,7 +851,7 @@ test("consensus generation uses the new endpoint and retry calls only one profil
   `);
   a.set("fetch", async (url, options = {}) => {
     requests.push({ url, options });
-    const retry = String(url).includes("/retry/");
+    const retry = String(url).endsWith("/retry");
     return {
       ok: true,
       status: 200,
@@ -857,6 +859,7 @@ test("consensus generation uses the new endpoint and retry calls only one profil
         runId: retry ? "run-retry" : JSON.parse(options.body).runId,
         status: "complete",
         snapshotVersion: retry ? 2 : 1,
+        retryToken: retry ? "signed-retry-token-v2" : "signed-retry-token-v1",
         decision: "adopt_fields",
         blockers: [],
         fields: { author: { status: "unanimous", value: "苏轼", policy: "standard", verifiedEvidence: 3, votes: ["苏轼", "苏轼", "苏轼"] } },
@@ -868,6 +871,8 @@ test("consensus generation uses the new endpoint and retry calls only one profil
   assert.equal(requests[0].url, "./api/ai/consensus");
   const body = JSON.parse(requests[0].options.body);
   assert.equal(body.reviewMode, "assist");
+  assert.equal(body.cloudWorkspaceId, "11111111-2222-4333-8444-555555555555");
+  assert.equal(requests[0].options.headers.Authorization, "Bearer signed-in-session-token");
   assert.equal(body.defaultConsensus, "standard");
   assert.equal(body.schema.find((field) => field.id === "author").validationMode, "model");
   assert.equal(body.schema.find((field) => field.id === "pageNo").validationMode, "system");
@@ -875,7 +880,12 @@ test("consensus generation uses the new endpoint and retry calls only one profil
   assert.equal(a.get("state.aiFieldJudgments.author"), "accept");
   const originalModels = a.get("state.aiProposal.models.map(item => item.profileId)");
   assert.equal(await a.run("retryConsensusModel('secondary')"), true);
-  assert.match(requests[1].url, /\/api\/ai\/consensus\/[^/]+\/retry\/secondary$/);
+  assert.equal(requests[1].url, "./api/ai/consensus/retry");
+  const retryBody = JSON.parse(requests[1].options.body);
+  assert.equal(retryBody.profileId, "secondary");
+  assert.equal(requests[1].options.headers.Authorization, "Bearer signed-in-session-token");
+  assert.equal(retryBody.runId, body.runId);
+  assert.equal(retryBody.retryToken, "signed-retry-token-v1");
   assert.deepEqual(a.get("state.aiProposal.models.map(item => item.profileId)"), originalModels);
   assert.equal(a.get("state.aiProposal.snapshotVersion"), 2);
 });

@@ -581,6 +581,15 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/ai/consensus":
             self._handle_api_action(run_model_consensus)
             return
+        if parsed.path == "/api/ai/consensus/retry":
+            self._handle_api_action(
+                lambda payload: retry_consensus_model(
+                    normalize_run_id(payload.get("runId")),
+                    str(payload.get("profileId") or ""),
+                    payload,
+                )
+            )
+            return
         retry_match = re.fullmatch(
             r"/api/ai/consensus/([A-Za-z0-9_-]{1,80})/retry/(primary|secondary|tertiary)",
             parsed.path,

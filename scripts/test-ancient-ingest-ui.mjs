@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-function harness() {
+function harness(hostname = "") {
   const requests = [];
   const nodes = new Map();
   const document = { querySelector: (s) => nodes.get(s) || null, querySelectorAll: () => [], activeElement: null };
-  const window = { addEventListener() {}, setTimeout: () => 1 };
+  const window = { location: { hostname }, addEventListener() {}, setTimeout: () => 1 };
   const context = vm.createContext({ window, document, clearTimeout() {}, Map, FormData: class { constructor(form) { this.form = form; } get(key) { return this.form[key]; } }, fetch: (url, options) => new Promise((resolve) => requests.push({ url, options, finish: (payload, ok = true) => resolve({ ok, status: ok ? 200 : 500, json: async () => payload }) })) });
   const source = fs.readFileSync(new URL('../src/ancient-ingest.js', import.meta.url), 'utf8');
   vm.runInContext(source.replace('window.AncientIngestUI =', 'window.testUI = { state, selectPage, savePage }; window.AncientIngestUI ='), context);
@@ -15,6 +15,14 @@ function harness() {
   Object.assign(state, { status: 'ready', selectedJobId: 'job-a', jobs: [{ id: 'job-a', records: [1, 2].map((printedPage) => ({ printedPage, status: 'complete' })) }] });
   return { ...window.testUI, ui: window.AncientIngestUI, requests, nodes };
 }
+
+test('hosted runtime shows a local-only explanation without calling ingest APIs', async () => {
+  const h = harness('example.vercel.app');
+  h.state.status = 'idle';
+  await h.ui.load();
+  assert.equal(h.requests.length, 0);
+  assert.match(h.ui.render(), /古籍入库需要本地服务/);
+});
 
 test('late page response cannot replace the newly selected page', async () => {
   const h = harness();
