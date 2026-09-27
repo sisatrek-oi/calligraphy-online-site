@@ -76,16 +76,23 @@
     const p = current.package, m = p.material, row = m.rows[selected], draft = current.entries.find(e => e.rowId === row.id);
     const entry = draft || { decision:'', note:'', values:row.values };
     const done = current.entries.filter(e => { try { C.validateEntries([e], m, false); return true; } catch { return false; } }).length;
-    return shell(`<div class="intro"><div class="eyebrow">独立审核 · ${esc(p.reviewer)}</div><h1>${esc(m.title)}</h1><div class="status-line"><span>已完成 ${done} / ${m.rows.length} 条</span><span class="muted">每人意见单独收回</span></div><progress class="progress" value="${done}" max="${m.rows.length}"></progress></div>
-    <div class="workspace"><aside class="panel"><h2>审核条目</h2><nav class="row-nav">${m.rows.map((r, i) => `<button class="${i === selected ? 'active' : ''}" data-row="${i}">${esc(r.id)}${current.entries.some(e => e.rowId === r.id && e.decision) ? ' · 已填写' : ''}</button>`).join('')}</nav></aside>
-    <section class="panel"><h2>${esc(row.id)}</h2><div class="review-grid"><div><h3>原文与出处</h3><p class="muted wrap">${esc(row.sourceFile || '未提供原文文件名')}</p>${row.image ? `<a href="${esc(row.image)}" target="_blank" rel="noopener"><img class="page-image" src="${esc(row.image)}" alt="${esc(row.id)} 原始页图"></a>` : ''}<div class="source">${esc(row.sourceText || '未附原文全文。请依据摘录与页图判断；证据不足时选择“无法判断”。')}</div></div>
-    <form id="review-form"><h3>逐项核对</h3>${m.fields.map((f, i) => `<label><span>${esc(f.label)}</span><div class="original">原：${esc(row.values[f.id] || '空')}</div><textarea data-field="${i}" aria-label="${esc(f.label)}建议">${esc(entry.values[f.id])}</textarea></label>`).join('')}
-    <label><span>审核判断</span><select name="decision" required><option value="">请选择</option>${Object.entries(C.decisions).map(([k, v]) => `<option value="${k}" ${entry.decision === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-    <label><span>审核说明（需要修改 / 无法判断时必填）</span><textarea name="note" maxlength="10000">${esc(entry.note)}</textarea></label>
-    <button type="submit" class="primary">保存本条${selected < m.rows.length - 1 ? '并继续' : ''}</button></form></div></section></div>
-    <section class="panel"><h2>完成后发回负责人</h2><p class="muted">保存到浏览器不会发回意见。完成全部条目后生成结果文件并下载，发给负责人。</p><div class="toolbar"><button class="primary" data-result>生成结果文件</button>${link(filename(p.reviewer) + '-审核草稿.json', { type:'shulun-review-recovery', version:1, record:current }, '下载草稿备份')}</div><div id="result-download">${prepared ? link(filename(p.reviewer) + '-审核结果-v' + prepared.revision + '.json', prepared, '下载审核结果 v' + prepared.revision) : ''}</div></section>`);
+    const source = row.sourceText || '未附原文全文；证据不足时请选择“无法判断”。';
+    const quote = row.values.quote || '', hit = quote ? source.indexOf(quote) : -1;
+    const sourceHtml = hit < 0 ? esc(source) : esc(source.slice(0, hit)) + '<mark id="source-hit">' + esc(quote) + '</mark>' + esc(source.slice(hit + quote.length));
+    return shell(`<div class="review-heading"><div><span class="eyebrow">独立审核 · ${esc(p.reviewer)}</span><h1 title="${esc(m.title)}">${esc(m.title)}</h1></div><span class="badge">已完成 ${done} / ${m.rows.length}</span></div>
+    <div class="review-item-bar"><label><span>审核条目</span><select id="row-picker" aria-label="审核条目">${m.rows.map((r, i) => `<option value="${i}" ${i === selected ? 'selected' : ''}>${esc(r.id)}${current.entries.some(e => e.rowId === r.id && e.decision) ? ' · 已填写' : ''}</option>`).join('')}</select></label><span class="muted">${selected + 1} / ${m.rows.length}</span><button data-row="${selected - 1}" ${selected === 0 ? 'disabled' : ''}>上一条</button><button data-row="${selected + 1}" ${selected === m.rows.length - 1 ? 'disabled' : ''}>下一条</button></div>
+    <div class="review-desk"><section class="source-pane"><div class="pane-heading"><h2>原文对照</h2>${hit >= 0 ? '<button type="button" data-locate>定位摘录</button>' : '<span class="muted">未找到完整摘录</span>'}</div><p class="source-meta">${esc(row.sourceFile || '未提供原文文件名')} · 导入文本，需核对底本</p><div class="source-scroll" tabindex="0" aria-label="原文内容">${row.image ? `<a href="${esc(row.image)}" target="_blank" rel="noopener"><img class="page-image" src="${esc(row.image)}" alt="${esc(row.id)} 原始页图"></a>` : ''}<div class="source">${sourceHtml}</div></div></section>
+    <form id="review-form"><div class="pane-heading"><h2>逐项核对</h2><span class="muted">${esc(row.id)}</span></div><div class="review-fields">${m.fields.map((f, i) => `<label><span>${esc(f.label)}</span><div class="original">原：${esc(row.values[f.id] || '空')}</div><textarea data-field="${i}" rows="${f.id === 'quote' ? 3 : 2}" aria-label="${esc(f.label)}建议">${esc(entry.values[f.id])}</textarea></label>`).join('')}</div>
+    <div class="review-decision"><label><span>审核判断</span><select name="decision" required><option value="">请选择</option>${Object.entries(C.decisions).map(([k, v]) => `<option value="${k}" ${entry.decision === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label class="review-note"><span>说明（修改／无法判断必填）</span><textarea name="note" rows="2" maxlength="10000">${esc(entry.note)}</textarea></label><button type="submit" class="primary">保存本条${selected < m.rows.length - 1 ? '并继续' : ''}</button></div></form></div>
+    <div class="review-delivery"><button class="primary" data-result>生成结果文件</button><details><summary>草稿备份</summary><div>${link(filename(p.reviewer) + '-审核草稿.json', { type:'shulun-review-recovery', version:1, record:current }, '下载草稿备份')}</div></details><div id="result-download">${prepared ? link(filename(p.reviewer) + '-审核结果-v' + prepared.revision + '.json', prepared, '下载审核结果 v' + prepared.revision) : '<span class="muted">完成后下载结果，发回负责人</span>'}</div></div>`);
   }
-  function render() { releaseUrls(); exports = []; app.innerHTML = setup ? renderSetup() : current ? (current.batch ? renderCoordinator() : renderReviewer()) : renderHome(); bind(); status(); }
+  function render() {
+    releaseUrls(); exports = [];
+    document.body.classList.toggle('reviewing', Boolean(!setup && current?.package));
+    app.innerHTML = setup ? renderSetup() : current ? (current.batch ? renderCoordinator() : renderReviewer()) : renderHome(); bind(); status();
+    const hit = document.getElementById('source-hit'), scroller = document.querySelector('.source-scroll');
+    if (hit && scroller) scroller.scrollTop = Math.max(0, hit.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 60);
+  }
   function capture() {
     const form = document.getElementById('review-form'); if (!form || !current?.package) return;
     const m = current.package.material, row = m.rows[selected];
@@ -150,6 +157,8 @@
       current.batch = batch; changed(); await persist(); render(); toast(`新增 ${counts.added} 人，更新 ${counts.updated} 份，跳过重复 ${counts.duplicate} 份；旧版意见保留`);
     }));
     document.querySelectorAll('[data-row]').forEach(b => b.addEventListener('click', action(async () => { capture(); await persist(); selected = Number(b.dataset.row); render(); })));
+    document.getElementById('row-picker')?.addEventListener('change', action(async e => { const next = Number(e.target.value); capture(); await persist(); selected = next; render(); }));
+    document.querySelector('[data-locate]')?.addEventListener('click', () => { const hit = document.getElementById('source-hit'), scroller = document.querySelector('.source-scroll'); if (hit && scroller) scroller.scrollTop += hit.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 60; });
     const form = document.getElementById('review-form');
     form?.addEventListener('input', e => { if (busy || saveError) return; if (e.target.dataset.field != null) form.elements.decision.value = 'change'; capture(); });
     form?.addEventListener('change', () => { if (!busy && !saveError) capture(); });
