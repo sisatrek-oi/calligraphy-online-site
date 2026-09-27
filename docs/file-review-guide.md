@@ -4,6 +4,8 @@
 
 ## 使用流程
 
+也可从网站主页进入：介绍／登录／注册页顶部，以及工作台顶栏，均有“进入审核”按钮。成员无需登录完整工作台。
+
 独立入口：`review.html`。发布地址：https://sisatrek-oi.github.io/calligraphy-online-site/review.html 。无需服务器账号、OCR 或模型服务；2026-09-27 已完成 Pages 构建及线上导入、保存、结果生成核验。
 
 ### 负责人

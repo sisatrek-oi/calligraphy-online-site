@@ -6443,6 +6443,7 @@ function renderShell(content) {
           <div class="brand-copy"><h1>书论工作区</h1><span>${sectionLabel}</span></div>
         </div>
         <div class="top-utility">
+          <a class="review-entry-link" href="./review.html" target="_blank" rel="noopener" title="打开文件审核与汇总，无需登录">进入审核</a>
           <label><span>⌕</span><input type="search" value="${escapeHtml(state.query)}" placeholder="全局搜索（Ctrl+K）" data-global-search /></label>
           ${topUserControl()}
         </div>

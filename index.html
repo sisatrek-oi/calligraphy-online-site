@@ -8,9 +8,13 @@
     <link rel="icon" type="image/png" href="./src/assets/shulun-mark.png" />
     <link rel="stylesheet" href="./src/styles.css?v=20260927-import-ocr-v2" />
     <link rel="stylesheet" href="./src/layout.css?v=20260914-icon-controls" />
-    <link rel="stylesheet" href="./src/entry.css?v=20260914-email-memory" />
+    <link rel="stylesheet" href="./src/entry.css?v=20260927-review-entry" />
   </head>
-  <body>
+  <body data-entry-active="true">
+    <nav class="public-review-entry" aria-label="成员审核入口">
+      <span>已有审核包？无需登录</span>
+      <a href="./review.html" class="review-entry-link">进入审核 <span aria-hidden="true">→</span></a>
+    </nav>
     <div id="app"></div>
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="./src/cloud-store.js?v=20260914-register-entry"></script>
@@ -21,6 +25,6 @@
     <script defer src="./src/ai-consensus.js?v=20260921-consensus-v6"></script>
     <script defer src="./src/embedded-sample.js?v=20260914-file-fallback"></script>
     <script defer src="./src/ancient-ingest.js?v=20260927-file-review-v1"></script>
-    <script defer src="./src/main.js?v=20260927-file-review-v1"></script>
+    <script defer src="./src/main.js?v=20260927-review-entry"></script>
   </body>
 </html>
