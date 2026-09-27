@@ -47,15 +47,17 @@
     str(m.title, '标题', 200, false);
     list(m.fields, '字段', 80).forEach(f => { if (!object(f)) fail('字段无效'); key(f.id); str(f.label, '字段名', 100, false); });
     unique(m.fields.map(f => f.id));
+    let materialBytes = new TextEncoder().encode(JSON.stringify({ title:m.title, fields:m.fields })).length;
     list(m.rows, '条目', 2000).forEach(r => {
       if (!object(r) || !object(r.values)) fail('条目无效');
       key(r.id); str(r.sourceText, '原文', 1000000); str(r.sourceFile, '原文文件', 500);
       if (Object.keys(r.values).length !== m.fields.length) fail('条目字段不完整');
       m.fields.forEach(f => { if (!own(r.values, f.id)) fail('条目缺少字段'); str(r.values[f.id], f.label); });
       if (r.image) image(r.image);
+      materialBytes += new TextEncoder().encode(JSON.stringify(r)).length + 1;
+      if (materialBytes > MAX_BYTES - 1000000) fail('材料过大，请减少图片或拆分批次');
     });
     unique(m.rows.map(r => r.id));
-    if (new TextEncoder().encode(JSON.stringify(m)).length > MAX_BYTES - 1000000) fail('材料过大，请减少图片或拆分批次');
     return m;
   }
   function fromWorkspace(w) {

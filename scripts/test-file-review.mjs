@@ -57,3 +57,7 @@ test('malformed backup is rejected without altering live data',async()=>{
  const b=await make(); const bad=C.clone(b);bad.assignments.push(bad.assignments[0]);await assert.rejects(()=>C.validateBatch(bad),/重复/);assert.equal(b.assignments.length,5);
  assert.throws(()=>C.parse('{'),/JSON/);
 });
+
+test('oversized batches are rejected before building the full serialized package',()=>{
+ const m=C.fromWorkspace(workspace());const row=m.rows[0];m.rows=Array.from({length:60},(_,i)=>({...row,id:'large-'+i,sourceText:'x'.repeat(1000000)}));assert.throws(()=>C.validateMaterial(m),/材料过大/);
+});

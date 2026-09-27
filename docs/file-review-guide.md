@@ -4,7 +4,7 @@
 
 ## 使用流程
 
-独立入口：`review.html`。发布地址：https://sisatrek-oi.github.io/calligraphy-online-site/review.html 。无需服务器账号、OCR 或模型服务；实际发布状态以 GitHub Pages 构建与访问验收记录为准。
+独立入口：`review.html`。发布地址：https://sisatrek-oi.github.io/calligraphy-online-site/review.html 。无需服务器账号、OCR 或模型服务；2026-09-27 已完成 Pages 构建及线上导入、保存、结果生成核验。
 
 ### 负责人
 
@@ -42,7 +42,7 @@
 
 ## 验证
 
-- 175 项 JavaScript + 77 项 Python 测试通过，共 252 项；其中 10 项为文件审核协议测试。
+- 176 项 JavaScript + 77 项 Python 测试通过，共 253 项；其中 11 项为文件审核协议测试。
 - 实际页面：创建五份独立包，五人分别审核，包含通过、修改、无法判断，回收显示 5/5 与 1 条分歧；原作者字段未被覆盖。
 - 实际文件回读：五个结果均通过批次检查，再次合并均判重复；协调备份包含五人意见。
 - 刷新保留、独立存储环境导入协调备份恢复、跨标签页过期写入拒绝并生成恢复文件均通过。

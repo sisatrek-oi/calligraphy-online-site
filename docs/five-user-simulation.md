@@ -49,3 +49,7 @@ python3 simulation_server.py --port 8773 --data-root '/Users/liujianing/Desktop/
 - 验证限制：本轮浏览器自动化未捕获工作台草稿 Blob 下载事件；该下载交互不标记实机通过。OCR 后端 CSV 下载内容已通过真实 HTTP 验证。正式模型抽取、正式云权限及公网环境尚未验证。
 
 证据：[任务验收记录](../../../../../2026-09-27-shulun-user-isolation/验收记录.md)。
+
+## 后续发布记录
+
+2026-09-27：本地模拟代码随文件审核版提交 7987992 推送 GitHub。模拟后端仍只在本机运行；Pages 新增的是独立静态文件审核入口，详见 [文件审核说明](file-review-guide.md)。测试账号与数据未推送。
