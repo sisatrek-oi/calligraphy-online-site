@@ -1777,6 +1777,13 @@ function dashboardWorkflow() {
         <h2>工作流程</h2>
         <span>当前工作区</span>
       </div>
+      <section class="material-preparation" aria-label="材料准备">
+        <div><h3>材料准备</h3><p>扫描古籍先入库；已有文本或整理表可直接导入。</p></div>
+        <div class="material-preparation-actions">
+          <button type="button" data-view="ingest">古籍入库<span>版本登记 · OCR · 逐页校对（本地）</span></button>
+          <button type="button" data-home-focus="file">导入已有材料<span>TXT / CSV / JSON</span></button>
+        </div>
+      </section>
       <div class="workflow-list">
         ${steps.map((step) => `
         <article class="workflow-row">
@@ -1828,7 +1835,8 @@ function dashboardProjectCard() {
       <div class="quick-actions">
         <h3>快捷操作</h3>
         <div>
-          <button type="button" data-home-focus="file">材料导入</button>
+          <button type="button" data-view="ingest">古籍入库</button>
+          <button type="button" data-home-focus="file">导入已有材料</button>
           <button type="button" data-home-focus="schema">字段模板</button>
           <button type="button" data-view="detail" data-detail-mode="table">原文定位</button>
           <button type="button" data-view="detail" data-detail-mode="table">打开统一主表</button>
@@ -6460,8 +6468,10 @@ function renderShell(content) {
         </div>
         <nav class="drawer-nav">
           <button type="button" class="${state.view === "home" ? "active" : ""}" data-view="home" ${state.view === "home" ? "aria-current='page'" : ""}>工作台</button>
+          <span class="drawer-section-label">材料准备</span>
           <button type="button" data-home-focus="file">材料库</button>
           <button type="button" class="${state.view === "ingest" ? "active" : ""}" data-view="ingest" ${state.view === "ingest" ? "aria-current='page'" : ""}>古籍入库</button>
+          <span class="drawer-section-label">整理与审校</span>
           <button type="button" class="${state.view === "detail" && state.detailMode === "table" ? "active" : ""}" data-view="detail" data-detail-mode="table" ${state.view === "detail" && state.detailMode === "table" ? "aria-current='page'" : ""}>统一主表</button>
           <button type="button" class="${state.view === "detail" && state.detailMode === "review" ? "active" : ""}" data-view="detail" data-detail-mode="review" ${state.view === "detail" && state.detailMode === "review" ? "aria-current='page'" : ""}>回检修订</button>
           <button type="button" data-home-focus="export" ${state.rows.length || state.exportVersions.length ? "" : "disabled"}>成果导出</button>

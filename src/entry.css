@@ -363,7 +363,7 @@ body:not([data-entry-active="true"]) .public-review-entry { display: none; }
 }
 .review-entry-link:hover { background: #185952; color: #fff; }
 .review-entry-link:focus-visible { outline: 3px solid #a57824; outline-offset: 3px; }
-.entry-gate { padding: 92px 0 24px; }
+.entry-gate { padding: 116px 0 24px; }
 @media (max-width: 560px) {
   .public-review-entry { top: 20px; left: 24px; right: 24px; justify-content: space-between; gap: 8px; }
   .public-review-entry > span { font-size: 12px; }
@@ -373,3 +373,17 @@ body:not([data-entry-active="true"]) .public-review-entry { display: none; }
 @media (max-height: 650px) {
   body[data-entry-active="true"] { overflow-y: auto; }
 }
+
+.public-entry-group { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.public-entry-group > span { font-size: 12px; color: #69706b; }
+.secondary-entry-link { background: #fff; color: #1f6f68; }
+.secondary-entry-link:hover { background: #eef3ef; color: #185952; }
+.material-preparation { margin: 0 18px 16px; padding: 16px; border: 1px solid #d9d0c2; border-radius: 6px; background: #f6f8f4; }
+.material-preparation h3 { margin: 0 0 6px; font-size: 16px; }
+.material-preparation p { margin: 0 0 12px; font-size: 13px; color: #69706b; line-height: 1.6; }
+.material-preparation-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.material-preparation-actions button, .material-preparation-actions a { display: block; min-height: 44px; padding: 10px 14px; border: 1px solid #d9d0c2; border-radius: 5px; background: #fff; color: #1f6f68; text-decoration: none; text-align: left; font: inherit; cursor: pointer; }
+.material-preparation-actions button span { display: block; margin-top: 4px; font-size: 12px; color: #69706b; }
+.material-preparation-actions :is(button,a):focus-visible { outline: 3px solid #a57824; outline-offset: 2px; }
+.drawer-section-label { margin: 14px 14px 4px; font-size: 12px; color: #77746d; }
+@media (max-width: 560px) { .public-entry-group { align-items: flex-start; } .public-entry-group:last-child { align-items: flex-end; } .material-preparation { margin: 0 12px 12px; padding: 12px; } .material-preparation-actions > * { flex: 1 1 150px; } }

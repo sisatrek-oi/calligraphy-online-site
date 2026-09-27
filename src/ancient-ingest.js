@@ -327,10 +327,15 @@
   function render() {
     if (state.status === "local-only") {
       return `<section class="ingest-page ingest-local-only"><div class="ingest-local-only-card">
-        <span>LOCAL WORKFLOW</span>
+        <span>材料准备 / 古籍入库</span>
         <h2>古籍入库需要本地服务</h2>
-        <p>这一步会读取本地 PDF、调用 OCR，并把逐页文本与中间表写入工作区，因此不能在 GitHub Pages 等静态托管中运行。</p>
-        <p>GitHub Pages 提供网页预览；团队同步、检索与 AI 功能需要另行配置相应服务。需要处理 PDF 时，请在本机启动 <code>python3 server.py</code>后打开此页。</p>
+        <p>由负责人完成版本登记、PDF 处理与逐页校对，整理好材料后再交给成员审核。</p>
+        <p>当前线上版提供审核与文件交换，PDF 识别仍在本机进行。已有 TXT、CSV 或 JSON 时，可以直接导入已有材料。</p>
+        <div class="material-preparation-actions">
+          <button type="button" data-home-focus="file">导入已有材料</button>
+          <a href="./review.html" target="_blank" rel="noopener">进入成员审核</a>
+          <a href="https://github.com/sisatrek-oi/calligraphy-online-site/blob/main/docs/import-ocr-guide.md" target="_blank" rel="noopener">本地入库使用说明</a>
+        </div>
       </div></section>`;
     }
     if (state.status === "idle" || state.status === "loading") {
