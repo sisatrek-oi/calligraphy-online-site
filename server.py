@@ -515,6 +515,9 @@ def test_model_connection(
 
 
 class WorkspaceHandler(SimpleHTTPRequestHandler):
+    def _ingest_service(self):
+        return ancient_ingest_service()
+
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/health":
@@ -530,21 +533,21 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
             self._handle_search(parsed.query)
             return
         if parsed.path == "/api/ancient-ingest/pdfs":
-            self._handle_ingest_action(lambda: ancient_ingest_service().list_pdfs())
+            self._handle_ingest_action(lambda: self._ingest_service().list_pdfs())
             return
         if parsed.path == "/api/ancient-ingest/jobs":
-            self._handle_ingest_action(lambda: ancient_ingest_service().list_jobs())
+            self._handle_ingest_action(lambda: self._ingest_service().list_jobs())
             return
         job_match = re.fullmatch(r"/api/ancient-ingest/jobs/([a-f0-9]{12})", parsed.path)
         if job_match:
-            self._handle_ingest_action(lambda: ancient_ingest_service().get_job(job_match.group(1)))
+            self._handle_ingest_action(lambda: self._ingest_service().get_job(job_match.group(1)))
             return
         page_match = re.fullmatch(
             r"/api/ancient-ingest/jobs/([a-f0-9]{12})/pages/(-?\d+)", parsed.path
         )
         if page_match:
             self._handle_ingest_action(
-                lambda: ancient_ingest_service().page_content(
+                lambda: self._ingest_service().page_content(
                     page_match.group(1), int(page_match.group(2))
                 )
             )
@@ -554,7 +557,7 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
         )
         if preview_match:
             self._handle_ingest_file(
-                lambda: ancient_ingest_service().preview_path(
+                lambda: self._ingest_service().preview_path(
                     preview_match.group(1), int(preview_match.group(2))
                 ),
                 "image/jpeg",
@@ -568,7 +571,7 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
             name = output_match.group(2)
             content_type = "application/json" if name.endswith(".json") else "text/csv; charset=utf-8"
             self._handle_ingest_file(
-                lambda: ancient_ingest_service().output_path(output_match.group(1), name),
+                lambda: self._ingest_service().output_path(output_match.group(1), name),
                 content_type,
                 download_name=name,
             )
@@ -610,7 +613,7 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
             self._handle_ingest_upload()
             return
         if parsed.path == "/api/ancient-ingest/jobs":
-            self._handle_ingest_api(lambda payload: ancient_ingest_service().create_job(payload))
+            self._handle_ingest_api(lambda payload: self._ingest_service().create_job(payload))
             return
         ingest_action_match = re.fullmatch(
             r"/api/ancient-ingest/jobs/([a-f0-9]{12})/(pause|resume)", parsed.path
@@ -618,9 +621,9 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
         if ingest_action_match:
             job_id, action = ingest_action_match.groups()
             self._handle_ingest_api(
-                lambda _payload: ancient_ingest_service().pause_job(job_id)
+                lambda _payload: self._ingest_service().pause_job(job_id)
                 if action == "pause"
-                else ancient_ingest_service().resume_job(job_id),
+                else self._ingest_service().resume_job(job_id),
                 body=False,
             )
             return
@@ -629,7 +632,7 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
         )
         if ingest_extract_match:
             self._handle_ingest_api(
-                lambda _payload: ancient_ingest_service().start_extraction(
+                lambda _payload: self._ingest_service().start_extraction(
                     ingest_extract_match.group(1), extract_ingest_evidence
                 ),
                 body=False,
@@ -640,7 +643,7 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
         )
         if ingest_page_match:
             self._handle_ingest_api(
-                lambda payload: ancient_ingest_service().save_page_content(
+                lambda payload: self._ingest_service().save_page_content(
                     ingest_page_match.group(1),
                     int(ingest_page_match.group(2)),
                     str(payload.get("text") or ""),
@@ -738,7 +741,7 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
             filename = urllib.parse.unquote(self.headers.get("X-PDF-Filename", ""))
             self.connection.settimeout(60)
-            self._send_json(ancient_ingest_service().import_pdf(self.rfile, size, filename))
+            self._send_json(self._ingest_service().import_pdf(self.rfile, size, filename))
         except IngestError as exc:
             self.close_connection = True
             self._send_json({"error": str(exc)}, status=exc.status)

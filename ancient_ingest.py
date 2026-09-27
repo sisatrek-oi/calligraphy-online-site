@@ -78,13 +78,13 @@ def _clean_ocr_text(value: str) -> str:
 
 
 class AncientIngestService:
-    def __init__(self, app_root: Path) -> None:
+    def __init__(self, app_root: Path, *, inbox_root: Path | None = None, runtime_root: Path | None = None) -> None:
         self.app_root = app_root.resolve()
         self.workspace_root = _workspace_root(self.app_root)
         self.inbox_root = Path(
-            os.environ.get("CALLIGRAPHY_INBOX_ROOT", self.workspace_root / "inbox")
+            inbox_root if inbox_root is not None else os.environ.get("CALLIGRAPHY_INBOX_ROOT", self.workspace_root / "inbox")
         ).resolve()
-        self.runtime_root = Path(os.environ.get("CALLIGRAPHY_INGEST_ROOT", self.app_root / ".runtime" / "ancient-ingest")).resolve()
+        self.runtime_root = Path(runtime_root if runtime_root is not None else os.environ.get("CALLIGRAPHY_INGEST_ROOT", self.app_root / ".runtime" / "ancient-ingest")).resolve()
         self.jobs_root = self.runtime_root / "jobs"
         self.preview_root = self.runtime_root / "previews"
         self._lock = threading.RLock()

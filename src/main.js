@@ -1,3 +1,4 @@
+const workspaceStorage = window.CalligraphySession?.storage || localStorage;
 const app = document.querySelector("#app");
 const WORKSPACE_POINTER_KEY = "calligraphy-current-workspace-v2";
 const WORKSPACE_STORAGE_PREFIX = "calligraphy-workspace-v2:";
@@ -327,7 +328,7 @@ function cloneSchema(fields) {
 
 function loadCustomTemplates() {
   try {
-    const payload = JSON.parse(localStorage.getItem(CUSTOM_TEMPLATES_KEY) || "[]");
+    const payload = JSON.parse(workspaceStorage.getItem(CUSTOM_TEMPLATES_KEY) || "[]");
     if (!Array.isArray(payload)) return [];
     return payload
       .filter((template) => template?.id && template?.name && Array.isArray(template.fields))
@@ -338,7 +339,7 @@ function loadCustomTemplates() {
 }
 
 function saveCustomTemplates(templates) {
-  localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(templates.map((template) => ({
+  workspaceStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(templates.map((template) => ({
     ...template,
     custom: true,
     fields: cloneSchema(template.fields)
@@ -490,7 +491,7 @@ function workspacePayload() {
 
 function workspaceIsCurrent(id) {
   const expected = workspaceSnapshots.get(id) ?? null;
-  const current = localStorage.getItem(storageKey(id));
+  const current = workspaceStorage.getItem(storageKey(id));
   if (current === expected) return true;
   state.workspaceConflict = { id, deleted: current === null };
   state.saveError = "其他页面已更新或移除当前工作区，本次操作未保存。";
@@ -577,12 +578,12 @@ function saveWorkspace() {
   const savedAt = new Date().toISOString();
   try {
     if (!workspaceIsCurrent(id)) return false;
-    const pointerChanged = localStorage.getItem(WORKSPACE_POINTER_KEY) !== id;
+    const pointerChanged = workspaceStorage.getItem(WORKSPACE_POINTER_KEY) !== id;
     const serialized = JSON.stringify({ ...workspacePayload(), savedAt });
     // Serialization may take time; recheck the snapshot immediately before writing.
     if (!workspaceIsCurrent(id)) return false;
-    localStorage.setItem(storageKey(id), serialized);
-    if (pointerChanged) localStorage.setItem(WORKSPACE_POINTER_KEY, id);
+    workspaceStorage.setItem(storageKey(id), serialized);
+    if (pointerChanged) workspaceStorage.setItem(WORKSPACE_POINTER_KEY, id);
     workspaceSnapshots.set(id, serialized);
     state.lastSavedAt = savedAt;
     state.saveError = "";
@@ -600,6 +601,7 @@ function cloudReady() {
 }
 
 function cloudLabel() {
+  if (window.CalligraphySession?.user) return `${window.CalligraphySession.user} · 独立测试账号`;
   if (state.cloud.status === "ready") return state.cloud.user?.email || "云端已连接";
   if (state.cloud.status === "signed-out") return "云端未登录";
   if (state.cloud.status === "error") return "云端异常";
@@ -607,6 +609,7 @@ function cloudLabel() {
 }
 
 function topUserControl() {
+  if (window.CalligraphySession?.user) return `<button type="button" class="top-user" data-simulation-logout>${escapeHtml(window.CalligraphySession.user)} · 退出</button>`;
   const label = cloudLabel();
   if (state.cloud.status === "ready") {
     return `<button type="button" class="top-user cloud-ready" data-cloud-sync title="${escapeHtml(state.cloud.message || "同步当前工作区")}">${escapeHtml(label)} · 同步</button>`;
@@ -628,6 +631,7 @@ function updateTopUserDom() {
 }
 
 function cloudStatusPanel() {
+  if (window.CalligraphySession) return `<section class="dash-panel cloud-panel"><div class="dash-panel-head"><h2>账号隔离模拟</h2></div><p>${escapeHtml(cloudLabel())}</p><p>材料、任务和工作区由本机服务按账号保存。其他测试账号无法访问；团队共享尚未启用。</p></section>`;
   const rows = [
     ["状态", state.cloud.message || cloudLabel()],
     ["团队", state.cloud.team?.name || "-"],
@@ -868,7 +872,7 @@ async function loadCloudWorkspaceData() {
   if (state.workspaceId !== state.cloud.workspace.id) resetBatchUiState();
   state.workspaceId = state.cloud.workspace.id;
   try {
-    const localSnapshot = localStorage.getItem(storageKey());
+    const localSnapshot = workspaceStorage.getItem(storageKey());
     workspaceSnapshots.set(state.workspaceId, localSnapshot);
     state.exportVersions = JSON.parse(localSnapshot || "{}").exportVersions || [];
   } catch {
@@ -1001,6 +1005,9 @@ async function handleCloudRefresh() {
 }
 
 function attachCloudControls() {
+  document.querySelectorAll("[data-simulation-logout]").forEach(button => button.addEventListener("click", async () => {
+    try { await window.CalligraphySession.logout(); } catch (error) { window.alert(error.message); }
+  }));
   document.querySelectorAll("[data-cloud-sync]").forEach((button) => {
     button.addEventListener("click", handleCloudSync);
   });
@@ -1015,10 +1022,10 @@ function attachCloudControls() {
   });
 }
 
-function loadWorkspace(id = localStorage.getItem(WORKSPACE_POINTER_KEY)) {
+function loadWorkspace(id = workspaceStorage.getItem(WORKSPACE_POINTER_KEY)) {
   if (!id) return false;
   try {
-    const serialized = localStorage.getItem(storageKey(id));
+    const serialized = workspaceStorage.getItem(storageKey(id));
     const payload = JSON.parse(serialized || "null");
     if (!payload || !Array.isArray(payload.rows)) return false;
     if (state.workspaceId !== id) resetBatchUiState();
@@ -1053,7 +1060,7 @@ function loadWorkspace(id = localStorage.getItem(WORKSPACE_POINTER_KEY)) {
     state.sourceText = "";
     state.sourceStatus = "idle";
     state.manifest = buildManifest(state.rows);
-    const selection = localStorage.getItem(storageKey(id) + ":selection") || payload.selectedId;
+    const selection = workspaceStorage.getItem(storageKey(id) + ":selection") || payload.selectedId;
     state.selectedId = state.rows.some((row) => row.id === selection) ? selection : state.rows[0]?.id || "";
     state.lastSavedAt = payload.savedAt || "";
     workspaceSnapshots.set(id, serialized);
@@ -1067,14 +1074,14 @@ function loadWorkspace(id = localStorage.getItem(WORKSPACE_POINTER_KEY)) {
 }
 
 function clearWorkspace() {
-  const id = state.workspaceId || localStorage.getItem(WORKSPACE_POINTER_KEY);
+  const id = state.workspaceId || workspaceStorage.getItem(WORKSPACE_POINTER_KEY);
   if (id && !workspaceIsCurrent(id)) return false;
   if (id) {
-    localStorage.removeItem(storageKey(id));
+    workspaceStorage.removeItem(storageKey(id));
     workspaceSnapshots.set(id, null);
   }
-  if (localStorage.getItem(WORKSPACE_POINTER_KEY) === id) localStorage.removeItem(WORKSPACE_POINTER_KEY);
-  localStorage.removeItem("calligraphy-review-state-v1");
+  if (workspaceStorage.getItem(WORKSPACE_POINTER_KEY) === id) workspaceStorage.removeItem(WORKSPACE_POINTER_KEY);
+  workspaceStorage.removeItem("calligraphy-review-state-v1");
   resetBatchUiState();
   state.workspaceId = newWorkspaceId();
   state.datasetName = "空白隔离工作区";
@@ -1798,7 +1805,7 @@ function dashboardProjectCard() {
       <dl class="project-meta">
         <div><dt>工作区</dt><dd>${escapeHtml(workspaceShortId)}</dd></div>
         <div><dt>保存时间</dt><dd>${escapeHtml(formatLocalTime(state.lastSavedAt))}</dd></div>
-        <div><dt>处理方式</dt><dd>浏览器本地隔离</dd></div>
+        <div><dt>处理方式</dt><dd>${window.CalligraphySession ? "服务端按账号隔离" : "浏览器本地隔离"}</dd></div>
         <div><dt>字段模板</dt><dd>${escapeHtml(templateById(state.schemaTemplateId)?.name || "书论字段模板")}</dd></div>
         <div><dt>项目描述</dt><dd>${escapeHtml(hasWorkspaceData() ? "当前数据来自本地导入文件，可继续定位、回检、修订与导出。" : "还没有导入材料。请先导入 CSV/JSON 或工作区 JSON。")}</dd></div>
       </dl>
@@ -1846,7 +1853,7 @@ function dashboardLogTable() {
     formatLocalTime(item.at || item.time),
     item.step || "材料导入",
     item.name || item.message || "导入本地文件",
-    "本地用户",
+    item.actor || window.CalligraphySession?.user || "本地用户",
     item.error || item.type === "error" ? "失败" : item.type === "warn" ? "待处理" : "成功",
     item.message || item.detail || (item.rows ? `${formatCount(item.rows)} 行` : item.count ? `${formatCount(item.count)} 条` : "-")
   ]);
@@ -1947,6 +1954,8 @@ function workspaceActions() {
   return `
     <div class="workspace-actions">
       <button type="button" data-workspace-export>导出工作区</button>
+      <button type="button" data-review-material-export ${state.rows.length ? "" : "disabled"}>导出审核材料</button>
+      <a class="button" href="./review.html" target="_blank" rel="noopener">文件审核与汇总</a>
       <button type="button" data-main-table-export ${state.rows.length || state.exportVersions.length ? "" : "disabled"}>成果导出</button>
       <button type="button" data-problem-export ${state.rows.length ? "" : "disabled"}>导出问题条目</button>
       <button type="button" data-review-log-export ${state.rows.length || state.trashRows.length ? "" : "disabled"}>导出审校日志</button>
@@ -4376,7 +4385,7 @@ function selectResult(rowId) {
   }
   state.selectedId = rowId;
   try {
-    localStorage.setItem(storageKey() + ":selection", rowId);
+    workspaceStorage.setItem(storageKey() + ":selection", rowId);
   } catch {
     state.saveError = "当前位置未保存";
   }
@@ -4809,7 +4818,7 @@ function openBatchResult(rowId) {
   resetResearchForRow(row);
   resetAiForRow(row);
   try {
-    localStorage.setItem(storageKey() + ":selection", rowId);
+    workspaceStorage.setItem(storageKey() + ":selection", rowId);
   } catch {
     state.saveError = "当前位置未保存";
   }
@@ -5324,6 +5333,19 @@ function exportWorkspace() {
   downloadBlob(`${stamp}-${safeName}.json`, JSON.stringify(workspacePayload(), null, 2));
 }
 
+function exportReviewMaterial() {
+  const fields = orderedSchema().map(field => ({ id: field.id, label: field.label }));
+  const pages = Object.fromEntries([...state.sourceCache, ...state.uploadedPages]
+    .filter(([name, value]) => typeof value === "string" && state.rows.some(row => row.sourceFile === name)));
+  const payload = {
+    type: "calligraphy-workspace", version: 2, datasetName: state.datasetName,
+    schema: fields, uploadedPages: pages,
+    rows: state.rows.map(row => ({ id: row.id, sourceFile: row.sourceFile,
+      fields: Object.fromEntries(fields.map(field => [field.id, fieldValue(row, field.id)])) }))
+  };
+  downloadBlob("书论-审核材料.json", JSON.stringify(payload, null, 2));
+}
+
 function downloadTemplateCsv() {
   const schemaHeaders = orderedSchema().map((field) => field.label);
   const headers = ["材料ID", "附表", "二轮状态", ...schemaHeaders, "原文命中"];
@@ -5459,7 +5481,7 @@ function createFormalRelease() {
   const snapshot = window.CalligraphyExportWorkflow.createRelease({
     metadata: {
       id, version, workspaceId: state.workspaceId, datasetName: state.datasetName,
-      createdAt: new Date().toISOString(), actor: state.cloud.user?.email || "本地用户",
+      createdAt: new Date().toISOString(), actor: window.CalligraphySession?.user || state.cloud.user?.email || "本地用户",
       scope: state.exportScope, scopeLabel: deliveryScopeLabel(),
       selection: { filter: state.filter, query: state.query, qualityFocus: state.qualityFocus },
       schemaVersion: state.schemaVersion, rulesVersion: "delivery-v1",
@@ -5991,7 +6013,7 @@ function resolveImportIssue(reportIndex, issueIndex, action, reason = "", quoteO
   const sourceFile = conflictSourceFile(issue);
   const sourceText = report.sourceConflicts?.[sourceFile];
   const identity = issue.identity || window.CalligraphyImportWorkflow.issueIdentity(issue.row, sourceFile, sourceText ?? null);
-  const actor = state.cloud.user?.email || "本地用户";
+  const actor = window.CalligraphySession?.user || state.cloud.user?.email || "本地用户";
   const at = new Date().toISOString();
   const decision = { action, reason, actor, at };
   const before = Object.fromEntries(["rows", "originalRows", "uploadedPages", "importReports", "uploadLog", "undoAction"]
@@ -6188,11 +6210,11 @@ function importMappingModal() {
 
 function localWorkspaceList() {
   const items = [];
-  for (let index = 0; index < localStorage.length; index++) {
-    const key = localStorage.key(index);
+  for (let index = 0; index < workspaceStorage.length; index++) {
+    const key = workspaceStorage.key(index);
     if (!key?.startsWith(WORKSPACE_STORAGE_PREFIX)) continue;
     try {
-      const payload = JSON.parse(localStorage.getItem(key));
+      const payload = JSON.parse(workspaceStorage.getItem(key));
       if (Array.isArray(payload?.rows)) items.push({
         id: key.slice(WORKSPACE_STORAGE_PREFIX.length),
         name: payload.datasetName || "未命名工作区",
@@ -6284,11 +6306,11 @@ function switchLocalWorkspace(id) {
   const previous = state.workspaceId;
   const before = { ...state };
   try {
-    localStorage.setItem(WORKSPACE_POINTER_KEY, id);
+    workspaceStorage.setItem(WORKSPACE_POINTER_KEY, id);
     if (!loadWorkspace()) throw new Error("工作区读取失败");
   } catch {
     Object.assign(state, before);
-    localStorage.setItem(WORKSPACE_POINTER_KEY, previous);
+    workspaceStorage.setItem(WORKSPACE_POINTER_KEY, previous);
     window.alert("工作区读取失败，已保留当前工作区。");
     return;
   }
@@ -6576,6 +6598,7 @@ function verifyDemoCredentials(account, password) {
 }
 
 function localDemoSessionAvailable() {
+  if (window.CalligraphySession) return false;
   if (state.cloud.config?.enabled) return false;
   const hostname = String(location.hostname || "").toLowerCase();
   const loopback = ["localhost", "127.0.0.1", "::1"].includes(hostname);
@@ -6585,7 +6608,7 @@ function localDemoSessionAvailable() {
 
 function restoreLocalDemoSession() {
   if (!localDemoSessionAvailable()) return false;
-  try { localStorage.setItem(LOCAL_DEMO_SESSION_KEY, "active"); } catch { /* Local preview can still continue without storage. */ }
+  try { workspaceStorage.setItem(LOCAL_DEMO_SESSION_KEY, "active"); } catch { /* Local preview can still continue without storage. */ }
   state.entryStage = "workspace";
   state.entryAccount = "";
   state.entryEmail = "";
@@ -6596,7 +6619,7 @@ function restoreLocalDemoSession() {
 
 function persistLocalDemoSession() {
   if (!localDemoSessionAvailable()) return;
-  try { localStorage.setItem(LOCAL_DEMO_SESSION_KEY, "active"); } catch { /* Login remains usable when storage is blocked. */ }
+  try { workspaceStorage.setItem(LOCAL_DEMO_SESSION_KEY, "active"); } catch { /* Login remains usable when storage is blocked. */ }
 }
 
 function emailMemoryEnabled() {
@@ -6607,11 +6630,11 @@ function restoreRememberedEmail() {
   if (!emailMemoryEnabled()) {
     state.entryEmail = "";
     state.entryRememberEmail = false;
-    try { localStorage.removeItem(REMEMBERED_EMAIL_KEY); } catch { /* Storage may be unavailable. */ }
+    try { workspaceStorage.removeItem(REMEMBERED_EMAIL_KEY); } catch { /* Storage may be unavailable. */ }
     return;
   }
   try {
-    state.entryEmail = String(localStorage.getItem(REMEMBERED_EMAIL_KEY) || "");
+    state.entryEmail = String(workspaceStorage.getItem(REMEMBERED_EMAIL_KEY) || "");
   } catch {
     state.entryEmail = "";
   }
@@ -6621,8 +6644,8 @@ function restoreRememberedEmail() {
 function persistRememberedEmail(email, remember) {
   if (!emailMemoryEnabled()) return;
   try {
-    if (remember) localStorage.setItem(REMEMBERED_EMAIL_KEY, String(email || "").trim().toLowerCase());
-    else localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+    if (remember) workspaceStorage.setItem(REMEMBERED_EMAIL_KEY, String(email || "").trim().toLowerCase());
+    else workspaceStorage.removeItem(REMEMBERED_EMAIL_KEY);
   } catch { /* Login must remain usable when browser storage is blocked. */ }
 }
 
@@ -6659,7 +6682,7 @@ function renderEntry() {
               ${emailMemoryEnabled() ? `<label class="entry-remember"><input type="checkbox" name="rememberEmail" ${state.entryRememberEmail ? "checked" : ""} /><span>在此设备记住账号</span></label>` : ""}
               <p class="entry-login-error" role="alert" aria-live="polite">${escapeHtml(state.entryError)}</p>
               <button type="submit" class="entry-login-submit">登录</button>
-              <div class="entry-auth-switch"><span>还没有账号？</span><button type="button" data-entry-register>邮箱免密注册</button></div>
+              ${window.CalligraphySession ? `<p class="entry-register-help">五用户隔离模拟 · 请使用测试账号登录</p>` : `<div class="entry-auth-switch"><span>还没有账号？</span><button type="button" data-entry-register>邮箱免密注册</button></div>`}
               <button type="button" class="entry-login-back" data-entry-back>返回介绍</button>
             </form>
           `}
@@ -6732,11 +6755,16 @@ function renderEntry() {
     }
     renderEntry();
   });
-  document.querySelector("#entryLoginForm")?.addEventListener("submit", (event) => {
+  document.querySelector("#entryLoginForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
     state.entryAccount = String(values.get("account") || "").trim();
     state.entryRememberEmail = values.get("rememberEmail") === "on";
+    if (window.CalligraphySession) {
+      try { await window.CalligraphySession.login(state.entryAccount, values.get("password")); }
+      catch (error) { state.entryError = error.message; renderEntry(); }
+      return;
+    }
     if (!verifyDemoCredentials(state.entryAccount, values.get("password"))) {
       state.entryError = "账号或密码不正确";
       renderEntry();
@@ -6963,6 +6991,7 @@ function attachGlobalEvents() {
     button.addEventListener("click", cancelPendingImport);
   });
 
+  document.querySelector("[data-review-material-export]")?.addEventListener("click", exportReviewMaterial);
   document.querySelectorAll("[data-workspace-export]").forEach((button) => {
     button.addEventListener("click", exportWorkspace);
   });
@@ -7683,6 +7712,11 @@ async function loadBundledSampleData() {
 }
 
 async function init() {
+  if (window.CalligraphySession) {
+    await window.CalligraphySession.ready;
+    state.entryStage = window.CalligraphySession.user ? "workspace" : "signin";
+    if (!window.CalligraphySession.user) { state.manifest = buildManifest([]); render(); return; }
+  }
   initButtonTooltips();
   window.AncientIngestUI?.configure?.({
     rerender: () => render(),
@@ -7705,7 +7739,7 @@ async function init() {
     state.originalRows = [];
     state.manifest = buildManifest([]);
   }
-  if (!state.rows.length && !state.uploadedPages.size) {
+  if (!window.CalligraphySession && !state.rows.length && !state.uploadedPages.size) {
     await loadBundledSampleData();
     saveWorkspace();
   }

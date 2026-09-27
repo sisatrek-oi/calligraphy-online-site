@@ -318,7 +318,7 @@
       <div class="ingest-output-list">
         <div><span class="file-kind">TXT</span><div><strong>逐页原文</strong><small>page_*.txt · ${job.completed} 页</small></div><button type="button" data-ingest-import-pages ${ready ? "" : "disabled"}>载入材料库</button></div>
         <div><span class="file-kind">CSV</span><div><strong>全文中间表</strong><small>pages.csv · 每页一行，保留 OCR 状态</small></div><a href="/api/ancient-ingest/jobs/${job.id}/outputs/pages.csv" download>下载</a></div>
-        <div><span class="file-kind">CSV</span><div><strong>主表候选</strong><small>evidence.csv · ${job.extractedCount || 0} 条 · ${extractionStatusLabel(job.extractionStatus)}</small></div><span class="ingest-output-actions"><button type="button" data-ingest-extract ${ready && job.extractionStatus !== "running" ? "" : "disabled"}>${job.extractionStatus === "running" ? "抽取中…" : "生成候选"}</button><a href="/api/ancient-ingest/jobs/${job.id}/outputs/evidence.csv" download>下载</a></span></div>
+        <div><span class="file-kind">CSV</span><div><strong>主表候选</strong><small>evidence.csv · ${job.extractedCount || 0} 条 · ${extractionStatusLabel(job.extractionStatus)}</small></div><span class="ingest-output-actions"><button type="button" data-ingest-extract ${ready && !window.CalligraphySession && job.extractionStatus !== "running" ? "" : "disabled"}>${window.CalligraphySession ? "模拟环境未启用模型" : job.extractionStatus === "running" ? "抽取中…" : "生成候选"}</button><a href="/api/ancient-ingest/jobs/${job.id}/outputs/evidence.csv" download>下载</a></span></div>
         <div><span class="file-kind">JSON</span><div><strong>处理清单</strong><small>页码映射、引擎和逐页错误</small></div><a href="/api/ancient-ingest/jobs/${job.id}/outputs/ocr-manifest.json" download>下载</a></div>
       </div>
     </section>`;
