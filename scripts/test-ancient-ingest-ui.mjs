@@ -60,3 +60,27 @@ test('page drafts survive navigation and job refresh rerenders', async () => {
   const back = h.selectPage(1); h.requests[2].finish({ text: 'first', record: { printedPage: 1 } }); await back;
   assert.equal(h.state.pageText, 'unsaved correction');
 });
+
+test('save sends page revision and refreshes invalidated candidate state', async () => {
+  const h = harness();
+  h.state.selectedPrintedPage = 1; h.state.pageStatus = 'ready';
+  h.state.pageRecord = { printedPage: 1, revision: 4 };
+  const saving = h.savePage({ dataset: { page: '1' }, text: 'revision five' });
+  assert.equal(JSON.parse(h.requests[0].options.body).revision, 4);
+  h.requests[0].finish({text:'revision five', rawText:'raw', record:{printedPage:1,revision:5}, job:{id:'job-a', records:[{printedPage:1,revision:5}], extractedCount:0, extractedPages:[]}});
+  await saving;
+  assert.equal(h.state.rawText, 'raw');
+  assert.equal(h.state.jobs[0].extractedCount, 0);
+  assert.equal(h.state.pageRecord.revision, 5);
+});
+
+test('save conflict preserves local draft across navigation', async () => {
+  const h = harness(); h.state.selectedPrintedPage = 1; h.state.pageStatus = 'ready';
+  const saving = h.savePage({ dataset: { page: '1' }, text: 'keep my draft' });
+  h.requests[0].finish({error:'页面已被更新'}, false); await saving;
+  assert.match(h.state.error, /页面已被更新/);
+  const reading = h.selectPage(1);
+  h.requests[1].finish({text:'server revision',rawText:'raw original',record:{printedPage:1,revision:9}});await reading;
+  assert.equal(h.state.pageText, 'keep my draft');
+  assert.equal(h.state.rawText, 'raw original');
+});

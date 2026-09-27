@@ -58,13 +58,15 @@ MAX_MODEL_RESPONSE_LENGTH = 2_000_000
 CONSENSUS_RUNS: OrderedDict[str, dict] = OrderedDict()
 CONSENSUS_RUNS_LOCK = threading.Lock()
 ANCIENT_INGEST_SERVICE: AncientIngestService | None = None
+ANCIENT_INGEST_LOCK = threading.Lock()
 
 
 def ancient_ingest_service() -> AncientIngestService:
     global ANCIENT_INGEST_SERVICE
-    if ANCIENT_INGEST_SERVICE is None:
-        ANCIENT_INGEST_SERVICE = AncientIngestService(ROOT)
-    return ANCIENT_INGEST_SERVICE
+    with ANCIENT_INGEST_LOCK:
+        if ANCIENT_INGEST_SERVICE is None:
+            ANCIENT_INGEST_SERVICE = AncientIngestService(ROOT)
+        return ANCIENT_INGEST_SERVICE
 
 
 def load_env_file(path: Path) -> None:
@@ -604,6 +606,9 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/model-config/test":
             self._handle_api_action(test_model_connection, local_only=True)
             return
+        if parsed.path == "/api/ancient-ingest/pdfs/import":
+            self._handle_ingest_upload()
+            return
         if parsed.path == "/api/ancient-ingest/jobs":
             self._handle_ingest_api(lambda payload: ancient_ingest_service().create_job(payload))
             return
@@ -639,6 +644,7 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
                     ingest_page_match.group(1),
                     int(ingest_page_match.group(2)),
                     str(payload.get("text") or ""),
+                    payload.get("revision"),
                 )
             )
             return
@@ -722,6 +728,26 @@ class WorkspaceHandler(SimpleHTTPRequestHandler):
         return model_config_request_allowed(
             self.client_address[0], self.headers.get("Origin", "")
         )
+
+    def _handle_ingest_upload(self) -> None:
+        try:
+            if not self._ingest_request_allowed():
+                raise IngestError("古籍入库仅允许本机页面访问", 403)
+            if self.headers.get("Content-Type", "").split(";")[0] != "application/pdf":
+                raise IngestError("请上传 PDF 文件", 415)
+            size = int(self.headers.get("Content-Length", "0"))
+            filename = urllib.parse.unquote(self.headers.get("X-PDF-Filename", ""))
+            self.connection.settimeout(60)
+            self._send_json(ancient_ingest_service().import_pdf(self.rfile, size, filename))
+        except IngestError as exc:
+            self.close_connection = True
+            self._send_json({"error": str(exc)}, status=exc.status)
+        except (ValueError, TimeoutError):
+            self.close_connection = True
+            self._send_json({"error": "文件大小无效或上传超时，请重试"}, status=400)
+        except OSError:
+            self.close_connection = True
+            self._send_json({"error": "文件保存失败，请检查磁盘空间"}, status=500)
 
     def _handle_ingest_action(self, action) -> None:
         try:

@@ -1,6 +1,15 @@
 # 书论工作区部署说明
 
-Review date: 2026-09-23
+Review date: 2026-09-27
+
+## GitHub Pages 发布入口
+
+- 现有仓库：`sisatrek-oi/calligraphy-online-site`。
+- 网站：https://sisatrek-oi.github.io/calligraphy-online-site/
+- Pages 从 `main` 分支根目录自动构建，`.nojekyll` 保持静态资源原样发布。
+- 本轮更新版本导入／OCR 的代码和页面说明。Pages 仅提供静态网页；Python 服务、PDF 上传和 OCR 仍需本地运行，不能将代码发布视为 OCR 后端上线。
+- 发布前执行检查与相关测试，推送后核对 Pages 构建提交及公网资源版本。仅提交代码、测试与指导文档；`.runtime/`、`.env*`（模板除外）、真实 `cloud-config.json`、本机 PDF 和验收数据不进入发布。
+- 回退使用 `git revert <发布提交>` 后推送 `main`，不强推旧历史。
 
 ## 部署架构
 

@@ -8544,3 +8544,21 @@ button.icon-control {
   padding: 0;
   font-size: 17px;
 }
+
+/* Intake controls and source transcript stay within the existing workbench. */
+#ancientIngestUploadForm { display: grid; gap: 8px; }
+#ancientIngestUploadForm label { display: grid; gap: 6px; }
+#ancientIngestUploadForm input { max-width: 100%; min-width: 0; }
+.ingest-original { flex: 0 0 auto; max-height: 160px; overflow: auto; }
+.ingest-original pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+
+.ingest-editor-pane > form { grid-template-rows: auto minmax(0, 1fr) auto; }
+#ancientIngestUploadForm { font-size: 12px; }
+#ancientIngestUploadForm input[type=file] { font-size: 11px; width: 100%; }
+#ancientIngestUploadForm button { min-height: 32px; border: 1px solid #2d6740; border-radius: 4px; background: #326b43; color: #fff; font: inherit; cursor: pointer; }
+#ancientIngestUploadForm button:disabled { opacity: .6; cursor: wait; }
+#ancientIngestUploadForm small { color: #747a73; line-height: 1.5; }
+@media (max-width: 700px) {
+  .ingest-original { max-height: 64px; font-size: 12px; }
+  .ingest-editor-pane > form { grid-template-rows: auto minmax(44px, 1fr) auto; overflow-y: auto; }
+}

@@ -11,6 +11,9 @@
     selectedPrintedPage: null,
     pageStatus: "idle",
     pageText: "",
+    rawText: null,
+    uploading: false,
+    notice: "",
     pageRecord: null,
     saving: false,
     creating: false,
@@ -152,6 +155,35 @@
     </option>`).join("");
   }
 
+  function uploadPanel() {
+    return `<section class="ingest-band">
+      <form id="ancientIngestUploadForm">
+        <label>导入书论 PDF<input type="file" name="pdf" accept="application/pdf,.pdf" required ${state.uploading ? "disabled" : ""} /></label>
+        <button type="submit" ${state.uploading ? "disabled" : ""}>${state.uploading ? "正在上传并校验…" : "导入 PDF"}</button>
+        <small>最大 512 MB · 文件保存在本机 · 同一文件不会重复导入</small>
+      </form>
+      ${state.notice ? `<p role="status">${escapeHtml(state.notice)}</p>` : ""}
+    </section>`;
+  }
+
+  async function uploadPdf(form) {
+    if (state.uploading) return;
+    const file = new FormData(form).get("pdf");
+    if (!file?.size || file.size > 512 * 1024 * 1024) {
+      state.error = "请选择不超过 512 MB 的 PDF"; host.rerender(); return;
+    }
+    state.uploading = true; state.error = ""; state.notice = ""; host.rerender();
+    try {
+      const result = await api("/api/ancient-ingest/pdfs/import", {
+        method: "POST", headers: { "Content-Type": "application/pdf", "X-PDF-Filename": encodeURIComponent(file.name) }, body: file,
+      });
+      state.selectedPdfId = result.pdfId;
+      state.notice = result.duplicate ? "该 PDF 已存在，已选中原文件。" : "PDF 已导入，请登记版本并选择处理页码。";
+      await load({ quiet: true });
+    } catch (error) { state.error = error.message; }
+    finally { state.uploading = false; host.rerender(); }
+  }
+
   function setupPanel() {
     const pdf = currentPdf();
     if (!pdf) {
@@ -164,6 +196,9 @@
       <div class="ingest-section-head"><div><span>01</span><h2>材料与页码</h2></div>${capabilityMarkup()}</div>
       <form id="ancientIngestCreateForm" class="ingest-form-grid">
         <label class="wide"><span>inbox 古籍 PDF</span><select name="pdfId" data-ingest-pdf-select>${pdfOptions()}</select></label>
+        <label class="wide"><span>书名</span><input name="bookTitle" value="${escapeHtml(pdf.title || pdf.name)}" maxlength="500" required /></label>
+        <label class="wide"><span>版本／版次</span><input name="edition" maxlength="500" placeholder="如：某出版社某年版／某刻本" /></label>
+        <label class="wide"><span>材料来源</span><input name="sourceNote" maxlength="500" placeholder="馆藏、下载出处或提供者" /></label>
         <label><span>PDF 起始页</span><input type="number" name="startPage" min="1" max="${pdf.pages}" value="${suggestedStart}" required /></label>
         <label><span>PDF 结束页</span><input type="number" name="endPage" min="1" max="${pdf.pages}" value="${suggestedEnd}" required /></label>
         <label><span>页码偏移</span><input type="number" name="pageOffset" value="${suggestedOffset}" required /><small>书中页码 = PDF 页码 - 偏移</small></label>
@@ -204,13 +239,15 @@
           </button>`).join("") || `<p>尚无入库任务</p>`}
         </nav>
         ${job ? `<div class="ingest-job-detail">
-          <header><div><strong>${escapeHtml(job.sourceName)}</strong><span>${jobStatusLabel(job.status)}${job.currentPage ? ` · PDF ${job.currentPage}` : ""}${job.extractionStatus === "running" ? ` · 正在抽取书页 ${job.currentExtractionPage || ""}` : ""}</span></div>
+          <header><div><strong>${escapeHtml(job.bookTitle || job.sourceName)}</strong><span>${escapeHtml(job.edition || "版本未登记")} · ${jobStatusLabel(job.status)}${job.currentPage ? ` · PDF ${job.currentPage}` : ""}${job.extractionStatus === "running" ? ` · 正在抽取书页 ${job.currentExtractionPage || ""}` : ""}</span></div>
             <div class="ingest-job-actions">
               ${["queued", "running", "pausing"].includes(job.status) ? `<button type="button" data-ingest-pause>暂停</button>` : ""}
               ${["paused", "failed", "complete_with_errors"].includes(job.status) ? `<button type="button" data-ingest-resume>继续处理</button>` : ""}
             </div>
           </header>
           <div class="ingest-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i><span style="width:${progress}%"></span></i><b>${progress}%</b></div>
+          ${job.error || job.recoveryMessage ? `<p role="status">${escapeHtml(job.error || job.recoveryMessage)}</p>` : ""}
+          ${job.records.some((r) => r.status === "failed") ? `<details><summary>查看失败页（可继续处理重试）</summary>${job.records.filter((r) => r.status === "failed").map((r) => `<p>PDF ${r.pdfPage}：${escapeHtml(r.error)}</p>`).join("")}</details>` : ""}
           <dl class="ingest-counters">
             <div><dt>完成</dt><dd>${job.completed}/${job.total}</dd></div><div><dt>复用</dt><dd>${job.reused}</dd></div>
             <div><dt>OCR</dt><dd>${job.ocrCount}</dd></div><div><dt>候选</dt><dd>${job.extractedCount || 0}</dd></div><div><dt>异常</dt><dd>${job.failed}</dd></div>
@@ -258,13 +295,14 @@
       <div class="ingest-scan-pane">
         <div class="ingest-section-head"><div><span>03</span><h2>扫描页</h2></div><small>${completed.length ? `已处理 ${completed.length} 页` : "等待首个页面完成"}</small></div>
         ${pageNavigation(job, page)}
-        ${page == null ? `<div class="ingest-job-placeholder"><strong>还没有可校对页面</strong><span>OCR 或 TXT 复用完成后会自动出现。</span></div>` : `<div class="ingest-scan-canvas"><figure><img src="/api/ancient-ingest/jobs/${job.id}/pages/${page}/preview" alt="书中第 ${page} 页扫描图" /><figcaption>PDF ${selected.pdfPage} · 书页 ${page}</figcaption></figure></div>`}
+        ${page == null ? `<div class="ingest-job-placeholder"><strong>还没有可校对页面</strong><span>OCR 或 TXT 复用完成后会自动出现。</span></div>` : `<div class="ingest-scan-canvas"><figure><img src="/api/ancient-ingest/jobs/${job.id}/pages/${page}/preview" alt="书中第 ${page} 页扫描图" /><figcaption>${escapeHtml(job.bookTitle || job.sourceName)} · ${escapeHtml(job.edition || "版本未登记")}<br />PDF ${selected.pdfPage} · 书页 ${page}</figcaption></figure></div>`}
       </div>
       <div class="ingest-editor-pane">
         <div class="ingest-editor-heading"><div><span>04</span><h2>文本与输出</h2></div><small>TXT/OCR · CSV · AI 候选</small></div>
         ${page == null ? `<div class="ingest-job-placeholder"><strong>还没有可编辑文本</strong><span>OCR 或 TXT 复用完成后可在这里编辑、保存并生成候选。</span></div>` : `<form id="ancientIngestPageForm" data-page="${page}">
           <header><div><strong>${escapeHtml(selected.sourceFile)}</strong><span data-ingest-save-status>${drafts.has(pageKey(job.id, page)) ? "未保存 · 翻页保留草稿" : selected.method === "reused" ? "复用既有文本" : selected.method === "edited" ? "人工已修改" : "OCR 初稿"}</span></div><button type="submit" ${state.saving || state.pageStatus !== "ready" ? "disabled" : ""}>${state.saving ? "保存中…" : "保存文本"}</button></header>
           ${state.pageStatus === "loading" ? `<div class="ingest-text-loading">正在读取文本…</div>` : state.pageStatus === "error" ? `<div class="ingest-text-loading"><span>文本读取失败</span><button type="button" data-ingest-page="${page}">重试读取</button></div>` : `<textarea name="text" spellcheck="false" aria-label="第 ${page} 页 OCR 文本">${escapeHtml(state.pageText)}</textarea>`}
+          <details class="ingest-original"><summary>查看原始 OCR／复用文本</summary><pre>${escapeHtml(state.rawText ?? "此历史任务未保留原始文本")}</pre></details>
         </form>`}
         ${outputsPanel()}
       </div>
@@ -291,8 +329,8 @@
       return `<section class="ingest-page ingest-local-only"><div class="ingest-local-only-card">
         <span>LOCAL WORKFLOW</span>
         <h2>古籍入库需要本地服务</h2>
-        <p>这一步会读取本地 PDF、调用 OCR，并把逐页文本与中间表写入工作区，因此不在 Vercel 线上版运行。</p>
-        <p>线上版仍可正常使用主表、团队同步、检索和 AI 共识。需要处理 PDF 时，请在本机启动 <code>python3 server.py</code>后打开此页。</p>
+        <p>这一步会读取本地 PDF、调用 OCR，并把逐页文本与中间表写入工作区，因此不能在 GitHub Pages 等静态托管中运行。</p>
+        <p>GitHub Pages 提供网页预览；团队同步、检索与 AI 功能需要另行配置相应服务。需要处理 PDF 时，请在本机启动 <code>python3 server.py</code>后打开此页。</p>
       </div></section>`;
     }
     if (state.status === "idle" || state.status === "loading") {
@@ -302,7 +340,7 @@
       ${state.error ? `<p class="ingest-alert" role="alert">${escapeHtml(state.error)}</p>` : ""}
       <div class="ingest-workbench">
         <aside class="ingest-sidebar" aria-label="古籍入库任务管理">
-          ${setupPanel()}${jobsPanel()}
+          ${uploadPanel()}${setupPanel()}${jobsPanel()}
         </aside>
         ${reviewPanel()}
       </div>
@@ -320,6 +358,9 @@
         method: "POST",
         body: JSON.stringify({
           pdfId: String(data.get("pdfId") || ""),
+          bookTitle: String(data.get("bookTitle") || ""),
+          edition: String(data.get("edition") || ""),
+          sourceNote: String(data.get("sourceNote") || ""),
           startPage: Number(data.get("startPage")),
           endPage: Number(data.get("endPage")),
           pageOffset: Number(data.get("pageOffset")),
@@ -327,7 +368,7 @@
           ocrMissing: data.get("ocrMissing") === "on",
         }),
       });
-      state.jobs.unshift(job);
+      state.jobs = [job, ...state.jobs.filter((item) => item.id !== job.id)];
       state.selectedJobId = job.id;
       pageRequest += 1;
       state.selectedPrintedPage = null;
@@ -351,6 +392,7 @@
     state.error = "";
     state.pageStatus = "loading";
     state.pageText = "";
+    state.rawText = null;
     state.pageRecord = job.records.find((item) => item.printedPage === state.selectedPrintedPage) || null;
     host.rerender();
     try {
@@ -358,6 +400,7 @@
       if (request !== pageRequest || state.selectedJobId !== job.id) return;
       state.pageText = drafts.get(pageKey(job.id, targetPage)) ?? payload.text ?? "";
       state.pageRecord = payload.record || state.pageRecord;
+      state.rawText = payload.rawText ?? null;
       state.pageStatus = "ready";
     } catch (error) {
       if (request !== pageRequest || state.selectedJobId !== job.id) return;
@@ -379,14 +422,16 @@
     host.rerender();
     try {
       const payload = await api(`/api/ancient-ingest/jobs/${job.id}/pages/${page}`, {
-        method: "POST", body: JSON.stringify({ text }),
+        method: "POST", body: JSON.stringify({ text, revision: state.pageRecord?.revision ?? 0 }),
       });
       if (drafts.get(key) === text) drafts.delete(key);
       if (state.selectedJobId === job.id && state.selectedPrintedPage === page && state.pageStatus === "ready") {
         state.pageText = drafts.get(key) ?? payload.text ?? "";
         state.pageRecord = payload.record;
+        state.rawText = payload.rawText ?? null;
       }
       const liveJob = state.jobs.find((item) => item.id === job.id);
+      if (liveJob && payload.job) Object.assign(liveJob, payload.job);
       const index = liveJob?.records.findIndex((item) => item.printedPage === page) ?? -1;
       if (index >= 0) liveJob.records[index] = payload.record;
     } catch (error) {
@@ -422,6 +467,9 @@
 
   function attach() {
     if (state.status === "idle") load();
+    document.querySelector("#ancientIngestUploadForm")?.addEventListener("submit", (event) => {
+      event.preventDefault(); uploadPdf(event.currentTarget);
+    });
     document.querySelector("[data-ingest-refresh]")?.addEventListener("click", () => load());
     document.querySelector("[data-ingest-pdf-select]")?.addEventListener("change", (event) => {
       state.selectedPdfId = event.target.value;
@@ -432,7 +480,7 @@
       createJob(event.currentTarget);
     });
     const setupForm = document.querySelector("#ancientIngestCreateForm");
-    const setupFields = ["startPage", "endPage", "pageOffset", "reuseExisting", "ocrMissing"];
+    const setupFields = ["bookTitle", "edition", "sourceNote", "startPage", "endPage", "pageOffset", "reuseExisting", "ocrMissing"];
     const setupValues = setupDrafts.get(state.selectedPdfId);
     if (setupForm && setupValues) {
       for (const name of setupFields) {
