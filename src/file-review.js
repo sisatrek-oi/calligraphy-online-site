@@ -81,7 +81,7 @@
     const sourceHtml = hit < 0 ? esc(source) : esc(source.slice(0, hit)) + '<mark id="source-hit">' + esc(quote) + '</mark>' + esc(source.slice(hit + quote.length));
     return shell(`<div class="review-heading"><div><span class="eyebrow">独立审核 · ${esc(p.reviewer)}</span><h1 title="${esc(m.title)}">${esc(m.title)}</h1></div><span class="badge">已完成 ${done} / ${m.rows.length}</span></div>
     <div class="review-item-bar"><label><span>审核条目</span><select id="row-picker" aria-label="审核条目">${m.rows.map((r, i) => `<option value="${i}" ${i === selected ? 'selected' : ''}>${esc(r.id)}${current.entries.some(e => e.rowId === r.id && e.decision) ? ' · 已填写' : ''}</option>`).join('')}</select></label><span class="muted">${selected + 1} / ${m.rows.length}</span><button data-row="${selected - 1}" ${selected === 0 ? 'disabled' : ''}>上一条</button><button data-row="${selected + 1}" ${selected === m.rows.length - 1 ? 'disabled' : ''}>下一条</button></div>
-    <div class="review-desk"><section class="source-pane"><div class="pane-heading"><h2>原文对照</h2>${hit >= 0 ? '<button type="button" data-locate>定位摘录</button>' : '<span class="muted">未找到完整摘录</span>'}</div><p class="source-meta">${esc(row.sourceFile || '未提供原文文件名')} · 导入文本，需核对底本</p><div class="source-scroll" tabindex="0" aria-label="原文内容">${row.image ? `<a href="${esc(row.image)}" target="_blank" rel="noopener"><img class="page-image" src="${esc(row.image)}" alt="${esc(row.id)} 原始页图"></a>` : ''}<div class="source">${sourceHtml}</div></div></section>
+    <div class="review-desk"><section class="source-pane"><div class="pane-heading"><h2>原文对照</h2><div class="source-tools">${row.image ? '<button type="button" data-scan>看扫描页</button>' : ''}${hit >= 0 ? '<button type="button" data-locate>定位摘录</button>' : '<span class="muted">未找到完整摘录</span>'}</div></div><p class="source-meta">${esc(row.sourceFile || '未提供原文文件名')} · 导入文本，需核对底本</p><div class="source-scroll" tabindex="0" aria-label="原文内容">${row.image ? `<button type="button" class="page-image-button" data-zoom aria-label="放大查看 ${esc(row.id)} 原PDF扫描页" title="点击在本页放大扫描页"><img class="page-image" src="${esc(row.image)}" alt="${esc(row.id)} 原PDF扫描页，点击放大"></button>` : ''}<div class="source">${sourceHtml}</div></div></section>
     <form id="review-form"><div class="pane-heading"><h2>逐项核对</h2><span class="muted">${esc(row.id)}</span></div><div class="review-fields">${m.fields.map((f, i) => `<label><span>${esc(f.label)}</span><div class="original">原：${esc(row.values[f.id] || '空')}</div><textarea data-field="${i}" rows="${f.id === 'quote' ? 3 : 2}" aria-label="${esc(f.label)}建议">${esc(entry.values[f.id])}</textarea></label>`).join('')}</div>
     <div class="review-decision"><label><span>审核判断</span><select name="decision" required><option value="">请选择</option>${Object.entries(C.decisions).map(([k, v]) => `<option value="${k}" ${entry.decision === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label class="review-note"><span>说明（修改／无法判断必填）</span><textarea name="note" rows="2" maxlength="10000">${esc(entry.note)}</textarea></label><button type="submit" class="primary">保存本条${selected < m.rows.length - 1 ? '并继续' : ''}</button></div></form></div>
     <div class="review-delivery"><button class="primary" data-result>生成结果文件</button><details><summary>草稿备份</summary><div>${link(filename(p.reviewer) + '-审核草稿.json', { type:'shulun-review-recovery', version:1, record:current }, '下载草稿备份')}</div></details><div id="result-download">${prepared ? link(filename(p.reviewer) + '-审核结果-v' + prepared.revision + '.json', prepared, '下载审核结果 v' + prepared.revision) : '<span class="muted">完成后下载结果，发回负责人</span>'}</div></div>`);
@@ -91,7 +91,7 @@
     document.body.classList.toggle('reviewing', Boolean(!setup && current?.package));
     app.innerHTML = setup ? renderSetup() : current ? (current.batch ? renderCoordinator() : renderReviewer()) : renderHome(); bind(); status();
     const hit = document.getElementById('source-hit'), scroller = document.querySelector('.source-scroll');
-    if (hit && scroller) scroller.scrollTop = Math.max(0, hit.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 60);
+    if (hit && scroller && !document.querySelector('.source-scroll .page-image')) scroller.scrollTop = Math.max(0, hit.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 60);
   }
   function capture() {
     const form = document.getElementById('review-form'); if (!form || !current?.package) return;
@@ -159,6 +159,7 @@
     document.querySelectorAll('[data-row]').forEach(b => b.addEventListener('click', action(async () => { capture(); await persist(); selected = Number(b.dataset.row); render(); })));
     document.getElementById('row-picker')?.addEventListener('change', action(async e => { const next = Number(e.target.value); capture(); await persist(); selected = next; render(); }));
     document.querySelector('[data-locate]')?.addEventListener('click', () => { const hit = document.getElementById('source-hit'), scroller = document.querySelector('.source-scroll'); if (hit && scroller) scroller.scrollTop += hit.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 60; });
+    document.querySelector('[data-scan]')?.addEventListener('click', () => { const scroller = document.querySelector('.source-scroll'); if (scroller) scroller.scrollTop = 0; });
     const form = document.getElementById('review-form');
     form?.addEventListener('input', e => { if (busy || saveError) return; if (e.target.dataset.field != null) form.elements.decision.value = 'change'; capture(); });
     form?.addEventListener('change', () => { if (!busy && !saveError) capture(); });
@@ -175,6 +176,16 @@
     if (saveError) document.querySelectorAll('#review-form input,#review-form textarea,#review-form select,#review-form button').forEach(n => n.disabled = true);
   }
   app.addEventListener('click', async event => {
+    if (event.target.closest('[data-zoom]')) {
+      const row = current?.package?.material?.rows[selected]; if (!row?.image) return;
+      const dialog = document.createElement('dialog'); dialog.className = 'scan-dialog';
+      dialog.innerHTML = `<div class="scan-dialog-heading"><strong>${esc(row.id)} · ${esc(row.sourceFile || '原PDF扫描页')}</strong><div class="scan-dialog-actions"><button type="button" data-size-scan>查看原尺寸</button><button type="button" data-close-scan aria-label="关闭扫描页">关闭</button></div></div><div class="scan-dialog-scroll"><img src="${esc(row.image)}" alt="${esc(row.id)} 原PDF扫描页放大图"></div>`;
+      document.body.append(dialog); dialog.showModal();
+      dialog.querySelector('[data-size-scan]').onclick = event => { const full = dialog.classList.toggle('full-size'); event.target.textContent = full ? '适合窗口' : '查看原尺寸'; };
+      dialog.querySelector('[data-close-scan]').onclick = () => dialog.close();
+      dialog.addEventListener('close', () => dialog.remove());
+      return;
+    }
     const button = event.target.closest('[data-preview]'); if (!button) return;
     const output = exports[Number(button.dataset.preview)]; if (!output) return;
     if (current && output.name.endsWith('-审核草稿.json')) output.content = JSON.stringify({ type:'shulun-review-recovery', version:1, record:current }, null, 2);
