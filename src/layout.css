@@ -188,7 +188,8 @@
   padding: 14px 10px;
 }
 
-.drawer-nav button {
+.drawer-nav button,
+.drawer-nav a {
   position: relative;
   width: 100%;
   min-height: 44px;
@@ -200,9 +201,13 @@
   padding: 0 14px 0 18px;
   text-align: left;
   font-size: 15px;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
 }
 
-.drawer-nav button::before {
+.drawer-nav button::before,
+.drawer-nav a::before {
   content: "";
   position: absolute;
   top: 10px;
@@ -214,7 +219,9 @@
 }
 
 .drawer-nav button:hover,
-.drawer-nav button:focus-visible { background: #f3f5f2; outline: 0; }
+.drawer-nav button:focus-visible,
+.drawer-nav a:hover,
+.drawer-nav a:focus-visible { background: #f3f5f2; outline: 0; }
 .drawer-nav button.active { background: #edf3ee; color: #205f35; font-weight: 600; }
 .drawer-nav button.active::before { background: #2f7045; }
 .drawer-nav button:disabled { color: #a0a19d; background: transparent; }

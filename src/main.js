@@ -6471,6 +6471,7 @@ function renderShell(content) {
           <span class="drawer-section-label">材料准备</span>
           <button type="button" data-home-focus="file">材料库</button>
           <button type="button" class="${state.view === "ingest" ? "active" : ""}" data-view="ingest" ${state.view === "ingest" ? "aria-current='page'" : ""}>古籍入库</button>
+          <a href="./team-tasks.html">团队任务</a>
           <span class="drawer-section-label">整理与审校</span>
           <button type="button" class="${state.view === "detail" && state.detailMode === "table" ? "active" : ""}" data-view="detail" data-detail-mode="table" ${state.view === "detail" && state.detailMode === "table" ? "aria-current='page'" : ""}>统一主表</button>
           <button type="button" class="${state.view === "detail" && state.detailMode === "review" ? "active" : ""}" data-view="detail" data-detail-mode="review" ${state.view === "detail" && state.detailMode === "review" ? "aria-current='page'" : ""}>回检修订</button>
