@@ -51,9 +51,9 @@
   function offline() {
     const ranges = [[1, 258], [259, 527], [528, 776], [777, 1052]];
     shell(`<section class="intro narrow"><span class="eyebrow">静态团队任务 · 待人工初筛</span><h1>《历代书法论文选》全书初筛</h1>
-      <p>1052 个原 PDF 物理页，四份连续页段。成员选自己的页段，载入已解压的扫描图，在网页逐页记录并导出回收表。</p>
+      <p>1052 个原 PDF 物理页，分成四份连续页段。扫描图、OCR 全文和原 PDF 都可在线查看；成员按自己的页段逐页审核。</p>
       <p class="static-note">静态站不识别成员身份，也不共享实时进度；审核记录保存在当前浏览器，提交以导出的两张 CSV 为准。</p>
-      <div class="static-units">${ranges.map(([start, end], index) => `<article><span class="eyebrow">审核成员 ${index + 1}</span><h2>原 PDF 第 ${start}–${end} 页</h2><p>${end - start + 1} 页 · 尚待人工初筛</p><a href="./screening.html?part=${index + 1}">进入逐页审核 →</a></article>`).join('')}</div></section>`);
+      <div class="static-units">${ranges.map(([start, end], index) => `<article><span class="eyebrow">审核成员 ${index + 1}</span><h2>原 PDF 第 ${start}–${end} 页</h2><p>${end - start + 1} 页 · 尚待人工初筛</p><a class="unit-primary" href="./screening.html?part=${index + 1}">进入逐页审核 →</a><div class="unit-sources"><a href="./screening-data/part-${index + 1}-ocr.txt" download>OCR 全文 TXT</a><a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div><small>扫描图在审核页逐页查看、打开。</small></article>`).join('')}</div></section>`);
   }
 
   function booksPanel() {
@@ -100,7 +100,7 @@
       .findIndex(([start, end]) => unit.stage === 'screen' && unit.startPage === start && unit.endPage === end) + 1;
     return `<aside class="detail"><div class="panel-head"><div><span class="eyebrow">${label(unit.stage)} · 第 ${unit.startPage}–${unit.endPage} 页</span><h2>${label(unit.status)}</h2></div><small>修订 ${unit.revision}</small></div>
       <p class="byline">负责人 ${esc(unit.assignee)}${unit.returnReason ? ` · 退回：${esc(unit.returnReason)}` : ''}</p>
-      ${screeningPart ? `<p class="screening-entry"><a href="./screening.html?part=${screeningPart}">进入本页段逐页审核 →</a><small>扫描图需在审核页选择本机材料包；导出两张 CSV 后交回负责人。</small></p>` : ''}
+      ${screeningPart ? `<p class="screening-entry"><a href="./screening.html?part=${screeningPart}">进入本页段逐页审核 →</a><small>在线查看扫描图、OCR 和原 PDF；导出两张 CSV 后交回负责人。</small></p>` : ''}
       <section class="source"><h3>原始材料／工作说明</h3><pre>${esc(unit.materialText || '管理员尚未附原文，请按来源说明核对相应页段。')}</pre></section>
       <section class="answer"><h3>${editable ? '我的工作稿' : '提交内容'}</h3>
         ${editable ? `<textarea id="workDraft" rows="11" aria-label="工作稿">${esc(state.draft)}</textarea><div class="actions"><button type="button" data-save>保存草稿</button><button type="button" class="secondary" data-submit>提交验收</button></div>`

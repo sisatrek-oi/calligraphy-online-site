@@ -10,6 +10,20 @@
   const current = () => state.reviews[page().page] || {};
   const seen = () => state.data.pages.filter((item) => state.reviews[item.page]?.seen).length;
   const filename = (number) => `page-${String(number).padStart(4, '0')}.jpg`;
+  const scanHref = (number) => `./screening-data/scans/${filename(number)}`;
+  const pdfHref = (local) => `./screening-data/part-${part}.pdf#page=${local}`;
+
+  function attachOcr(source) {
+    const text = source.replace(/^\uFEFF/, '');
+    const headings = [...text.matchAll(/^===== 原 PDF 物理页 (\d+)｜分册第 (\d+) 页 =====\r?$/gm)];
+    if (headings.length !== state.data.pages.length) throw new Error('线上 OCR 页数与页码索引不匹配');
+    headings.forEach((heading, index) => {
+      const item = state.data.pages[index];
+      if (Number(heading[1]) !== item.page || Number(heading[2]) !== item.local)
+        throw new Error(`线上 OCR 第 ${index + 1} 页与页码索引不匹配`);
+      item.ocr = text.slice(heading.index + heading[0].length, headings[index + 1]?.index ?? text.length).trim();
+    });
+  }
 
   function persist() {
     try {
@@ -43,17 +57,17 @@
     state.imageReady = false;
     const scan = app.querySelector('#scanWrap');
     const file = state.files.get(filename(page().page));
-    if (!file) {
-      scan.innerHTML = '<div class="scan-placeholder"><strong>尚未载入这页扫描图</strong>先选自己的解压材料包，再以扫描图逐页核对。OCR 不能代替看图。</div>';
-      updateSeenButton();
-      return;
-    }
-    state.imageUrl = URL.createObjectURL(file);
+    if (file) state.imageUrl = URL.createObjectURL(file);
     scan.innerHTML = `<img alt="原 PDF 物理页 ${page().page} 扫描图" />`;
     const image = scan.querySelector('img');
-    image.onload = () => { state.imageReady = true; updateSeenButton(); };
-    image.onerror = () => { state.error = `扫描图 ${filename(page().page)} 无法打开，请重新选择材料。`; showMessage(); };
-    image.src = state.imageUrl;
+    image.onload = () => { if (scan.contains(image)) { state.imageReady = true; updateSeenButton(); } };
+    image.onerror = () => {
+      if (!scan.contains(image)) return;
+      scan.innerHTML = '<div class="scan-placeholder"><strong>扫描图未能载入</strong>请检查网络，或在“本地材料备用”里选择本机扫描图。</div>';
+      state.error = `扫描图 ${filename(page().page)} 无法打开。`;
+      showMessage();
+    };
+    image.src = state.imageUrl || scanHref(page().page);
   }
 
   function updateSeenButton() {
@@ -67,15 +81,16 @@
     const candidates = Array.isArray(review.candidates) ? review.candidates : [];
     app.innerHTML = `<main class="page">
       <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / 审核成员 ${part}</span><h1>原 PDF 第 ${state.data.start}–${state.data.end} 页</h1><p>逐页看扫描图，记录新候选；已审进度只保存在当前浏览器。</p></div><span class="progress" id="progress">已看 ${seen()} / ${state.data.pages.length} 页</span></div>
-      <section class="setup"><p><strong>先载入第 ${part} 份解压材料的“扫描页”文件夹。</strong><br>需要 OCR 对照时，再选包内“定位与操作.html”。这些文件只在本机读取，不上传。</p>
-        <div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
+      <section class="setup"><p><strong>扫描图和 OCR 原文已在线载入。</strong><br>逐页审核后导出两张 CSV，发给负责人；进度只保存在当前浏览器。</p>
+        <div class="tools"><a class="download" href="./screening-data/part-${part}-ocr.txt" download>下载 OCR 全文</a>
+          <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
+          <button type="button" id="backup">导出进度备份</button><label class="file-button">导入进度<input id="backupFile" type="file" accept="application/json,.json" /></label></div>
+        <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
           <label class="file-button">或选择图片<input id="scanFiles" type="file" accept="image/jpeg" multiple /></label>
-          <label class="file-button">载入本地 OCR<input id="locatorFile" type="file" accept="text/html,.html" /></label>
-          <label class="file-button">导入进度<input id="backupFile" type="file" accept="application/json,.json" /></label>
-          <button type="button" id="backup">导出进度备份</button></div></section>
+          <label class="file-button">载入本地 OCR<input id="locatorFile" type="file" accept="text/html,.html" /></label></div></details></section>
       <div id="messageSlot"></div>
       <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>绿色表示已看扫描图</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${state.reviews[item.page]?.seen ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${state.reviews[item.page]?.seen ? '已看' : item.priority === '通读复核' ? '待看' : esc(item.priority)}</small></button>`).join('')}</div></aside>
-      <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF 物理页 ${p.page}</h2><small>分册第 ${p.local} 页 · ${esc(p.priority)}${p.ids.length ? ` · 旧材料 ID：${esc(p.ids.join('、'))}` : ''}</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="scan-wrap" id="scanWrap"></div><details class="ocr"><summary>展开 OCR 对照（未校勘）</summary><pre>${esc(p.ocr || '选择包内“定位与操作.html”可在本页查看 OCR；仍以扫描图为准。')}</pre></details></div></section>
+      <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF 物理页 ${p.page}</h2><small>分册第 ${p.local} 页 · ${esc(p.priority)}${p.ids.length ? ` · 旧材料 ID：${esc(p.ids.join('、'))}` : ''}</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">打开这页扫描图</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">在原 PDF 中看这页</a></div><details class="ocr"><summary>展开 OCR 对照（未校勘）</summary><pre>${esc(p.ocr || '线上 OCR 暂未载入，请下载全文对照；仍以扫描图为准。')}</pre></details></div></section>
       <section class="panel form-panel"><div class="panel-head"><h2>本页审核记录</h2><small>每次修改自动保存在本机</small></div><div class="form-body">
         <label>审核人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="请填写真实姓名" /></label>
         <div class="form-actions"><button type="button" id="markSeen" class="primary">${review.seen ? '撤销已看标记' : '已看这页扫描图'}</button>${review.seen ? '<span class="hint">已记录看图；可继续补充候选。</span>' : ''}</div>
@@ -193,7 +208,7 @@
           throw new Error('进度备份与本份页段不匹配');
         if (Object.keys(state.reviews).length && !confirm('导入会覆盖本机当前进度，确定继续？')) return;
         state.reviews = saved.reviews; state.person = String(saved.person || ''); persist();
-        state.notice = '进度备份已导入。仍需重新选择本机扫描图。'; render();
+        state.notice = '进度备份已导入，可继续在线逐页审核。'; render();
       } catch (error) { state.error = error.message || '进度备份读取失败'; showMessage(); }
     }
   });
@@ -211,10 +226,15 @@
   async function init() {
     if (![1, 2, 3, 4].includes(part)) { app.innerHTML = '<p class="loading">请选择团队任务中的第 1–4 份初筛工作项。</p>'; return; }
     try {
-      const response = await fetch(`./screening-data/part-${part}.json`, { cache: 'no-store' });
+      const [response, ocrResponse] = await Promise.all([
+        fetch(`./screening-data/part-${part}.json`, { cache: 'no-store' }),
+        fetch(`./screening-data/part-${part}-ocr.txt`, { cache: 'no-store' }),
+      ]);
       if (!response.ok) throw new Error('页码索引未找到');
       state.data = await response.json();
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1) throw new Error('页码索引不完整');
+      if (ocrResponse.ok) attachOcr(await ocrResponse.text());
+      else state.error = '线上 OCR 未能载入；可下载全文或载入本地 OCR，对照时仍以扫描图为准。';
       restore(); render();
     } catch (error) { app.innerHTML = `<p class="loading" role="alert">${esc(error.message)}。请刷新页面，或联系负责人检查静态站文件。</p>`; }
   }

@@ -6,4 +6,5 @@
 @media(max-width:1100px){.layout{grid-template-columns:210px minmax(0,1fr)}.form-panel{grid-column:2}.page-list{max-height:610px}}
 @media(max-width:700px){.heading{display:block}.progress{display:inline-block;margin-top:12px}.layout{grid-template-columns:1fr}.form-panel{grid-column:auto}.page-list{min-height:0;max-height:180px}.scan-wrap{height:52vh;min-height:260px}.topbar span{display:none}}
 .jump{display:grid;gap:5px;margin-top:12px;font-size:11px;color:#607365}.jump input{width:100%;padding:7px;border:1px solid #cad8cb;border-radius:5px}
+.setup .local-fallback{width:100%;border-top:1px solid #e4e9e2;padding-top:9px;font-size:12px;color:#627468}.local-fallback summary{cursor:pointer}.local-fallback .tools{margin-top:10px}.source-links{display:flex;flex-wrap:wrap;gap:15px;margin-top:10px;font-size:12px;font-weight:650}
 @media(max-width:700px){.viewer-panel{order:1}.page-panel{order:2}.form-panel{order:3}}
