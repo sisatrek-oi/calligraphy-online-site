@@ -1,7 +1,7 @@
 (() => {
   const app = document.querySelector('#teamTasksApp');
   const state = { user: null, role: null, books: [], units: [], bookId: '', unitId: '', unit: null,
-    draft: '', dirty: false, error: '', notice: '', loading: false, offline: false };
+    unitsByBook: {}, view: 'overview', draft: '', dirty: false, error: '', notice: '', loading: false, offline: false };
   const labels = { proofread: '原文校对', screen: '全书初筛', review: '条目审核',
     assigned: '待处理', in_progress: '进行中', submitted: '待验收', returned: '需修改', accepted: '已验收',
     draft: '草稿', published: '已发布' };
@@ -50,10 +50,30 @@
 
   function offline() {
     const ranges = [[1, 258], [259, 527], [528, 776], [777, 1052]];
-    shell(`<section class="intro narrow"><span class="eyebrow">静态团队任务 · 待人工初筛</span><h1>《历代书法论文选》全书初筛</h1>
-      <p>1052 个原 PDF 物理页，分成四份连续页段。扫描图、OCR 全文和原 PDF 都可在线查看；成员按自己的页段逐页审核。</p>
-      <p class="static-note">静态站不识别成员身份，也不共享实时进度；审核记录保存在当前浏览器，提交以导出的两张 CSV 为准。</p>
-      <div class="static-units">${ranges.map(([start, end], index) => `<article><span class="eyebrow">审核成员 ${index + 1}</span><h2>原 PDF 第 ${start}–${end} 页</h2><p>${end - start + 1} 页 · 尚待人工初筛</p><a class="unit-primary" href="./screening.html?part=${index + 1}">进入逐页审核 →</a><div class="unit-sources"><a href="./screening-data/part-${index + 1}-ocr.txt" download>OCR 全文 TXT</a><a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div><small>扫描图在审核页逐页查看、打开。</small></article>`).join('')}</div></section>`);
+    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>先看当前批次与分工，再进入自己的页段审核。</p></header>
+      <div class="overview-stats" aria-label="当前任务规模"><div><strong>1</strong><span>当前批次</span></div><div><strong>4</strong><span>连续页段</span></div><div><strong>1052</strong><span>原 PDF 物理页</span></div></div>
+      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 人工初筛</span><h2 id="screeningTitle">《历代书法论文选》全书初筛</h2><p>原 PDF 物理页 1–1052。四人各审一段，扫描图、OCR 全文和原 PDF 已在线备齐。</p></div><span class="task-state">材料已备齐</span></div>
+        <div class="overview-list-head"><h3>分工与材料</h3><span>按原 PDF 物理页定位</span></div>
+        <div class="overview-unit-list">${ranges.map(([start, end], index) => `<article class="overview-unit"><div class="unit-number">0${index + 1}</div><div class="unit-copy"><strong>审核成员 ${index + 1}</strong><span>第 ${start}–${end} 页 · ${end - start + 1} 页</span></div><div class="unit-actions"><a class="unit-primary" href="./screening.html?part=${index + 1}">进入审核 →</a><a href="./screening-data/part-${index + 1}-ocr.txt" download>OCR TXT</a><a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div></article>`).join('')}</div>
+        <div class="overview-handoff"><strong>交付方式</strong><span>逐页审核后导出“逐页表”和“候选表”两份 CSV，发给负责人。</span></div></section>
+      <p class="overview-note">静态站不识别成员身份，也不汇总各人的实时进度；审核记录保存在当前浏览器。OCR 未校勘，请以扫描图核对。</p>
+      <section class="overview-secondary"><div><span class="eyebrow">独立批次入口</span><h2>旧条目文件审核</h2><p>旧 188 条字段审核与本轮全书初筛分开处理，不计入上方任务规模。</p></div><a href="./review.html">进入文件审核 →</a></section></div>`);
+  }
+
+  function overview() {
+    const units = state.books.flatMap((book) => state.unitsByBook[book.id] || []);
+    const waiting = units.filter((unit) => ['assigned', 'in_progress', 'returned'].includes(unit.status)).length;
+    const submitted = units.filter((unit) => unit.status === 'submitted').length;
+    return `<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 本地演练</span><h1>团队任务总览</h1><p>${state.role === 'admin' ? '查看各古籍的分工和待验收项，再进入任务处理。' : '这里只列出分配给你的任务，选择古籍后进入工作项。'}</p></header>
+      <div class="overview-stats" aria-label="当前任务概况"><div><strong>${state.books.length}</strong><span>可见古籍</span></div><div><strong>${units.length}</strong><span>工作项</span></div><div><strong>${waiting}</strong><span>待处理</span></div><div><strong>${submitted}</strong><span>待验收</span></div></div>
+      <section class="overview-card" aria-labelledby="overviewBooksTitle"><div class="overview-list-head"><h2 id="overviewBooksTitle">${state.role === 'admin' ? '全部古籍任务' : '我的古籍任务'}</h2>${state.role === 'admin' ? '<button type="button" class="overview-create" data-open-create>新建或管理任务 →</button>' : ''}</div>
+        <div class="overview-book-list">${state.books.map((book) => {
+          const bookUnits = state.unitsByBook[book.id] || [];
+          const accepted = bookUnits.filter((unit) => unit.status === 'accepted').length;
+          const toDecide = bookUnits.filter((unit) => unit.status === 'submitted').length;
+          return `<article class="overview-book"><div><span class="eyebrow">${esc(label(book.status))} · ${book.totalPages} 页</span><h3>${esc(book.title)}</h3><p>${bookUnits.length} 个工作项 · 已验收 ${accepted}${state.role === 'admin' ? ` · 待验收 ${toDecide}` : ''}</p></div><button type="button" data-open-book="${esc(book.id)}">查看工作项 →</button></article>`;
+        }).join('') || `<p class="overview-empty">${state.role === 'admin' ? '还没有古籍任务。点击“新建或管理任务”开始分工。' : '目前没有分配给你的任务。'}</p>`}</div></section>
+      <p class="overview-note">这里显示本地五账号演练的任务状态；静态逐页审核的浏览器进度不会自动汇入此处。</p></div>`;
   }
 
   function booksPanel() {
@@ -115,8 +135,9 @@
   function render() {
     if (state.offline) return offline();
     if (!state.user) { location.replace(loginUrl); return; }
+    if (state.view === 'overview') { shell(overview()); return; }
     const book = state.books.find((item) => item.id === state.bookId);
-    shell(`<div class="page-heading"><div><span class="eyebrow">任务</span><h1>分配与验收</h1></div><p>${state.role === 'admin' ? '按古籍分配页段，验收提交。' : '核对页段与原文，完成后提交。'}</p></div>
+    shell(`<div class="page-heading"><div><button type="button" class="back-overview" data-overview>← 团队任务总览</button><h1>分配与验收</h1></div><p>${state.role === 'admin' ? '按古籍分配页段，验收提交。' : '核对页段与原文，完成后提交。'}</p></div>
       <div class="workspace">${booksPanel()}${unitsPanel(book)}${detailPanel()}</div>`);
   }
 
@@ -124,7 +145,10 @@
     const data = await api('/api/team-tasks');
     state.user = data.user; state.role = data.role; state.books = data.books;
     if (!state.books.some((book) => book.id === state.bookId)) state.bookId = state.books[0]?.id || '';
-    state.units = state.bookId ? (await api(`/api/team-tasks/books/${state.bookId}/units`)).units : [];
+    const unitLists = await Promise.all(state.books.map(async (book) =>
+      [book.id, (await api(`/api/team-tasks/books/${book.id}/units`)).units]));
+    state.unitsByBook = Object.fromEntries(unitLists);
+    state.units = state.unitsByBook[state.bookId] || [];
     if (!state.units.some((unit) => unit.id === state.unitId)) state.unitId = state.units[0]?.id || '';
     state.unit = state.unitId ? await api(`/api/team-tasks/units/${state.unitId}`) : null;
     state.draft = state.unit?.text || ''; state.dirty = false;
@@ -167,6 +191,14 @@
       toggle?.setAttribute('aria-expanded', 'false');
       toggle?.setAttribute('aria-label', '打开工作区导航');
       return;
+    }
+    if (button.hasAttribute('data-overview')) {
+      if (state.dirty && !window.confirm('工作稿尚未保存，确定返回总览？')) return;
+      state.view = 'overview'; render(); return;
+    }
+    if (button.hasAttribute('data-open-create')) { state.view = 'work'; render(); return; }
+    if (button.dataset.openBook) {
+      state.view = 'work'; state.bookId = button.dataset.openBook; state.unitId = ''; run(refresh); return;
     }
     if (button.dataset.book) {
       if (state.dirty && !window.confirm('工作稿尚未保存，确定切换任务？')) return;
