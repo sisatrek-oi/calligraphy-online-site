@@ -5,6 +5,7 @@
   const labels = { proofread: '原文校对', screen: '全书初筛', review: '条目审核',
     assigned: '待处理', in_progress: '进行中', submitted: '待验收', returned: '需修改', accepted: '已验收',
     draft: '草稿', published: '已发布' };
+  const screeningRanges = [[1, 258], [259, 527], [528, 776], [777, 1052]];
   const loginUrl = './index.html?login=1&next=team-tasks';
   const esc = (value = '') => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
@@ -48,16 +49,43 @@
     </div>`;
   }
 
+  function localScreeningProgress(part, start, end) {
+    try {
+      const raw = localStorage.getItem(`shulun-screening-v1-part-${part}`);
+      if (!raw) return 0;
+      const saved = JSON.parse(raw);
+      if (saved.version !== 1 || saved.part !== part || !saved.reviews ||
+          typeof saved.reviews !== 'object' || Array.isArray(saved.reviews)) return null;
+      let count = 0;
+      for (let number = start; number <= end; number += 1) if (saved.reviews[number]?.seen === true) count += 1;
+      return count;
+    } catch { return null; }
+  }
+
+  function updateOfflineProgress() {
+    if (!state.offline) return;
+    const counts = screeningRanges.map(([start, end], index) => localScreeningProgress(index + 1, start, end));
+    const total = counts.includes(null) ? null : counts.reduce((sum, count) => sum + count, 0);
+    const totalSlot = app.querySelector('#localSeenTotal');
+    if (totalSlot) totalSlot.textContent = total === null ? '—' : `${total} / 1052`;
+    counts.forEach((count, index) => {
+      const slot = app.querySelector(`[data-local-progress="${index + 1}"]`);
+      if (!slot) return;
+      slot.textContent = count === null ? '本机记录无法读取' : count === 0 ? '本机尚未开始'
+        : `本机已看 ${count} / ${screeningRanges[index][1] - screeningRanges[index][0] + 1} 页`;
+    });
+  }
+
   function offline() {
-    const ranges = [[1, 258], [259, 527], [528, 776], [777, 1052]];
     shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>先看当前批次与分工，再进入自己的页段审核。</p></header>
-      <div class="overview-stats" aria-label="当前任务规模"><div><strong>1</strong><span>当前批次</span></div><div><strong>4</strong><span>连续页段</span></div><div><strong>1052</strong><span>原 PDF 物理页</span></div></div>
+      <div class="overview-stats" aria-label="当前任务规模"><div><strong>1</strong><span>当前批次</span></div><div><strong>4</strong><span>连续页段</span></div><div><strong>1052</strong><span>原 PDF 物理页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已看</span></div></div>
       <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 人工初筛</span><h2 id="screeningTitle">《历代书法论文选》全书初筛</h2><p>原 PDF 物理页 1–1052。四人各审一段，扫描图、OCR 全文和原 PDF 已在线备齐。</p></div><span class="task-state">材料已备齐</span></div>
         <div class="overview-list-head"><h3>分工与材料</h3><span>按原 PDF 物理页定位</span></div>
-        <div class="overview-unit-list">${ranges.map(([start, end], index) => `<article class="overview-unit"><div class="unit-number">0${index + 1}</div><div class="unit-copy"><strong>审核成员 ${index + 1}</strong><span>第 ${start}–${end} 页 · ${end - start + 1} 页</span></div><div class="unit-actions"><a class="unit-primary" href="./screening.html?part=${index + 1}">进入审核 →</a><a href="./screening-data/part-${index + 1}-ocr.txt" download>OCR TXT</a><a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div></article>`).join('')}</div>
+        <div class="overview-unit-list">${screeningRanges.map(([start, end], index) => `<article class="overview-unit"><div class="unit-number">0${index + 1}</div><div class="unit-copy"><strong>审核成员 ${index + 1}</strong><span>第 ${start}–${end} 页 · ${end - start + 1} 页</span><span class="local-progress" data-local-progress="${index + 1}">读取本机进度…</span></div><div class="unit-actions"><a class="unit-primary" href="./screening.html?part=${index + 1}">进入审核 →</a><a href="./screening-data/part-${index + 1}-ocr.txt" download>OCR TXT</a><a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div></article>`).join('')}</div>
         <div class="overview-handoff"><strong>交付方式</strong><span>逐页审核后导出“逐页表”和“候选表”两份 CSV，发给负责人。</span></div></section>
       <p class="overview-note">静态站不识别成员身份，也不汇总各人的实时进度；审核记录保存在当前浏览器。OCR 未校勘，请以扫描图核对。</p>
       <section class="overview-secondary"><div><span class="eyebrow">独立批次入口</span><h2>旧条目文件审核</h2><p>旧 188 条字段审核与本轮全书初筛分开处理，不计入上方任务规模。</p></div><a href="./review.html">进入文件审核 →</a></section></div>`);
+    updateOfflineProgress();
   }
 
   function overview() {
@@ -116,7 +144,7 @@
     if (!unit) return `<aside class="detail"><div class="empty big">选择一个工作项，查看材料与处理记录。</div></aside>`;
     const editable = state.role !== 'admin' && ['assigned', 'in_progress', 'returned'].includes(unit.status);
     const canDecide = state.role === 'admin' && unit.status === 'submitted';
-    const screeningPart = [[1, 258], [259, 527], [528, 776], [777, 1052]]
+    const screeningPart = screeningRanges
       .findIndex(([start, end]) => unit.stage === 'screen' && unit.startPage === start && unit.endPage === end) + 1;
     return `<aside class="detail"><div class="panel-head"><div><span class="eyebrow">${label(unit.stage)} · 第 ${unit.startPage}–${unit.endPage} 页</span><h2>${label(unit.status)}</h2></div><small>修订 ${unit.revision}</small></div>
       <p class="byline">负责人 ${esc(unit.assignee)}${unit.returnReason ? ` · 退回：${esc(unit.returnReason)}` : ''}</p>
@@ -272,12 +300,17 @@
   });
 
   window.addEventListener('storage', (event) => {
+    if (state.offline && (!event.key || event.key.startsWith('shulun-screening-v1-part-'))) {
+      updateOfflineProgress(); return;
+    }
     if (event.key !== 'simulation-identity-changed') return;
     if (state.dirty) {
       state.error = '登录身份已变化，请先复制本页未保存的工作稿，再刷新页面。';
       render();
     } else location.reload();
   });
+
+  window.addEventListener('pageshow', updateOfflineProgress);
 
   (async () => {
     try {
