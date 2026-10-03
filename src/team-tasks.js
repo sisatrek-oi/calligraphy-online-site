@@ -1,3 +1,5 @@
+import { isVerified } from './collation-core.js?v=20261003-collation';
+
 (() => {
   const app = document.querySelector('#teamTasksApp');
   const state = { user: null, role: null, books: [], units: [], bookId: '', unitId: '', unit: null,
@@ -52,37 +54,40 @@
   function localScreeningProgress(part, start, end) {
     try {
       const raw = localStorage.getItem(`shulun-screening-v1-part-${part}`);
-      if (!raw) return 0;
+      if (!raw) return { seen: 0, verified: 0 };
       const saved = JSON.parse(raw);
       if (saved.version !== 1 || saved.part !== part || !saved.reviews ||
           typeof saved.reviews !== 'object' || Array.isArray(saved.reviews)) return null;
-      let count = 0;
-      for (let number = start; number <= end; number += 1) if (saved.reviews[number]?.seen === true) count += 1;
-      return count;
+      let seen = 0, verified = 0;
+      for (let number = start; number <= end; number += 1) {
+        if (saved.reviews[number]?.seen === true) seen += 1;
+        if (isVerified(saved.reviews[number]?.collation)) verified += 1;
+      }
+      return { seen, verified };
     } catch { return null; }
   }
 
   function updateOfflineProgress() {
     if (!state.offline) return;
     const counts = screeningRanges.map(([start, end], index) => localScreeningProgress(index + 1, start, end));
-    const total = counts.includes(null) ? null : counts.reduce((sum, count) => sum + count, 0);
+    const total = counts.includes(null) ? null : counts.reduce((sum, count) => sum + count.verified, 0);
     const totalSlot = app.querySelector('#localSeenTotal');
     if (totalSlot) totalSlot.textContent = total === null ? '—' : `${total} / 1052`;
     counts.forEach((count, index) => {
       const slot = app.querySelector(`[data-local-progress="${index + 1}"]`);
       if (!slot) return;
-      slot.textContent = count === null ? '本机记录无法读取' : count === 0 ? '本机尚未开始'
-        : `本机已看 ${count} / ${screeningRanges[index][1] - screeningRanges[index][0] + 1} 页`;
+      slot.textContent = count === null ? '本机记录无法读取'
+        : `本机已校验 ${count.verified} / ${screeningRanges[index][1] - screeningRanges[index][0] + 1} 页${count.seen ? ` · 已看 ${count.seen} 页` : ''}`;
     });
   }
 
   function offline() {
-    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>先看当前批次与分工，再进入自己的页段审核。</p></header>
-      <div class="overview-stats" aria-label="当前任务规模"><div><strong>1</strong><span>当前批次</span></div><div><strong>4</strong><span>连续页段</span></div><div><strong>1052</strong><span>原 PDF 物理页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已看</span></div></div>
-      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 人工初筛</span><h2 id="screeningTitle">《历代书法论文选》全书初筛</h2><p>原 PDF 物理页 1–1052。四人各审一段，扫描图、OCR 全文和原 PDF 已在线备齐。</p></div><span class="task-state">材料已备齐</span></div>
+    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>选择自己的页段，左右对照原页与 TXT，逐页校勘后导出。</p></header>
+      <div class="overview-stats" aria-label="当前任务规模"><div><strong>1</strong><span>当前批次</span></div><div><strong>4</strong><span>连续页段</span></div><div><strong>1052</strong><span>原 PDF 物理页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已校验</span></div></div>
+      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 原文校勘</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>原 PDF 物理页 1–1052。四人各校一段，扫描图、OCR 全文和原 PDF 已在线备齐。</p></div><span class="task-state">材料已备齐</span></div>
         <div class="overview-list-head"><h3>分工与材料</h3><span>按原 PDF 物理页定位</span></div>
-        <div class="overview-unit-list">${screeningRanges.map(([start, end], index) => `<article class="overview-unit"><div class="unit-number">0${index + 1}</div><div class="unit-copy"><strong>审核成员 ${index + 1}</strong><span>第 ${start}–${end} 页 · ${end - start + 1} 页</span><span class="local-progress" data-local-progress="${index + 1}">读取本机进度…</span></div><div class="unit-actions"><a class="unit-primary" href="./screening.html?part=${index + 1}">进入审核 →</a><a href="./screening-data/part-${index + 1}-ocr.txt" download>OCR TXT</a><a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div></article>`).join('')}</div>
-        <div class="overview-handoff"><strong>交付方式</strong><span>逐页审核后导出“逐页表”和“候选表”两份 CSV，发给负责人。</span></div></section>
+        <div class="overview-unit-list">${screeningRanges.map(([start, end], index) => `<article class="overview-unit"><div class="unit-number">0${index + 1}</div><div class="unit-copy"><strong>审核成员 ${index + 1}</strong><span>第 ${start}–${end} 页 · ${end - start + 1} 页</span><span class="local-progress" data-local-progress="${index + 1}">读取本机进度…</span></div><div class="unit-actions"><a class="unit-primary" href="./screening.html?part=${index + 1}">进入对照校勘 →</a><a href="./screening-data/part-${index + 1}-ocr.txt" download>OCR TXT</a><a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div></article>`).join('')}</div>
+        <div class="overview-handoff"><strong>交付方式</strong><span>对照原页调整 TXT 栏序、逐字核对；导出“校勘 TXT”和“校验表”交回负责人。</span></div></section>
       <p class="overview-note">静态站不识别成员身份，也不汇总各人的实时进度；审核记录保存在当前浏览器。OCR 未校勘，请以扫描图核对。</p>
       <section class="overview-secondary"><div><span class="eyebrow">独立批次入口</span><h2>旧条目文件审核</h2><p>旧 188 条字段审核与本轮全书初筛分开处理，不计入上方任务规模。</p></div><a href="./review.html">进入文件审核 →</a></section></div>`);
     updateOfflineProgress();
@@ -148,7 +153,7 @@
       .findIndex(([start, end]) => unit.stage === 'screen' && unit.startPage === start && unit.endPage === end) + 1;
     return `<aside class="detail"><div class="panel-head"><div><span class="eyebrow">${label(unit.stage)} · 第 ${unit.startPage}–${unit.endPage} 页</span><h2>${label(unit.status)}</h2></div><small>修订 ${unit.revision}</small></div>
       <p class="byline">负责人 ${esc(unit.assignee)}${unit.returnReason ? ` · 退回：${esc(unit.returnReason)}` : ''}</p>
-      ${screeningPart ? `<p class="screening-entry"><a href="./screening.html?part=${screeningPart}">进入本页段逐页审核 →</a><small>在线查看扫描图、OCR 和原 PDF；导出两张 CSV 后交回负责人。</small></p>` : ''}
+      ${screeningPart ? `<p class="screening-entry"><a href="./screening.html?part=${screeningPart}">进入本页段对照校勘 →</a><small>左右对照原页与 TXT，校勘后导出 TXT 和校验表。</small></p>` : ''}
       <section class="source"><h3>原始材料／工作说明</h3><pre>${esc(unit.materialText || '管理员尚未附原文，请按来源说明核对相应页段。')}</pre></section>
       <section class="answer"><h3>${editable ? '我的工作稿' : '提交内容'}</h3>
         ${editable ? `<textarea id="workDraft" rows="11" aria-label="工作稿">${esc(state.draft)}</textarea><div class="actions"><button type="button" data-save>保存草稿</button><button type="button" class="secondary" data-submit>提交验收</button></div>`
