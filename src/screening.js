@@ -1,10 +1,12 @@
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261003-collation';
+import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-theory';
 
 (() => {
   const app = document.querySelector('#screeningApp');
   const part = Number(new URLSearchParams(location.search).get('part'));
   const state = { data: null, index: 0, reviews: {}, files: new Map(), imageUrl: '', imageReady: false,
-    person: '', notice: '', error: '', zoom: 100, validation: false, resetPending: false };
+    person: '', notice: '', error: '', zoom: 100, validation: false, resetPending: false, highlight: true };
+  let editorObserver;
   const esc = (value = '') => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
   const key = () => `shulun-screening-v1-part-${part}`;
@@ -26,6 +28,30 @@ import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, ex
     record({ collation: { ...draft(), ...patch, ...(changed ? { checks: {} } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
     showMessage();
     updateValidation();
+    updateHighlight();
+  }
+
+  function syncHighlight() {
+    const editor = app.querySelector('#collationText'), layer = app.querySelector('#theoryLayer');
+    if (!editor || !layer) return;
+    const style = getComputedStyle(editor);
+    for (const key of ['font', 'lineHeight', 'letterSpacing', 'wordSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'textIndent', 'tabSize', 'wordBreak', 'overflowWrap']) layer.style[key] = style[key];
+    layer.style.width = `${editor.clientWidth}px`;
+    layer.style.height = `${editor.clientHeight}px`;
+    layer.scrollTop = editor.scrollTop; layer.scrollLeft = editor.scrollLeft;
+  }
+
+  function updateHighlight() {
+    const layer = app.querySelector('#theoryLayer'), status = app.querySelector('#theoryStatus');
+    if (!layer) return;
+    const text = String(draft().text || '');
+    const ranges = state.highlight ? theoryRanges(text) : [];
+    layer.innerHTML = highlightHtml(text, ranges);
+    const count = ranges.filter(range => range.type === 'theory').length;
+    status.textContent = !state.highlight ? '高亮已隐藏，原文保持完整。' : count
+      ? `深黄：书论线索 · 浅黄：邻近上下文（自动提示，需通读确认）`
+      : '本页暂未识别出明显书论线索，仍请通读确认。';
+    syncHighlight();
   }
 
   function updateValidation() {
@@ -121,7 +147,8 @@ import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, ex
       <section class="panel form-panel"><div class="panel-head"><h2>TXT · 第 ${p.page} 页</h2><small>一栏一行，编号表示阅读顺序；OCR 草稿须对照左侧核定。</small></div><div class="form-body">
         <div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div>
         <label class="editor-label" for="collationText">校勘正文 <span>${layoutNote()}<br>无法辨认填 □，待查写【待核：…】，空白页填【空白页】。</span></label>
-        <textarea id="collationText" spellcheck="false" placeholder="点击“生成分栏草稿”，将本页 OCR 整理为带栏号的可编辑文本。">${esc(draft().text || '')}</textarea>
+        <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
+        <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" spellcheck="false" placeholder="点击“生成分栏草稿”，将本页 OCR 整理为带栏号的可编辑文本。">${esc(draft().text || '')}</textarea></div>
         <details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
         <div class="validation" id="validation" aria-live="polite"></div>
         <div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.[key] ? 'checked' : ''} />${label}</label>`).join('')}</div>
@@ -141,6 +168,10 @@ import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, ex
     showMessage();
     setImage();
     updateValidation();
+    updateHighlight();
+    editorObserver?.disconnect();
+    editorObserver = new ResizeObserver(syncHighlight);
+    editorObserver.observe(app.querySelector('#collationText'));
     app.querySelector('[data-index][aria-current="true"]')?.scrollIntoView({ block: 'nearest' });
   }
 
@@ -258,12 +289,17 @@ import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, ex
 
   app.addEventListener('input', (event) => {
     if (!state.data) return;
+    if (event.target.id === 'theoryToggle') { state.highlight = event.target.checked; updateHighlight(); return; }
     if (event.target.id === 'person') { state.person = event.target.value; persist(); }
     if (event.target.id === 'collationText') updateDraft({ text: event.target.value });
     if (event.target.dataset.check) updateDraft({ checks: { ...draft().checks, [event.target.dataset.check]: event.target.checked } });
     if (event.target.id === 'question') record({ question: event.target.value });
     if (event.target.id === 'redoOcr') record({ redoOcr: event.target.checked });
   });
+
+  app.addEventListener('scroll', (event) => {
+    if (event.target.id === 'collationText') syncHighlight();
+  }, true);
 
   app.addEventListener('change', async (event) => {
     if (event.target.id === 'zoom') { state.zoom = Number(event.target.value); const image = app.querySelector('#scanWrap img'); if (image) image.style.width = `${state.zoom}%`; }
