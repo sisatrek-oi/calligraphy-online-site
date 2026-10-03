@@ -1,4 +1,5 @@
-import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261003-collation';
+import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261003-trim';
+import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-theory';
 
 (() => {
@@ -135,7 +136,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     app.innerHTML = `<main class="page">
       <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / 成员 ${part} / 原 PDF ${state.data.start}–${state.data.end} 页</span><h1>原文对照校勘</h1><p>① 对照原页整理栏序　② 逐字校勘　③ 校验并导出 TXT</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p>修改自动保存在本机；完成后导出交回负责人。</p>
-        <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="./screening-data/part-${part}-ocr.txt" download>下载原始 OCR</a>
+        <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
           <button type="button" id="backup">导出进度备份</button><label class="file-button">导入进度<input id="backupFile" type="file" accept="application/json,.json" /></label></div>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
@@ -301,12 +302,26 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     if (event.target.id === 'collationText') syncHighlight();
   }, true);
 
+  function jumpTo(value) {
+    const target = Number(value);
+    if (Number.isInteger(target) && target >= state.data.start && target <= state.data.end) {
+      const index = state.data.pages.findIndex(item => item.page === target);
+      if (index >= 0) select(index);
+      else { state.error = `第 ${target} 页为${excludedPages[target]}，已移出本轮任务。`; showMessage(); }
+    }
+    else { state.error = `请输入 ${state.data.start}–${state.data.end} 之间的原 PDF 页码。`; showMessage(); }
+  }
+
+  app.addEventListener('keydown', (event) => {
+    if (event.target.id === 'jump' && event.key === 'Enter') {
+      event.preventDefault(); jumpTo(event.target.value);
+    }
+  });
+
   app.addEventListener('change', async (event) => {
     if (event.target.id === 'zoom') { state.zoom = Number(event.target.value); const image = app.querySelector('#scanWrap img'); if (image) image.style.width = `${state.zoom}%`; }
     if (event.target.id === 'jump') {
-      const target = Number(event.target.value);
-      if (Number.isInteger(target) && target >= state.data.start && target <= state.data.end) select(target - state.data.start);
-      else { state.error = `请输入 ${state.data.start}–${state.data.end} 之间的原 PDF 页码。`; showMessage(); }
+      jumpTo(event.target.value);
     }
     if (event.target.id === 'scanFolder' || event.target.id === 'scanFiles') loadFiles(event.target.files || []);
     if (event.target.id === 'locatorFile') {
@@ -316,10 +331,10 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
         const end = source.indexOf(';let current=0', start);
         if (start < 0 || end < 0) throw new Error('这不是本轮材料包的定位页');
         const pages = JSON.parse(source.slice(start + 'const PAGES='.length, end));
-        if (!Array.isArray(pages) || pages.length !== state.data.pages.length ||
-            pages.some((item, index) => item.page !== state.data.pages[index].page || typeof item.ocr !== 'string'))
+        if (!Array.isArray(pages) || pages.length !== state.data.allPages.length ||
+            pages.some((item, index) => item.page !== state.data.allPages[index].page || typeof item.ocr !== 'string'))
           throw new Error('定位页与本份页段不匹配');
-        state.data.pages.forEach((item, index) => { item.ocr = pages[index].ocr; delete item.layout; });
+        state.data.allPages.forEach((item, index) => { item.ocr = pages[index].ocr; delete item.layout; });
         state.notice = '已载入本地 OCR 对照；请以扫描图核对。'; render();
       } catch (error) { state.error = error.message || '本地 OCR 载入失败'; showMessage(); }
     }
@@ -366,9 +381,16 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
             state.data.pages.forEach((item, index) => { item.layout = layout.pages[index]; });
         } catch { /* Missing layout suggestions must never prevent source review. */ }
       }
+      state.data.allPages = state.data.pages;
+      state.data.pages = state.data.allPages.filter(item => isTaskPage(item.page));
       restore();
       const targetPage = Number(new URLSearchParams(location.search).get('page'));
-      if (Number.isInteger(targetPage) && targetPage >= state.data.start && targetPage <= state.data.end) state.index = targetPage - state.data.start;
+      if (Number.isInteger(targetPage) && targetPage >= state.data.start && targetPage <= state.data.end) {
+        const index = state.data.pages.findIndex(item => item.page >= targetPage);
+        state.index = index < 0 ? state.data.pages.length - 1 : index;
+        if (!isTaskPage(targetPage)) state.notice = `第 ${targetPage} 页为${excludedPages[targetPage]}，已移出任务，已转到第 ${page().page} 页。`;
+      }
+      const url = new URL(location.href); url.searchParams.set('page', page().page); history.replaceState(null, '', url);
       render();
     } catch (error) { app.innerHTML = `<p class="loading" role="alert">${esc(error.message)}。请刷新页面，或联系负责人检查静态站文件。</p>`; }
   }

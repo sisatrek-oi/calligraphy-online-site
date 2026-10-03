@@ -1,3 +1,4 @@
+import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
 // Raw OCR remains immutable. These helpers format a draft, never certify its reading order.
 export const CHECKS = {
   order: '已按原页核对栏序（正文通常右→左、栏内上→下）',
@@ -52,6 +53,7 @@ export function isVerified(draft = {}, raw = '') {
 export function exportText({ part, person, pages, reviews }) {
   const content = [`《历代书法论文选》｜第 ${part} 份｜逐页 TXT 校勘`, `导出人：${person}`, '说明：栏号按阅读顺序排列；未开始、草稿、已校验分别记录。已校验为成员人工确认。', ''];
   for (const page of pages) {
+    if (!isTaskPage(page.page)) continue;
     const review = reviews[page.page] || {}, draft = review.collation || {};
     content.push(`===== 原 PDF 物理页 ${page.page}｜分册第 ${page.local} 页 =====`,
       `状态：${isVerified(draft, page.ocr) ? '已校验' : draft.text !== undefined ? '草稿' : '未开始'}`,
