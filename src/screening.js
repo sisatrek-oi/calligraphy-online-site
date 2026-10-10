@@ -6,7 +6,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
   const app = document.querySelector('#screeningApp');
   const part = Number(new URLSearchParams(location.search).get('part'));
   const state = { data: null, index: 0, reviews: {}, files: new Map(), imageUrl: '', imageReady: false,
-    person: '', notice: '', error: '', zoom: 100, validation: false, resetPending: false, highlight: true };
+    person: '', notice: '', error: '', zoom: 100, validation: false, resetPending: false, highlight: true, reviewOpen: false };
   let editorObserver;
   const esc = (value = '') => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
@@ -27,6 +27,10 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     state.notice = ''; state.error = '';
     const changed = Object.hasOwn(patch, 'text');
     record({ collation: { ...draft(), ...patch, ...(changed ? { checks: {} } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
+    const preview = app.querySelector('#collationText');
+    if (preview && preview.value !== draft().text) preview.value = draft().text;
+    const editor = app.querySelector('#editText');
+    if (editor && editor.value !== draft().text) editor.value = draft().text;
     showMessage();
     updateValidation();
     updateHighlight();
@@ -105,6 +109,17 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
       : state.notice ? `<p class="message" role="status">${esc(state.notice)}</p>` : '';
   }
 
+  function syncReviewDrawer() {
+    const drawer = app.querySelector('#reviewDrawer');
+    const toggle = app.querySelector('#toggleReviewDrawer');
+    if (!drawer || !toggle) return;
+    const open = Boolean(state.reviewOpen);
+    drawer.hidden = !open;
+    drawer.setAttribute('aria-hidden', String(!open));
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.innerHTML = `${open ? '收起' : '打开'}校勘操作 <span aria-hidden="true">${open ? '×' : '↗'}</span>`;
+  }
+
   function setImage() {
     if (state.imageUrl) URL.revokeObjectURL(state.imageUrl);
     state.imageUrl = '';
@@ -145,16 +160,14 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
       <div id="messageSlot"></div>
       <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, item.ocr) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${isVerified(r.collation, item.ocr) ? '已校验' : r.collation?.text !== undefined ? '草稿' : r.seen ? '已看' : '待校'}</small></button>`; }).join('')}</div></aside>
       <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；上方翻页会同步切换右侧 TXT。</p></div></section>
-      <section class="panel form-panel"><div class="panel-head"><h2>TXT · 第 ${p.page} 页</h2><small>一栏一行，编号表示阅读顺序；OCR 草稿须对照左侧核定。</small></div><div class="form-body">
-        <div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div>
-        <label class="editor-label" for="collationText">校勘正文 <span>${layoutNote()}<br>无法辨认填 □，待查写【待核：…】，空白页填【空白页】。</span></label>
+      <section class="panel form-panel"><div class="panel-head txt-head"><div><h2>TXT · 第 ${p.page} 页</h2><small>一栏一行，编号表示阅读顺序；OCR 草稿须对照左侧核定。</small></div><button type="button" id="openTextEditor">修改本页</button></div><div class="form-body">
+        <div class="editor-main">
         <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
-        <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" spellcheck="false" placeholder="点击“生成分栏草稿”，将本页 OCR 整理为带栏号的可编辑文本。">${esc(draft().text || '')}</textarea></div>
-        <details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
+        <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无 TXT 草稿，请打开右下角校勘操作生成。">${esc(draft().text || '')}</textarea></div>
+        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>校勘操作 · 第 ${p.page} 页</strong><small>修改正文、核对并保存</small></div><div class="drawer-head-actions"><button type="button" id="exportCurrentPage" class="drawer-save">保存本页 TXT</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="收起校勘操作">收起</button></div></div><div class="drawer-body"><div class="drawer-editor"><label for="editText">修改校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页修改校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 无法辨认填 □，待查写【待核：…】。</small></div><details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
         <div class="validation" id="validation" aria-live="polite"></div>
         <div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.[key] ? 'checked' : ''} />${label}</label>`).join('')}</div>
         <label>疑问与处理<textarea id="question" rows="2" placeholder="例如：第 3 栏有缺字；页眉已移除；跨页接第…页">${esc(review.question || '')}</textarea></label>
-        <div class="form-actions"><button id="validate">检查 TXT 模板</button><button id="verifyNext" class="primary">本页校验完成，下一页</button></div>
         <p class="hint">格式检查不判断古籍文字正误。修改正文会清除本页校验勾选；已看扫描图不等于已校验。</p>
         <details class="secondary-review"><summary>证据候选与旧初筛记录（${candidates.length} 条）</summary>
         <div class="form-actions"><button type="button" id="markSeen" class="primary">${review.seen ? '撤销已看标记' : '已看这页扫描图'}</button>${review.seen ? '<span class="hint">已记录看图；可继续补充候选。</span>' : ''}</div>
@@ -165,8 +178,9 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
           <label>连续原文摘录<textarea name="quote" rows="2" required></textarea></label><label>风格描述依据<textarea name="basis" rows="2" required></textarea></label>
           <label>不确定或待核事项<textarea name="uncertainty" rows="2"></textarea></label><button type="submit">添加本页候选</button></form>
         <h3>交回负责人</h3><p class="hint">两张 CSV 保留未审核页的空行，负责人可据此检查遗漏。请同时留存进度备份。</p><div class="form-actions"><button type="button" id="exportPages" class="primary">导出逐页表</button><button type="button" id="exportCandidates">导出候选表</button></div>
-      </details></div></section></div></main>`;
+      </details><div class="form-actions drawer-actions"><button id="validate">检查 TXT 模板</button><button id="verifyNext" class="primary">本页校验完成，下一页</button></div></div></aside></div></section></div><button type="button" id="toggleReviewDrawer" class="review-drawer-toggle" aria-controls="reviewDrawer" aria-expanded="${state.reviewOpen ? 'true' : 'false'}">${state.reviewOpen ? '收起' : '打开'}校勘操作 <span aria-hidden="true">${state.reviewOpen ? '×' : '↗'}</span></button></main>`;
     showMessage();
+    syncReviewDrawer();
     setImage();
     updateValidation();
     updateHighlight();
@@ -195,6 +209,11 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     const url = URL.createObjectURL(new Blob(['\ufeff', textValue], { type }));
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function exportCurrentPage() {
+    download(`第${part}份-第${page().page}页-校勘.txt`, `${draft().text || ''}\n`, 'text/plain;charset=utf-8');
+    state.notice = `已发起第 ${page().page} 页校勘 TXT 下载。`;
+    showMessage();
   }
   function exportCsv(kind) {
     if (!state.person.trim()) { state.error = '请先填写审核人真实姓名，再导出回收表。'; showMessage(); return; }
@@ -230,12 +249,15 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
   app.addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button || !state.data) return;
+    if (button.id === 'toggleReviewDrawer' || button.id === 'openTextEditor') { state.reviewOpen = true; syncReviewDrawer(); app.querySelector('#editText')?.focus(); return; }
+    if (button.id === 'closeReviewDrawer') { state.reviewOpen = false; syncReviewDrawer(); return; }
+    if (button.id === 'exportCurrentPage') return exportCurrentPage();
     if (button.dataset.index !== undefined) return select(Number(button.dataset.index));
     if (button.id === 'prev') return select(state.index - 1);
     if (button.id === 'next') return select(state.index + 1);
     if (button.id === 'cancelDraftReset') { state.resetPending = false; showMessage(); return; }
     if (['makeDraft', 'confirmDraftReset', 'renumber', 'lineUp', 'lineDown'].includes(button.id)) {
-      const editor = app.querySelector('#collationText');
+      const editor = app.querySelector('#editText') || app.querySelector('#collationText');
       let value = editor.value, caret = editor.selectionStart;
       if (button.id === 'makeDraft' || button.id === 'confirmDraftReset') {
         if (button.id === 'makeDraft' && current().collation?.text) { state.resetPending = true; state.error = ''; showMessage(); return; }
@@ -292,7 +314,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     if (!state.data) return;
     if (event.target.id === 'theoryToggle') { state.highlight = event.target.checked; updateHighlight(); return; }
     if (event.target.id === 'person') { state.person = event.target.value; persist(); }
-    if (event.target.id === 'collationText') updateDraft({ text: event.target.value });
+    if (event.target.id === 'editText' || event.target.id === 'collationText') updateDraft({ text: event.target.value });
     if (event.target.dataset.check) updateDraft({ checks: { ...draft().checks, [event.target.dataset.check]: event.target.checked } });
     if (event.target.id === 'question') record({ question: event.target.value });
     if (event.target.id === 'redoOcr') record({ redoOcr: event.target.checked });
