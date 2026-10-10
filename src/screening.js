@@ -1,16 +1,18 @@
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261003-trim';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
+import { createProgressStore, initialPageIndex, nextPendingIndex, progressSummary } from './screening-workflow.js?v=20261009-flow';
 import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-theory';
 
 (() => {
   const app = document.querySelector('#screeningApp');
   const part = Number(new URLSearchParams(location.search).get('part'));
   const state = { data: null, index: 0, reviews: {}, files: new Map(), imageUrl: '', imageReady: false,
-    person: '', notice: '', error: '', zoom: 100, validation: false, resetPending: false, highlight: true, reviewOpen: false };
+    person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, zoom: 100, validation: false, resetPending: false, highlight: true, reviewOpen: false };
   let editorObserver;
   const esc = (value = '') => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
   const key = () => `shulun-screening-v1-part-${part}`;
+  const progressStore = createProgressStore(localStorage, key(), part);
   const page = () => state.data.pages[state.index];
   const current = () => state.reviews[page().page] || {};
   const seen = () => state.data.pages.filter((item) => state.reviews[item.page]?.seen).length;
@@ -22,15 +24,14 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；页眉、标点与错字请看图核对。' : '本页缺少可靠栏界，暂保留原段落。请按原页拆栏或合并行。';
   const verifiedCount = () => state.data.pages.filter(item => isVerified(state.reviews[item.page]?.collation, item.ocr)).length;
 
-  function updateDraft(patch) {
+  function updateDraft(patch, { reset = false } = {}) {
     state.resetPending = false;
     state.notice = ''; state.error = '';
-    const changed = Object.hasOwn(patch, 'text');
+    const changed = Object.hasOwn(patch, 'text') && (reset || patch.text !== draft().text);
+    if (Object.hasOwn(patch, 'text') && !changed) return;
     record({ collation: { ...draft(), ...patch, ...(changed ? { checks: {} } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
     const preview = app.querySelector('#collationText');
     if (preview && preview.value !== draft().text) preview.value = draft().text;
-    const editor = app.querySelector('#editText');
-    if (editor && editor.value !== draft().text) editor.value = draft().text;
     showMessage();
     updateValidation();
     updateHighlight();
@@ -66,8 +67,14 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     for (const checkbox of app.querySelectorAll('[data-check]')) checkbox.checked = Boolean(draft().checks?.[checkbox.dataset.check]);
     const progress = app.querySelector('#progress');
     if (progress) progress.textContent = `已校验 ${verifiedCount()} / ${state.data.pages.length} 页`;
-    const row = app.querySelector('[data-index][aria-current="true"] small');
-    if (row) row.textContent = isVerified(draft(), page().ocr) ? '已校验' : current().collation?.text !== undefined ? '草稿' : current().seen ? '已看' : '待校';
+    for (const row of app.querySelectorAll('[data-index]')) {
+      const item = state.data.pages[Number(row.dataset.index)], review = state.reviews[item.page] || {};
+      const verified = isVerified(review.collation, item.ocr);
+      row.querySelector('small').textContent = verified ? '已校验' : review.collation?.text !== undefined ? '草稿' : review.seen ? '已看' : '待校';
+      row.classList.toggle('done', verified);
+    }
+    const complete = app.querySelector('#verifyNext');
+    if (complete) complete.textContent = isVerified(draft(), page().ocr) ? '已校验 · 继续待校页' : '校验本页并继续';
   }
 
   function attachOcr(source) {
@@ -82,42 +89,67 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     });
   }
 
-  function persist() {
-    try {
-      localStorage.setItem(key(), JSON.stringify({ version: 1, part, person: state.person, reviews: state.reviews }));
-      state.error = '';
-    } catch {
-      state.error = '浏览器存储空间不足，当前改动未保存。请立即导出“进度备份”，再清理空间。';
-      showMessage();
+  function payload() {
+    return { version: 1, part, person: state.person, reviews: state.reviews,
+      lastPage: page().page, savedAt: state.savedAt };
+  }
+
+  function updateSaveStatus() {
+    const status = app.querySelector('#saveStatus');
+    if (status) {
+      status.textContent = state.saveProblem ? '有改动未保存' : state.savedAt ? '已自动保存到本机' : '修改后自动保存在本机';
+      status.classList.toggle('unsaved', Boolean(state.saveProblem));
     }
+    const recovery = app.querySelector('#saveRecovery');
+    if (recovery) recovery.innerHTML = state.saveProblem
+      ? `<div class="message error" role="alert">${esc(state.saveProblem)}<div class="tools"><button id="retrySave">重试保存</button><button id="rescueBackup">导出当前进度备份</button>${state.saveConflict ? '<button id="reloadProgress">载入本机最新进度</button>' : ''}</div></div>` : '';
+  }
+
+  function persist() {
+    const savedAt = new Date().toISOString();
+    const result = progressStore.save({ ...payload(), savedAt });
+    state.saveConflict = Boolean(result.conflict);
+    state.saveProblem = result.ok ? '' : result.conflict
+      ? '其他标签页已更新进度，或旧记录无法读取。当前修改仍在本页，尚未保存。请先导出备份，再载入本机最新进度。'
+      : '本机保存失败，当前修改仍在本页。请重试保存或导出进度备份，暂勿关闭页面。';
+    if (result.ok) { state.savedAt = savedAt; state.lastPage = page().page; }
+    updateSaveStatus();
+    return result.ok;
   }
 
   function restore() {
     try {
-      const saved = JSON.parse(localStorage.getItem(key()) || '{}');
-      if (saved.version === 1 && saved.part === part && saved.reviews && typeof saved.reviews === 'object') {
-        state.reviews = saved.reviews;
-        state.person = String(saved.person || '');
-      }
-    } catch { state.error = '本机旧进度无法读取，可导入先前导出的进度备份。'; }
+      const saved = progressStore.read();
+      state.reviews = saved?.reviews || {};
+      state.person = String(saved?.person || '');
+      state.lastPage = saved?.lastPage;
+      state.savedAt = String(saved?.savedAt || '');
+      state.saveProblem = ''; state.saveConflict = false;
+      return true;
+    } catch {
+      state.saveProblem = '本机旧进度无法读取。为避免覆盖，已暂停自动保存；可先导出当前工作备份，或恢复先前的进度文件。';
+      state.saveConflict = true;
+      return false;
+    }
   }
 
   function showMessage() {
     const slot = app.querySelector('#messageSlot');
     if (slot) slot.innerHTML = state.error ? `<p class="message error" role="alert">${esc(state.error)}</p>`
-      : state.resetPending ? '<div class="message" role="status">重建会替换本页正文并清除校验状态。<button id="confirmDraftReset">确认重建本页草稿</button> <button id="cancelDraftReset">取消</button></div>'
+      : state.resetPending && !state.reviewOpen ? '<div class="message" role="status">重建会替换本页正文并清除校验状态。<button id="confirmDraftReset">确认重建本页草稿</button> <button id="cancelDraftReset">取消</button></div>'
       : state.notice ? `<p class="message" role="status">${esc(state.notice)}</p>` : '';
+    const drawerSlot = app.querySelector('#drawerMessage');
+    if (drawerSlot) drawerSlot.innerHTML = state.resetPending
+      ? '<div class="message" role="status">重新生成会替换当前正文并清除校验勾选。<div class="tools"><button id="confirmDraftReset">确认重新生成</button><button id="cancelDraftReset">取消</button></div></div>'
+      : state.error ? `<p class="message error" role="alert">${esc(state.error)}</p>` : '';
   }
 
   function syncReviewDrawer() {
     const drawer = app.querySelector('#reviewDrawer');
-    const toggle = app.querySelector('#toggleReviewDrawer');
-    if (!drawer || !toggle) return;
+    if (!drawer) return;
     const open = Boolean(state.reviewOpen);
     drawer.hidden = !open;
     drawer.setAttribute('aria-hidden', String(!open));
-    toggle.setAttribute('aria-expanded', String(open));
-    toggle.innerHTML = `${open ? '收起' : '打开'}校勘操作 <span aria-hidden="true">${open ? '×' : '↗'}</span>`;
   }
 
   function setImage() {
@@ -129,9 +161,9 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     if (file) state.imageUrl = URL.createObjectURL(file);
     scan.innerHTML = `<img alt="原 PDF 物理页 ${page().page} 扫描图" style="width:${state.zoom}%;max-width:none" />`;
     const image = scan.querySelector('img');
-    image.onload = () => { if (scan.contains(image)) { state.imageReady = true; updateSeenButton(); } };
+    image.onload = () => { if (app.contains(scan) && scan.contains(image)) { state.imageReady = true; updateSeenButton(); } };
     image.onerror = () => {
-      if (!scan.contains(image)) return;
+      if (!app.contains(scan) || !scan.contains(image)) return;
       scan.innerHTML = '<div class="scan-placeholder"><strong>扫描图未能载入</strong>请检查网络，或在“本地材料备用”里选择本机扫描图。</div>';
       state.error = `扫描图 ${filename(page().page)} 无法打开。`;
       showMessage();
@@ -150,21 +182,21 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     const candidates = Array.isArray(review.candidates) ? review.candidates : [];
     app.innerHTML = `<main class="page">
       <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / 成员 ${part} / 原 PDF ${state.data.start}–${state.data.end} 页</span><h1>原文对照校勘</h1><p>① 对照原页整理栏序　② 逐字校勘　③ 校验并导出 TXT</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
-      <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p>修改自动保存在本机；完成后导出交回负责人。</p>
+      <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
         <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
-          <button type="button" id="backup">导出进度备份</button><label class="file-button">导入进度<input id="backupFile" type="file" accept="application/json,.json" /></label></div>
+          <button type="button" id="backup">导出进度备份</button><label class="file-button">导入进度<input id="backupFile" type="file" accept="application/json,.json" /></label>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
           <label class="file-button">或选择图片<input id="scanFiles" type="file" accept="image/jpeg" multiple /></label>
-          <label class="file-button">载入本地 OCR<input id="locatorFile" type="file" accept="text/html,.html" /></label></div></details></details></div></section>
-      <div id="messageSlot"></div>
+          <label class="file-button">载入本地 OCR<input id="locatorFile" type="file" accept="text/html,.html" /></label></div></details></div></details></div></section>
+      <div id="saveRecovery"></div><div id="messageSlot"></div>
       <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, item.ocr) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${isVerified(r.collation, item.ocr) ? '已校验' : r.collation?.text !== undefined ? '草稿' : r.seen ? '已看' : '待校'}</small></button>`; }).join('')}</div></aside>
-      <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；上方翻页会同步切换右侧 TXT。</p></div></section>
-      <section class="panel form-panel"><div class="panel-head txt-head"><div><h2>TXT · 第 ${p.page} 页</h2><small>一栏一行，编号表示阅读顺序；OCR 草稿须对照左侧核定。</small></div><button type="button" id="openTextEditor">修改本页</button></div><div class="form-body">
+      <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已校验。Alt + ← / → 翻页。</p></div></section>
+      <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>只读预览；点击“编辑本页”打开右下角编辑器。</small></div><button type="button" id="openTextEditor">编辑本页</button></div><div class="form-body">
         <div class="editor-main">
         <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
-        <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无 TXT 草稿，请打开右下角校勘操作生成。">${esc(draft().text || '')}</textarea></div>
-        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>校勘操作 · 第 ${p.page} 页</strong><small>修改正文、核对并保存</small></div><div class="drawer-head-actions"><button type="button" id="exportCurrentPage" class="drawer-save">保存本页 TXT</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="收起校勘操作">收起</button></div></div><div class="drawer-body"><div class="drawer-editor"><label for="editText">修改校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页修改校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 无法辨认填 □，待查写【待核：…】。</small></div><details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
+        <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
+        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后下载 TXT 文件</small></div><div class="drawer-head-actions"><button type="button" id="exportCurrentPage" class="drawer-save">下载本页 TXT</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div><details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
         <div class="validation" id="validation" aria-live="polite"></div>
         <div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.[key] ? 'checked' : ''} />${label}</label>`).join('')}</div>
         <label>疑问与处理<textarea id="question" rows="2" placeholder="例如：第 3 栏有缺字；页眉已移除；跨页接第…页">${esc(review.question || '')}</textarea></label>
@@ -178,30 +210,65 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
           <label>连续原文摘录<textarea name="quote" rows="2" required></textarea></label><label>风格描述依据<textarea name="basis" rows="2" required></textarea></label>
           <label>不确定或待核事项<textarea name="uncertainty" rows="2"></textarea></label><button type="submit">添加本页候选</button></form>
         <h3>交回负责人</h3><p class="hint">两张 CSV 保留未审核页的空行，负责人可据此检查遗漏。请同时留存进度备份。</p><div class="form-actions"><button type="button" id="exportPages" class="primary">导出逐页表</button><button type="button" id="exportCandidates">导出候选表</button></div>
-      </details><div class="form-actions drawer-actions"><button id="validate">检查 TXT 模板</button><button id="verifyNext" class="primary">本页校验完成，下一页</button></div></div></aside></div></section></div><button type="button" id="toggleReviewDrawer" class="review-drawer-toggle" aria-controls="reviewDrawer" aria-expanded="${state.reviewOpen ? 'true' : 'false'}">${state.reviewOpen ? '收起' : '打开'}校勘操作 <span aria-hidden="true">${state.reviewOpen ? '×' : '↗'}</span></button></main>`;
+      </details><div class="form-actions drawer-actions"><button id="validate">检查格式</button><button id="verifyNext" class="primary">校验本页并继续待校页</button></div></div></aside></div></section></div></main>`;
     showMessage();
     syncReviewDrawer();
+    updateSaveStatus();
     setImage();
     updateValidation();
     updateHighlight();
     editorObserver?.disconnect();
     editorObserver = new ResizeObserver(syncHighlight);
     editorObserver.observe(app.querySelector('#collationText'));
-    app.querySelector('[data-index][aria-current="true"]')?.scrollIntoView({ block: 'nearest' });
+    revealCurrentPage();
+    for (const input of app.querySelectorAll('#candidateForm [name]')) input.value = current().candidateDraft?.[input.name] || '';
   }
 
-  function select(index) {
+  function revealCurrentPage() {
+    const row = app.querySelector('[data-index][aria-current="true"]');
+    const list = app.querySelector('#pageList');
+    if (row && list) { list.scrollTop = row.offsetTop - 8; list.scrollLeft = row.offsetLeft - 8; }
+  }
+
+  function syncUrl() {
+    const url = new URL(location.href); url.searchParams.set('page', page().page);
+    history.replaceState(null, '', url);
+  }
+
+  function select(index, notice = '') {
+    if (state.saveProblem && !persist()) { app.querySelector('#saveRecovery')?.scrollIntoView({ block: 'nearest' }); return false; }
     state.index = Math.max(0, Math.min(state.data.pages.length - 1, index));
     state.validation = false;
     state.resetPending = false;
-    const url = new URL(location.href); url.searchParams.set('page', page().page); history.replaceState(null, '', url);
-    state.notice = ''; state.error = ''; render();
+    syncUrl();
+    persist();
+    state.notice = notice; state.error = ''; render();
+    app.querySelector('#editorHeading')?.focus({ preventScroll: true });
+    return true;
   }
 
   function record(patch) {
     const number = page().page;
     state.reviews[number] = { ...current(), ...patch };
-    persist();
+    return persist();
+  }
+
+  function backup() {
+    download(`第${part}份-初筛进度备份.json`, JSON.stringify(payload(), null, 2), 'application/json;charset=utf-8');
+  }
+
+  function exportCurrentPage() {
+    if (!state.person.trim()) {
+      state.error = '请先填写校勘人真实姓名，再导出本页。';
+      showMessage();
+      app.querySelector('#person')?.focus();
+      return;
+    }
+    const currentPage = page();
+    const text = exportText({ part, person: state.person.trim(), pages: [currentPage], reviews: { [currentPage.page]: current() } });
+    download(`第${part}份-第${currentPage.page}页校勘.txt`, text, 'text/plain;charset=utf-8');
+    state.notice = `已发起第 ${currentPage.page} 页校勘 TXT 下载。`;
+    showMessage();
   }
 
   function csvCell(value) { return `"${String(value ?? '').replaceAll('"', '""')}"`; }
@@ -209,11 +276,6 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     const url = URL.createObjectURL(new Blob(['\ufeff', textValue], { type }));
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-  function exportCurrentPage() {
-    download(`第${part}份-第${page().page}页-校勘.txt`, `${draft().text || ''}\n`, 'text/plain;charset=utf-8');
-    state.notice = `已发起第 ${page().page} 页校勘 TXT 下载。`;
-    showMessage();
   }
   function exportCsv(kind) {
     if (!state.person.trim()) { state.error = '请先填写审核人真实姓名，再导出回收表。'; showMessage(); return; }
@@ -249,15 +311,35 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
   app.addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button || !state.data) return;
-    if (button.id === 'toggleReviewDrawer' || button.id === 'openTextEditor') { state.reviewOpen = true; syncReviewDrawer(); app.querySelector('#editText')?.focus(); return; }
-    if (button.id === 'closeReviewDrawer') { state.reviewOpen = false; syncReviewDrawer(); return; }
+    if (button.id === 'openTextEditor') {
+      state.reviewOpen = true;
+      syncReviewDrawer();
+      app.querySelector('#editText')?.focus({ preventScroll: true });
+      return;
+    }
+    if (button.id === 'closeReviewDrawer') {
+      state.reviewOpen = false;
+      syncReviewDrawer();
+      app.querySelector('#openTextEditor')?.focus({ preventScroll: true });
+      return;
+    }
     if (button.id === 'exportCurrentPage') return exportCurrentPage();
+    if (button.id === 'retrySave') return persist();
+    if (['backup', 'rescueBackup'].includes(button.id)) {
+      backup(); state.notice = '已发起进度备份下载，请在浏览器下载列表确认。'; showMessage(); return;
+    }
+    if (button.id === 'reloadProgress') {
+      if (!confirm('载入本机最新进度会替换本页未保存的修改。请确认已下载备份，再继续。')) return;
+      if (restore()) { state.notice = '已载入本机最新进度。'; state.error = ''; render(); }
+      else updateSaveStatus();
+      return;
+    }
     if (button.dataset.index !== undefined) return select(Number(button.dataset.index));
     if (button.id === 'prev') return select(state.index - 1);
     if (button.id === 'next') return select(state.index + 1);
     if (button.id === 'cancelDraftReset') { state.resetPending = false; showMessage(); return; }
     if (['makeDraft', 'confirmDraftReset', 'renumber', 'lineUp', 'lineDown'].includes(button.id)) {
-      const editor = app.querySelector('#editText') || app.querySelector('#collationText');
+      const editor = app.querySelector('#editText');
       let value = editor.value, caret = editor.selectionStart;
       if (button.id === 'makeDraft' || button.id === 'confirmDraftReset') {
         if (button.id === 'makeDraft' && current().collation?.text) { state.resetPending = true; state.error = ''; showMessage(); return; }
@@ -266,7 +348,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
         state.notice = layoutNote(); showMessage();
       } else if (button.id === 'renumber') value = numberLines(value);
       else ({ text: value, caret } = moveLine(value, caret, button.id === 'lineUp' ? -1 : 1));
-      updateDraft({ text: value }); editor.value = value; editor.focus(); editor.setSelectionRange(caret, caret);
+      updateDraft({ text: value }, { reset: ['makeDraft', 'confirmDraftReset'].includes(button.id) }); editor.value = value; editor.focus(); editor.setSelectionRange(caret, caret);
       app.querySelector('#makeDraft').textContent = '重新生成草稿'; return;
     }
     if (button.id === 'validate') { state.validation = true; updateValidation(); return; }
@@ -278,15 +360,19 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
       if (!state.imageReady) problems.push('原页尚未载入，请载入后核对。');
       if (!Object.keys(CHECKS).every(key => draft().checks?.[key])) problems.push('请逐项完成并勾选三项人工核对。');
       if (validation.warnings.length && !current().question?.trim()) problems.push('字数变化或重复栏提示需要在“疑问与处理”中说明。');
-      if (problems.length) { state.error = problems.join(' '); showMessage(); return; }
-      record({ seen: true, collation: { ...draft(), verified: true, verifiedBy: state.person.trim(), verifiedAt: new Date().toISOString() } });
-      if (state.error) return;
-      if (state.index < state.data.pages.length - 1) select(state.index + 1);
-      else { state.notice = '本页已校验。可导出本份 TXT 与校验表交回负责人。'; render(); }
+      if (problems.length) { state.error = problems.join(' '); showMessage();
+        app.querySelector(!state.person.trim() ? '#person' : validation.errors.length ? '#editText' : !Object.keys(CHECKS).every(key => draft().checks?.[key]) ? '[data-check]:not(:checked)' : '#question')?.focus(); return; }
+      const saved = record({ seen: true, collation: { ...draft(), verified: true, verifiedBy: state.person.trim(), verifiedAt: new Date().toISOString() } });
+      updateValidation();
+      if (!saved) return;
+      const completed = page().page;
+      const next = nextPendingIndex(state.data.pages, state.reviews, state.index);
+      if (next >= 0) select(next, `第 ${completed} 页已校验并保存；已转到第 ${state.data.pages[next].page} 页继续。`);
+      else { state.notice = '本份全部校验完成，请导出 TXT 与校验表交回负责人。'; render(); }
       return;
     }
     if (button.id === 'exportTxt' || button.id === 'exportChecks') {
-      if (!state.person.trim()) { state.error = '请先填写校勘人真实姓名，再导出。'; showMessage(); return; }
+      if (!state.person.trim()) { state.error = '请先填写校勘人真实姓名，再导出。'; showMessage(); app.querySelector('#person').focus(); return; }
       if (button.id === 'exportTxt') download(`第${part}份-逐页校勘.txt`, exportText({ part, person: state.person.trim(), pages: state.data.pages, reviews: state.reviews }), 'text/plain;charset=utf-8');
       else {
         const rows = [['原PDF物理页', '分册页', '校勘状态', '栏序核对', '逐字核对', '跨页核对', '格式问题', '提醒', '疑问与处理', '校验人', '校验时间'],
@@ -297,7 +383,8 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
           })];
         download(`第${part}份-TXT校验表.csv`, rows.map(row => row.map(csvCell).join(',')).join('\r\n'));
       }
-      state.notice = `已导出；其中 ${verifiedCount()} 页已校验，其余页按草稿或未开始保留。请同时留存进度备份。`; showMessage(); return;
+      const counts = progressSummary(state.data.pages, state.reviews);
+      state.notice = `已发起${button.id === 'exportTxt' ? '校勘 TXT' : '校验表'}下载：已校验 ${counts.verified} 页、草稿 ${counts.draft} 页、未开始 ${counts.unstarted} 页。请确认下载后，与另一份文件一起交回负责人。`; showMessage(); return;
     }
     if (button.id === 'markSeen' && (state.imageReady || current().seen)) { record({ seen: !current().seen }); render(); return; }
     if (button.dataset.remove !== undefined) {
@@ -306,15 +393,15 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     }
     if (button.id === 'exportPages') return exportCsv('pages');
     if (button.id === 'exportCandidates') return exportCsv('candidates');
-    if (button.id === 'backup') download(`第${part}份-初筛进度备份.json`, JSON.stringify({ version: 1, part,
-      person: state.person, reviews: state.reviews }, null, 2), 'application/json;charset=utf-8');
+
   });
 
   app.addEventListener('input', (event) => {
     if (!state.data) return;
+    if (event.target.closest('#candidateForm') && event.target.name) { record({ candidateDraft: { ...current().candidateDraft, [event.target.name]: event.target.value } }); return; }
     if (event.target.id === 'theoryToggle') { state.highlight = event.target.checked; updateHighlight(); return; }
     if (event.target.id === 'person') { state.person = event.target.value; persist(); }
-    if (event.target.id === 'editText' || event.target.id === 'collationText') updateDraft({ text: event.target.value });
+    if (event.target.id === 'editText') updateDraft({ text: event.target.value });
     if (event.target.dataset.check) updateDraft({ checks: { ...draft().checks, [event.target.dataset.check]: event.target.checked } });
     if (event.target.id === 'question') record({ question: event.target.value });
     if (event.target.id === 'redoOcr') record({ redoOcr: event.target.checked });
@@ -335,6 +422,15 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
   }
 
   app.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && state.reviewOpen) {
+      state.reviewOpen = false;
+      syncReviewDrawer();
+      app.querySelector('#openTextEditor')?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.isComposing && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+      event.preventDefault(); select(state.index + (event.key === 'ArrowLeft' ? -1 : 1)); return;
+    }
     if (event.target.id === 'jump' && event.key === 'Enter') {
       event.preventDefault(); jumpTo(event.target.value);
     }
@@ -361,13 +457,17 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
       } catch (error) { state.error = error.message || '本地 OCR 载入失败'; showMessage(); }
     }
     if (event.target.id === 'backupFile') {
+      if (!event.target.files?.length) return;
       try {
         const saved = JSON.parse(await event.target.files[0].text());
         if (saved.version !== 1 || saved.part !== part || !saved.reviews || typeof saved.reviews !== 'object' || Array.isArray(saved.reviews))
           throw new Error('进度备份与本份页段不匹配');
-        if (Object.keys(state.reviews).length && !confirm('导入会覆盖本机当前进度，确定继续？')) return;
-        state.reviews = saved.reviews; state.person = String(saved.person || ''); persist();
-        state.notice = '进度备份已导入，可继续在线逐页审核。'; render();
+        if ((Object.keys(state.reviews).length || state.saveProblem) && !confirm('导入会替换本份在当前浏览器的进度，包括其他标签页的更新。请确认已备份，再继续。')) return;
+        progressStore.allowBackupReplacement();
+        state.reviews = saved.reviews; state.person = String(saved.person || '');
+        state.index = initialPageIndex(state.data.pages, null, saved.lastPage ?? page().page);
+        syncUrl(); persist();
+        state.notice = state.saveProblem ? '' : '进度备份已导入，可继续逐页校勘。'; render();
       } catch (error) { state.error = error.message || '进度备份读取失败'; showMessage(); }
     }
   });
@@ -379,7 +479,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     const fields = new FormData(event.target);
     const candidate = Object.fromEntries(['author', 'style', 'quote', 'basis', 'uncertainty'].map((field) => [field, String(fields.get(field) || '').trim()]));
     if (!candidate.quote || !candidate.basis) return;
-    record({ candidates: [...(current().candidates || []), candidate] }); render();
+    record({ candidates: [...(current().candidates || []), candidate], candidateDraft: {} }); render();
   });
 
   async function init() {
@@ -406,15 +506,29 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
       state.data.allPages = state.data.pages;
       state.data.pages = state.data.allPages.filter(item => isTaskPage(item.page));
       restore();
-      const targetPage = Number(new URLSearchParams(location.search).get('page'));
+      const requested = new URLSearchParams(location.search).get('page');
+      const targetPage = Number(requested ?? state.lastPage);
+      state.index = initialPageIndex(state.data.pages, requested, state.lastPage);
+      if (requested === null && state.lastPage) state.notice = `已回到上次工作位置：第 ${page().page} 页。`;
       if (Number.isInteger(targetPage) && targetPage >= state.data.start && targetPage <= state.data.end) {
         const index = state.data.pages.findIndex(item => item.page >= targetPage);
         state.index = index < 0 ? state.data.pages.length - 1 : index;
         if (!isTaskPage(targetPage)) state.notice = `第 ${targetPage} 页为${excludedPages[targetPage]}，已移出任务，已转到第 ${page().page} 页。`;
       }
-      const url = new URL(location.href); url.searchParams.set('page', page().page); history.replaceState(null, '', url);
+      syncUrl();
       render();
     } catch (error) { app.innerHTML = `<p class="loading" role="alert">${esc(error.message)}。请刷新页面，或联系负责人检查静态站文件。</p>`; }
   }
+  window.addEventListener('resize', revealCurrentPage);
+  window.addEventListener('beforeunload', event => {
+    if (!state.saveProblem) return;
+    event.preventDefault(); event.returnValue = '';
+  });
+  window.addEventListener('storage', event => {
+    if (!state.data || (event.key !== key() && event.key !== null) || !progressStore.hasChanged()) return;
+    state.saveConflict = true;
+    state.saveProblem = '其他标签页已更新进度。请先备份本页修改，再载入本机最新进度，避免相互覆盖。';
+    updateSaveStatus();
+  });
   init();
 })();
