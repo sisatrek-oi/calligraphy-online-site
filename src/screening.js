@@ -7,7 +7,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
   const app = document.querySelector('#screeningApp');
   const part = Number(new URLSearchParams(location.search).get('part'));
   const state = { data: null, index: 0, reviews: {}, files: new Map(), imageUrl: '', imageReady: false,
-    person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, zoom: 100, validation: false, resetPending: false, highlight: true, reviewOpen: false };
+    person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, zoom: 100, validation: false, resetPending: false, highlight: true, reviewOpen: false, sourceVersion: 'normalized' };
   let editorObserver;
   const esc = (value = '') => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
@@ -19,10 +19,24 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
   const filename = (number) => `page-${String(number).padStart(4, '0')}.jpg`;
   const scanHref = (number) => `./screening-data/scans/${filename(number)}`;
   const pdfHref = (local) => `./screening-data/part-${part}.pdf#page=${local}`;
-  const draft = () => current().collation || { text: makeDraft(page().layout?.text ?? page().ocr) };
+  const sourceText = (item) => state.sourceVersion === 'raw' ? item.ocr : item.contextual?.[state.sourceVersion] || item.ocr;
+  const sourceLabel = () => ({ raw: '原始 OCR', conservative: '保守校验版', normalized: '语义整理版' }[state.sourceVersion] || '原始 OCR');
+  const draft = () => current().collation || { text: makeDraft(state.sourceVersion === 'raw' ? (page().layout?.text ?? page().ocr) : sourceText(page())) };
+  const sourceMeta = (item) => {
+    const contextual = item.contextual;
+    if (!contextual) return '清洗结果未载入，当前显示原始 OCR。';
+    const conservative = String(contextual.conservative || '').replace(/\s/g, '');
+    const normalized = String(contextual.normalized || '').replace(/\s/g, '');
+    const delta = normalized.length - conservative.length;
+    const sign = delta > 0 ? '+' : '';
+    return `${sourceLabel()} · ${contextual.uncertainties?.length || 0} 条待核 · 两版字数差 ${sign}${delta}`;
+  };
+  const sourceVersionOptions = () => [
+    ['normalized', '语义整理版'], ['conservative', '保守校验版'], ['raw', '原始 OCR'],
+  ].map(([value, label]) => `<option value="${value}" ${state.sourceVersion === value ? 'selected' : ''}>${label}</option>`).join('');
   const layoutNote = () => page().layout?.method === 'aligned-lines' ? '已按逐栏 OCR 对齐分栏；栏界为机器建议，请看图核对。'
     : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；页眉、标点与错字请看图核对。' : '本页缺少可靠栏界，暂保留原段落。请按原页拆栏或合并行。';
-  const verifiedCount = () => state.data.pages.filter(item => isVerified(state.reviews[item.page]?.collation, item.ocr)).length;
+  const verifiedCount = () => state.data.pages.filter(item => isVerified(state.reviews[item.page]?.collation, sourceText(item))).length;
 
   function updateDraft(patch, { reset = false } = {}) {
     state.resetPending = false;
@@ -61,21 +75,21 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
   }
 
   function updateValidation() {
-    const result = validateDraft(draft(), page().ocr);
+    const result = validateDraft(draft(), sourceText(page()));
     const slot = app.querySelector('#validation');
-    if (slot) slot.innerHTML = `<span>${result.lines} 栏 · ${result.chars} 汉字 · ${isVerified(draft(), page().ocr) ? '已校验' : '待人工校验'}</span>${state.validation ? `<ul>${[...result.errors, ...result.warnings].map(message => `<li>${esc(message)}</li>`).join('') || '<li>模板格式通过；字序和文字准确性仍须人工核对。</li>'}</ul>` : ''}`;
+    if (slot) slot.innerHTML = `<span>${result.lines} 栏 · ${result.chars} 汉字 · ${isVerified(draft(), sourceText(page())) ? '已校验' : '待人工校验'}</span>${state.validation ? `<ul>${[...result.errors, ...result.warnings].map(message => `<li>${esc(message)}</li>`).join('') || '<li>模板格式通过；字序和文字准确性仍须人工核对。</li>'}</ul>` : ''}`;
     const pageCheck = app.querySelector('#pageCheck');
     if (pageCheck) pageCheck.checked = Object.keys(CHECKS).every(key => draft().checks?.[key]);
     const progress = app.querySelector('#progress');
     if (progress) progress.textContent = `已校验 ${verifiedCount()} / ${state.data.pages.length} 页`;
     for (const row of app.querySelectorAll('[data-index]')) {
       const item = state.data.pages[Number(row.dataset.index)], review = state.reviews[item.page] || {};
-      const verified = isVerified(review.collation, item.ocr);
+      const verified = isVerified(review.collation, sourceText(item));
       row.querySelector('small').textContent = verified ? '已校验' : review.collation?.text !== undefined ? '草稿' : review.seen ? '已看' : '待校';
       row.classList.toggle('done', verified);
     }
     const complete = app.querySelector('#verifyNext');
-    if (complete) complete.textContent = isVerified(draft(), page().ocr) ? '已校验 · 继续待校页' : '校验本页并继续';
+    if (complete) complete.textContent = isVerified(draft(), sourceText(page())) ? '已校验 · 继续待校页' : '校验本页并继续';
   }
 
   function attachOcr(source) {
@@ -88,6 +102,21 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
         throw new Error(`线上 OCR 第 ${index + 1} 页与页码索引不匹配`);
       item.ocr = text.slice(heading.index + heading[0].length, headings[index + 1]?.index ?? text.length).trim();
     });
+  }
+
+  function attachContextual(payload) {
+    if (!payload || payload.version !== 1 || payload.part !== part || !Array.isArray(payload.pages)) return false;
+    const byPage = new Map(payload.pages.map(item => [Number(item.page), item]));
+    if (state.data.pages.some(item => !byPage.has(item.page))) return false;
+    state.data.pages.forEach(item => {
+      const contextual = byPage.get(item.page);
+      item.contextual = {
+        conservative: String(contextual.conservative || ''),
+        normalized: String(contextual.normalized || ''),
+        uncertainties: Array.isArray(contextual.uncertainties) ? contextual.uncertainties : [],
+      };
+    });
+    return true;
   }
 
   function payload() {
@@ -184,16 +213,17 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     app.innerHTML = `<main class="page">
       <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / 成员 ${part} / 原 PDF ${state.data.start}–${state.data.end} 页</span><h1>原文对照校勘</h1><p>① 对照原页整理栏序　② 逐字校勘　③ 校验并导出 TXT</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
-        <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a>
+        <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载全书保守版</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载全书语义版</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
           <button type="button" id="backup">导出进度备份</button><label class="file-button">导入进度<input id="backupFile" type="file" accept="application/json,.json" /></label>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
           <label class="file-button">或选择图片<input id="scanFiles" type="file" accept="image/jpeg" multiple /></label>
           <label class="file-button">载入本地 OCR<input id="locatorFile" type="file" accept="text/html,.html" /></label></div></details></div></details></div></section>
       <div id="saveRecovery"></div><div id="messageSlot"></div>
-      <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, item.ocr) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${isVerified(r.collation, item.ocr) ? '已校验' : r.collation?.text !== undefined ? '草稿' : r.seen ? '已看' : '待校'}</small></button>`; }).join('')}</div></aside>
+      <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, sourceText(item)) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${isVerified(r.collation, sourceText(item)) ? '已校验' : r.collation?.text !== undefined ? '草稿' : r.seen ? '已看' : '待校'}</small></button>`; }).join('')}</div></aside>
       <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已校验。Alt + ← / → 翻页。</p></div></section>
       <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>只读预览；点击“编辑本页”打开右下角编辑器。</small></div><button type="button" id="openTextEditor">编辑本页</button></div><div class="form-body">
+        <div class="source-version-bar"><label for="sourceVersion">校勘底稿<select id="sourceVersion">${sourceVersionOptions()}</select></label><button type="button" id="useSourceVersion" ${page().contextual ? '' : 'disabled'}>采用此版本到编辑器</button><span id="sourceVersionMeta">${esc(sourceMeta(p))}${current().collation?.text !== undefined ? ' · 当前页已有本机草稿' : ''}</span></div>
         <div class="editor-main">
         <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
         <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
@@ -266,7 +296,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
       return;
     }
     const currentPage = page();
-    const text = exportText({ part, person: state.person.trim(), pages: [currentPage], reviews: { [currentPage.page]: current() } });
+    const text = exportText({ part, person: state.person.trim(), pages: [currentPage], reviews: { [currentPage.page]: current() }, sourceForPage: sourceText });
     download(`第${part}份-第${currentPage.page}页校勘.txt`, text, 'text/plain;charset=utf-8');
     state.notice = `已发起第 ${currentPage.page} 页校勘 TXT 下载。`;
     showMessage();
@@ -318,6 +348,15 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
       app.querySelector('#editText')?.focus({ preventScroll: true });
       return;
     }
+    if (button.id === 'useSourceVersion') {
+      if (!page().contextual) return;
+      if (current().collation?.text && !confirm(`用${sourceLabel()}替换当前页编辑草稿？如需保留现有草稿，请先导出进度备份。`)) return;
+      updateDraft({ text: makeDraft(sourceText(page())) }, { reset: true });
+      state.reviewOpen = true;
+      render();
+      app.querySelector('#editText')?.focus({ preventScroll: true });
+      return;
+    }
     if (button.id === 'closeReviewDrawer') {
       state.reviewOpen = false;
       syncReviewDrawer();
@@ -345,7 +384,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
       if (button.id === 'makeDraft' || button.id === 'confirmDraftReset') {
         if (button.id === 'makeDraft' && current().collation?.text) { state.resetPending = true; state.error = ''; showMessage(); return; }
         state.resetPending = false;
-        value = makeDraft(page().layout?.text ?? page().ocr); caret = 0;
+        value = makeDraft(state.sourceVersion === 'raw' ? (page().layout?.text ?? page().ocr) : sourceText(page())); caret = 0;
         state.notice = layoutNote(); showMessage();
       } else if (button.id === 'renumber') value = numberLines(value);
       else ({ text: value, caret } = moveLine(value, caret, button.id === 'lineUp' ? -1 : 1));
@@ -355,7 +394,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     if (button.id === 'validate') { state.validation = true; updateValidation(); return; }
     if (button.id === 'verifyNext') {
       state.validation = true; updateValidation();
-      const validation = validateDraft(draft(), page().ocr);
+      const validation = validateDraft(draft(), sourceText(page()));
       const problems = [...validation.errors];
       if (!state.person.trim()) problems.unshift('请填写校勘人真实姓名。');
       if (!state.imageReady) problems.push('原页尚未载入，请载入后核对。');
@@ -374,12 +413,12 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     }
     if (button.id === 'exportTxt' || button.id === 'exportChecks') {
       if (!state.person.trim()) { state.error = '请先填写校勘人真实姓名，再导出。'; showMessage(); app.querySelector('#person').focus(); return; }
-      if (button.id === 'exportTxt') download(`第${part}份-逐页校勘.txt`, exportText({ part, person: state.person.trim(), pages: state.data.pages, reviews: state.reviews }), 'text/plain;charset=utf-8');
+      if (button.id === 'exportTxt') download(`第${part}份-逐页校勘.txt`, exportText({ part, person: state.person.trim(), pages: state.data.pages, reviews: state.reviews, sourceForPage: sourceText }), 'text/plain;charset=utf-8');
       else {
         const rows = [['原PDF物理页', '分册页', '校勘状态', '栏序核对', '逐字核对', '跨页核对', '格式问题', '提醒', '疑问与处理', '校验人', '校验时间'],
           ...state.data.pages.map(item => {
-            const review = state.reviews[item.page] || {}, d = review.collation || {}, v = validateDraft(d, item.ocr);
-            return [item.page, item.local, isVerified(d, item.ocr) ? '已校验' : d.text !== undefined ? '草稿' : '未开始', ...Object.keys(CHECKS).map(key => d.checks?.[key] ? '是' : ''),
+            const review = state.reviews[item.page] || {}, d = review.collation || {}, v = validateDraft(d, sourceText(item));
+            return [item.page, item.local, isVerified(d, sourceText(item)) ? '已校验' : d.text !== undefined ? '草稿' : '未开始', ...Object.keys(CHECKS).map(key => d.checks?.[key] ? '是' : ''),
               d.text !== undefined ? v.errors.join('；') : '', v.warnings.join('；'), review.question || '', d.verifiedBy || state.person.trim(), d.verifiedAt || ''];
           })];
         download(`第${part}份-TXT校验表.csv`, rows.map(row => row.map(csvCell).join(',')).join('\r\n'));
@@ -438,6 +477,12 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
   });
 
   app.addEventListener('change', async (event) => {
+    if (event.target.id === 'sourceVersion') {
+      state.sourceVersion = event.target.value;
+      state.validation = false;
+      render();
+      return;
+    }
     if (event.target.id === 'zoom') { state.zoom = Number(event.target.value); const image = app.querySelector('#scanWrap img'); if (image) image.style.width = `${state.zoom}%`; }
     if (event.target.id === 'jump') {
       jumpTo(event.target.value);
@@ -486,16 +531,22 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
   async function init() {
     if (![1, 2, 3, 4].includes(part)) { app.innerHTML = '<p class="loading">请选择团队任务中的第 1–4 份初筛工作项。</p>'; return; }
     try {
-      const [response, ocrResponse, layoutResponse] = await Promise.all([
+      const [response, ocrResponse, layoutResponse, contextualResponse] = await Promise.all([
         fetch(`./screening-data/part-${part}.json`, { cache: 'no-store' }),
         fetch(`./screening-data/part-${part}-ocr.txt`, { cache: 'no-store' }),
         fetch(`./screening-data/part-${part}-layout.json`, { cache: 'no-store' }).catch(() => null),
+        fetch(`./screening-data/part-${part}-contextual.json`, { cache: 'no-store' }).catch(() => null),
       ]);
       if (!response.ok) throw new Error('页码索引未找到');
       state.data = await response.json();
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1) throw new Error('页码索引不完整');
       if (ocrResponse.ok) attachOcr(await ocrResponse.text());
       else state.error = '线上 OCR 未能载入；可下载全文或载入本地 OCR，对照时仍以扫描图为准。';
+      if (contextualResponse?.ok) {
+        try {
+          if (!attachContextual(await contextualResponse.json())) state.notice = '清洗版数据与本份页码不匹配，当前显示原始 OCR。';
+        } catch { state.notice = '清洗版数据读取失败，当前显示原始 OCR。'; }
+      } else state.notice = '清洗版尚未载入，当前显示原始 OCR。';
       if (layoutResponse?.ok) {
         try {
           const layout = await layoutResponse.json();

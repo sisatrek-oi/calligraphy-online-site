@@ -50,13 +50,13 @@ export function isVerified(draft = {}, raw = '') {
   return Boolean(draft.verified && Object.keys(CHECKS).every(key => draft.checks?.[key]) && !validateDraft(draft, raw).errors.length);
 }
 
-export function exportText({ part, person, pages, reviews }) {
+export function exportText({ part, person, pages, reviews, sourceForPage = page => page.ocr }) {
   const content = [`《历代书法论文选》｜第 ${part} 份｜逐页 TXT 校勘`, `导出人：${person}`, '说明：栏号按阅读顺序排列；未开始、草稿、已校验分别记录。已校验为成员人工确认。', ''];
   for (const page of pages) {
     if (!isTaskPage(page.page)) continue;
     const review = reviews[page.page] || {}, draft = review.collation || {};
     content.push(`===== 原 PDF 物理页 ${page.page}｜分册第 ${page.local} 页 =====`,
-      `状态：${isVerified(draft, page.ocr) ? '已校验' : draft.text !== undefined ? '草稿' : '未开始'}`,
+      `状态：${isVerified(draft, sourceForPage(page)) ? '已校验' : draft.text !== undefined ? '草稿' : '未开始'}`,
       `校验人：${draft.verifiedBy || person}`, `校验时间：${draft.verifiedAt || '—'}`,
       ...Object.entries(CHECKS).map(([key, label]) => `${draft.checks?.[key] ? '[x]' : '[ ]'} ${label}`),
       `疑问与处理：${review.question || '—'}`, '【正文·一栏一行】', draft.text || '（未录入）', '');

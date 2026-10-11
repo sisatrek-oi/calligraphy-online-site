@@ -1,0 +1,35 @@
+{
+  "book": "《历代书法论文选》",
+  "physical_page_range": [
+    1,
+    1052
+  ],
+  "source_ocr_files": [
+    "screening-data/part-1-ocr.txt",
+    "screening-data/part-2-ocr.txt",
+    "screening-data/part-3-ocr.txt",
+    "screening-data/part-4-ocr.txt"
+  ],
+  "source_preserved": true,
+  "outputs": {
+    "conservative": "full-book-conservative.txt",
+    "normalized": "full-book-normalized.txt",
+    "structured": "full-book-contextual.jsonl",
+    "uncertainties": "full-book-uncertainties.jsonl"
+  },
+  "records": 1052,
+  "duplicate_boundary_pages_removed": [
+    263,
+    264,
+    526,
+    527,
+    789,
+    790
+  ],
+  "models_used": [
+    "primary",
+    "secondary"
+  ],
+  "fallback_note": "主模型在后段达到额度限制后，剩余批次由 secondary 续跑；返回结构和校验规则相同。",
+  "generated_at": "2026-10-11"
+}
