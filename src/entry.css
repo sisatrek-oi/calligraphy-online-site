@@ -342,10 +342,12 @@ body[data-entry-active="true"] {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-wrap: wrap;
   color: #69706b;
   font-size: 13px;
 }
 body:not([data-entry-active="true"]) .public-review-entry { display: none; }
+body[data-entry-stage="auth"] .public-review-entry { display: none; }
 .review-entry-link {
   display: inline-flex;
   align-items: center;
@@ -386,4 +388,4 @@ body:not([data-entry-active="true"]) .public-review-entry { display: none; }
 .material-preparation-actions button span { display: block; margin-top: 4px; font-size: 12px; color: #69706b; }
 .material-preparation-actions :is(button,a):focus-visible { outline: 3px solid #a57824; outline-offset: 2px; }
 .drawer-section-label { margin: 14px 14px 4px; font-size: 12px; color: #77746d; }
-@media (max-width: 560px) { .public-entry-group { align-items: flex-start; } .public-entry-group:last-child { align-items: flex-end; } .material-preparation { margin: 0 12px 12px; padding: 12px; } .material-preparation-actions > * { flex: 1 1 150px; } }
+@media (max-width: 560px) { .public-entry-group { flex: 1 1 95px; align-items: flex-start; } .public-entry-group:last-child { align-items: flex-end; } .public-entry-group > span { font-size: 10px; } .public-entry-group .review-entry-link { min-height: 38px; padding: 7px 9px; font-size: 12px; } .material-preparation { margin: 0 12px 12px; padding: 12px; } .material-preparation-actions > * { flex: 1 1 150px; } }

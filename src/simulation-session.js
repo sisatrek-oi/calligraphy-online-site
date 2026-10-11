@@ -82,7 +82,8 @@
   session.login = async (account, password) => {
     await api('/api/simulation/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account, password }) });
     window.localStorage.setItem('simulation-identity-changed', String(Date.now()));
-    location.reload();
+    if (new URL(location.href).searchParams.get('next') === 'team-tasks') location.replace('./team-tasks.html');
+    else location.reload();
   };
   session.logout = async () => {
     await flush();

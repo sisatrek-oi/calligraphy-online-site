@@ -6,14 +6,14 @@
     <meta name="description" content="书论整理成果线上可视化工作台" />
     <title>书论成果线上工作台</title>
     <link rel="icon" type="image/png" href="./src/assets/shulun-mark.png" />
-    <link rel="stylesheet" href="./src/styles.css?v=20260927-import-ocr-v2" />
-    <link rel="stylesheet" href="./src/layout.css?v=20261001-static-screening" />
-    <link rel="stylesheet" href="./src/entry.css?v=20260927-material-entry" />
+    <link rel="stylesheet" href="./src/styles.css?v=20260929-book-tasks" />
+    <link rel="stylesheet" href="./src/layout.css?v=20261001-flow" />
+    <link rel="stylesheet" href="./src/entry.css?v=20260930-task-login" />
   </head>
   <body data-entry-active="true">
     <nav class="public-review-entry" aria-label="材料准备与成员审核">
-      <div class="public-entry-group"><span>材料准备 · 本地处理</span><a href="./index.html#ingest" class="review-entry-link secondary-entry-link">古籍入库</a></div>
-      <div class="public-entry-group"><span>全书初筛 · 四人分工</span><a href="./team-tasks.html" class="review-entry-link">团队任务 <span aria-hidden="true">→</span></a></div>
+      <div class="public-entry-group"><span>材料导入 · PDF 本地处理</span><a href="./index.html#ingest" class="review-entry-link secondary-entry-link">材料准备</a></div>
+      <div class="public-entry-group"><span>团队分工 · 本地演练</span><a href="./team-tasks.html" class="review-entry-link">团队任务 <span aria-hidden="true">→</span></a></div>
       <div class="public-entry-group"><span>成员审核 · 无需登录</span><a href="./review.html" class="review-entry-link">进入审核 <span aria-hidden="true">→</span></a></div>
     </nav>
     <div id="app"></div>
@@ -25,7 +25,7 @@
     <script defer src="./src/export-workflow.js?v=20260914-delivery-v1"></script>
     <script defer src="./src/ai-consensus.js?v=20260921-consensus-v6"></script>
     <script defer src="./src/embedded-sample.js?v=20260914-file-fallback"></script>
-    <script defer src="./src/ancient-ingest.js?v=20260927-material-entry"></script>
-    <script defer src="./src/main.js?v=20261001-static-screening"></script>
+    <script defer src="./src/ancient-ingest.js?v=20261001-flow"></script>
+    <script defer src="./src/main.js?v=20261001-nav-restore"></script>
   </body>
 </html>

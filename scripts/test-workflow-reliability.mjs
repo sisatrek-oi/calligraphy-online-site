@@ -692,14 +692,16 @@ test("batch review navigation stays inside actionable results and closes cleanly
   assert.equal(a.get("state.batchReviewRowId"), "");
 });
 
-test("table and review share four summary slots, four toolbar slots and the dock preference", () => {
+test("table and review keep compact summaries, toolbar actions and the dock preference", () => {
   const a = app();
   loadSample(a);
   for (const mode of ['table', 'review']) {
     a.set('mode', mode);
     a.run("state.detailMode = mode; state.detailCollapsed = true; applyDetailModeDefaults(mode)");
     assert.equal(a.get('state.detailCollapsed'), true);
-    assert.equal((a.run('modeSummaryPanel(visibleRows())').match(/<span>/g) || []).length, 4);
+    const summary = a.run('modeSummaryPanel(visibleRows())');
+    assert.equal((summary.match(/<span>/g) || []).length, mode === 'table' ? 2 : 3);
+    assert.doesNotMatch(summary, /全量行|当前视图|当前队列/);
     assert.equal((a.run('tableViewActions()').match(/<button /g) || []).length, 4);
   }
   assert.match(a.run('tableViewActions()'), /data-quality-batch-review/);
@@ -721,6 +723,30 @@ test("master table keeps excerpt, source context and review actions above second
   const panel = a.run("detailPanel(selectedRow())");
   assert.ok(panel.indexOf("master-evidence-card") < panel.indexOf("detail-card"));
   assert.ok(panel.indexOf("detail-card") < panel.indexOf("research-card"));
+});
+
+test("review focus keeps a selectable queue beside full source and decision controls", () => {
+  const a = app();
+  loadSample(a);
+  a.run(`
+    state.detailMode = 'review';
+    state.sourceText = sourcePages[selectedRow().sourceFile] || '';
+    state.sourceStatus = 'ready';
+  `);
+  assert.equal(a.get('isReviewFocusLayout()'), true);
+  const queue = a.run('reviewQueueList(visibleRows())');
+  assert.match(queue, /class="table-shell review-queue-shell"/);
+  assert.match(queue, /data-row-id=/);
+  assert.match(queue, /aria-current="true"/);
+  const panel = a.run('detailPanel(selectedRow())');
+  assert.ok(panel.indexOf('review-evidence-pane') < panel.indexOf('review-decision-pane'));
+  assert.match(panel, /全表已确认/);
+  assert.match(panel, /data-row-action="confirm-next"/);
+  assert.match(a.run('sourceCardContent(selectedRow())'), /<mark>/);
+  a.run('state.reviewFocusLayout = false');
+  assert.equal(a.get('isReviewFocusLayout()'), false);
+  assert.doesNotMatch(a.run('detailPanel(selectedRow())'), /review-evidence-pane/);
+  assert.match(a.run('resultTable(visibleRows())'), /<table>/);
 });
 
 test("symbol controls expose concise labels to the shared hover tooltip", () => {
@@ -2080,6 +2106,30 @@ test("new workspace can switch back; failed storage leaves current rows untouche
   assert.ok(a.alerts.some((message) => message.includes("保存失败")));
 });
 
+test("each ancient book keeps its own rows, source pages and review progress", async () => {
+  const a = app();
+  assert.equal(a.run("activateBookTask('甲书')"), true);
+  const firstId = a.get("state.workspaceId");
+  await a.import([file("a.csv", csv("BOOK-A")), file("page_154.txt", "甲书原文")]);
+  a.run("confirmPendingImport(); confirmRow('BOOK-A')");
+  assert.equal(a.get("state.rows[0].reviewed"), true);
+  assert.equal(a.run("activateBookTask('乙书')"), true);
+  assert.equal(a.get("state.rows.length"), 0);
+  assert.equal(a.get("state.uploadedPages.size"), 0);
+  await a.import([file("b.csv", csv("BOOK-B")), file("page_154.txt", "乙书原文")]);
+  a.run("confirmPendingImport()");
+  assert.equal(a.get("state.rows[0].reviewed"), false);
+  assert.equal(a.run("activateBookTask(' 甲书 ')"), true);
+  assert.equal(a.get("state.workspaceId"), firstId);
+  assert.equal(a.get("state.rows[0].id"), "BOOK-A");
+  assert.equal(a.get("state.uploadedPages.get('page_154.txt')"), "甲书原文");
+  assert.equal(a.get("state.rows[0].reviewed"), true);
+  assert.equal(a.get("localWorkspaceList().filter(item => item.bookTask).length"), 2);
+  a.failWrites(true);
+  assert.equal(a.run("activateBookTask('丙书')"), false);
+  assert.equal(a.get("state.workspaceId"), firstId);
+});
+
 test("import HTML escapes file content and exposes working modal controls", async () => {
   const a = app();
   await a.import([file("<img onerror=alert(1)>.csv", csv("A", "<script>bad</script>"))]);
@@ -2253,13 +2303,35 @@ test("dashboard counts each pending entry once and displays import failures accu
   const a = app();
   await a.import([file("a.csv", csv("A"))]);
   a.run("confirmPendingImport(); setFieldValue(state.rows[0], 'author', ''); state.manifest = buildManifest(state.rows)");
-  const html = a.run("dashboardRightColumn()");
-  assert.ok(html.includes("待确认（1）"));
+  assert.equal(a.get("dashboardReadiness().unreviewedRows"), 1);
+  assert.ok(a.run("dashboardWorkflow()").includes("1 条尚未确认"));
   a.run("state.uploadLog = [logEntry('error', 'bad.csv', '文件读取失败', {step:'材料导入'})]");
   const log = a.run("dashboardLogTable()");
   assert.ok(log.includes("文件读取失败"));
   assert.ok(log.includes(">失败</td>"));
   assert.ok(!log.includes(">成功</td>"));
+});
+
+test("home chooses a usable next action for empty and populated workspaces", () => {
+  const a = app();
+  assert.match(a.run("dashboardWorkflow()"), /class="focus-primary" data-view="ingest">打开材料准备/);
+  loadSample(a);
+  assert.match(a.run("dashboardWorkflow()"), /data-dashboard-queue="unreviewed"/);
+  const path = a.run("dashboardPath()");
+  for (const label of ['准备材料', '分配任务', '文件审核', '回检与导出']) assert.ok(path.includes(label));
+  assert.equal((a.run("dashboardWorkflow()").match(/data-dashboard-queue=/g) || []).length, 1);
+});
+
+test("workbench sidebar keeps separate table and recheck destinations", () => {
+  const a = app();
+  a.run("state.view = 'detail'; state.detailMode = 'review'; renderShell('')");
+  const html = a.root.innerHTML;
+  assert.match(html, /href="\.\/team-tasks\.html"[^>]*>团队任务<\/a>/);
+  assert.match(html, /href="\.\/review\.html"[^>]*>进入审核<\/a>/);
+  assert.match(html, /data-detail-mode="table"[^>]*>统一主表<\/button>/);
+  assert.match(html, /data-detail-mode="review"[^>]*>回检修订<\/button>/);
+  assert.match(html, /data-home-focus="schema">项目设置<\/button>/);
+  assert.doesNotMatch(html, />主表与回检<\/button>/);
 });
 
 test("dashboard readiness reuses release rules and deduplicates overlapping blockers", () => {
@@ -2306,10 +2378,8 @@ test("dashboard queues target current blockers independently of stale search and
   assert.ok(a.run("detailPanel(null)").includes('暂无可交付条目'));
   const home = a.run("dashboardProjectCard()");
   assert.ok(home.includes('交付就绪'));
-  assert.ok(home.includes('原文已关联'));
-  assert.ok(!home.includes('<dt>已定位</dt>'));
-  const html = a.run("dashboardRightColumn()");
-  for (const key of ['unreviewed', 'unlocated', 'openProblem']) assert.ok(html.includes('data-dashboard-queue="' + key + '"'));
+  assert.ok(!home.includes('原文已关联'));
+  assert.ok(a.run("dashboardWorkflow()").includes('data-dashboard-queue="unreviewed"'));
 });
 
 test("dashboard queues update when a blocker changes and all entry buttons are bound", () => {

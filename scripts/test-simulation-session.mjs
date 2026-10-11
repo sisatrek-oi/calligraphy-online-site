@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
 const source = fs.readFileSync(new URL('../src/simulation-session.js',import.meta.url),'utf8');
-function browser(user, backend) {
+function browser(user, backend, href='http://127.0.0.1:8773/') {
   const events = {}, nodes = new Map(), calls = [];
-  let logout = false, reloaded = false;
+  let logout = false, reloaded = false, replaced = null;
   const node = () => ({style:{}, setAttribute(){}, append(){}, hidden:false, textContent:''});
   const window = {localStorage:{setItem(){}}, addEventListener(name,fn){events[name]=fn;}, fetch:async (url,options={}) => {
     calls.push({url,options}); let status=200,data;
@@ -20,11 +20,11 @@ function browser(user, backend) {
     return {ok:status===200,status,json:async()=>data};
   }};
   const context=vm.createContext({window, URL, Headers, Request, Blob, setTimeout,clearTimeout,
-    location:{href:'http://127.0.0.1:8773/',origin:'http://127.0.0.1:8773',reload(){reloaded=true;}},
+    location:{href,origin:'http://127.0.0.1:8773',reload(){reloaded=true;},replace(path){replaced=path;}},
     document:{getElementById:id=>nodes.get(id)||null,createElement:node,body:{append(n){nodes.set(n.id,n);}}}});
   Object.defineProperty(context,'fetch',{get:()=>window.fetch});
   vm.runInContext(source,context);
-  return {session:window.CalligraphySession,calls,events,nodes,get logout(){return logout;},get reloaded(){return reloaded;}};
+  return {session:window.CalligraphySession,calls,events,nodes,get logout(){return logout;},get reloaded(){return reloaded;},get replaced(){return replaced;}};
 }
 
 test('five sessions save disjoint workspaces and hydrate after reload',async()=>{
@@ -60,4 +60,12 @@ test('unauthenticated adapter cannot mutate workspace',async()=>{
   const a=browser(null,{});await a.session.ready;
   assert.throws(()=>a.session.storage.setItem('calligraphy-private','x'),/登录/);
   assert.equal(a.session.storage.length,0);
+});
+test('shared login returns only to the allowed team task page',async()=>{
+  const team=browser(null,{},'http://127.0.0.1:8773/index.html?login=1&next=team-tasks');
+  await team.session.ready; await team.session.login('test02','test-password');
+  assert.equal(team.replaced,'./team-tasks.html');assert.equal(team.reloaded,false);
+  const external=browser(null,{},'http://127.0.0.1:8773/index.html?next=https%3A%2F%2Fexample.com');
+  await external.session.ready; await external.session.login('test02','test-password');
+  assert.equal(external.replaced,null);assert.equal(external.reloaded,true);
 });

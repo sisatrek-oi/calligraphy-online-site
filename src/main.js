@@ -140,6 +140,7 @@ const state = {
   uploadLog: [],
   datasetName: "空白隔离工作区",
   workspaceId: "",
+  bookTask: null,
   schema: null,
   schemaTemplateId: "calligraphy-style",
   schemaVersion: SCHEMA_VERSION,
@@ -178,7 +179,8 @@ const state = {
   saveError: "",
   workspaceConflict: null,
   detailCollapsed: Boolean(narrowWorkbench?.matches),
-  filtersCollapsed: false,
+  reviewFocusLayout: true,
+  filtersCollapsed: true,
   railCollapsed: Boolean(compactWorkbench?.matches),
   tableFocus: false,
   tableHeaderCollapsed: false,
@@ -294,6 +296,11 @@ function ensureWorkspaceId() {
 
 function storageKey(id = ensureWorkspaceId()) {
   return `${WORKSPACE_STORAGE_PREFIX}${id}`;
+}
+
+function bookTaskFromTitle(value) {
+  const title = String(value || "").normalize("NFKC").trim().replace(/\.pdf$/i, "").replace(/\s+/g, " ").trim();
+  return title ? { title, key: `book:${title.toLocaleLowerCase()}` } : null;
 }
 
 function escapeHtml(value = "") {
@@ -470,6 +477,7 @@ function workspacePayload() {
     version: 2,
     workspaceId: state.workspaceId,
     datasetName: state.datasetName,
+    bookTask: state.bookTask,
     exportedAt: new Date().toISOString(),
     schema: ensureSchema(),
     schemaTemplateId: state.schemaTemplateId,
@@ -879,6 +887,7 @@ async function loadCloudWorkspaceData() {
     state.exportVersions = [];
   }
   state.datasetName = state.cloud.workspace.name || state.datasetName;
+  state.bookTask = null;
   state.schemaTemplateId = state.cloud.workspace.schema_template_id || state.schemaTemplateId;
   state.schemaVersion = state.cloud.workspace.schema_version || SCHEMA_VERSION;
   state.promptVersion = state.cloud.workspace.prompt_version || PROMPT_VERSION;
@@ -1031,6 +1040,7 @@ function loadWorkspace(id = workspaceStorage.getItem(WORKSPACE_POINTER_KEY)) {
     if (state.workspaceId !== id) resetBatchUiState();
     state.workspaceId = id;
     state.datasetName = payload.datasetName || "本地隔离工作区";
+    state.bookTask = bookTaskFromTitle(payload.bookTask?.title);
     state.schemaTemplateId = payload.schemaTemplateId || state.schemaTemplateId || "calligraphy-style";
     if (Array.isArray(payload.customTemplates)) {
       const mergedTemplates = [...loadCustomTemplates(), ...payload.customTemplates].reduce((acc, template) => {
@@ -1085,6 +1095,7 @@ function clearWorkspace() {
   resetBatchUiState();
   state.workspaceId = newWorkspaceId();
   state.datasetName = "空白隔离工作区";
+  state.bookTask = null;
   state.schemaTemplateId = "calligraphy-style";
   state.schema = defaultSchema(state.schemaTemplateId);
   state.schemaVersion = SCHEMA_VERSION;
@@ -1758,100 +1769,55 @@ function inspectDashboardQueue(key) {
 
 function dashboardWorkflow() {
   const stats = projectDashboardStats();
-  const hasData = hasWorkspaceData();
-  const importDone = hasData;
-  const tableDone = stats.tableRows > 0;
-  const locateDone = tableDone && stats.matchedRows === stats.tableRows;
-  const reviewDone = tableDone && !stats.openProblems;
-  const steps = [
-    { index: 1, title: "材料导入", note: "导入 CSV/JSON/page 文本，建立本地材料库", status: importDone ? "已完成" : "待导入", value: stats.imported, unit: "份", detail: importDone ? "已有本地材料" : "等待文件", done: importDone, focus: "file" },
-    { index: 2, title: "整理条目", note: "读取已有整理结果", status: tableDone ? "已入表" : "待导入", value: stats.chunks, unit: "条", detail: tableDone ? "来自导入材料" : "等待数据", done: tableDone, view: "detail", detailMode: "table" },
-    { index: 3, title: "原文定位", note: "比对摘录与原文上下文", status: locateDone ? "已匹配" : tableDone ? "待核对" : "待导入", value: stats.matchedRows, unit: "条", detail: "摘录完整匹配", done: locateDone, queue: "unlocated" },
-    { index: 4, title: "统一主表", note: "结构化入表，形成可检索主表", status: tableDone ? "进行中" : "待入表", value: stats.tableRows, unit: "条", detail: tableDone ? "当前可用" : "等待导入", done: tableDone, view: "detail", detailMode: "table" },
-    { index: 5, title: "回检修订", note: "处理问题并记录复核结论", status: reviewDone ? "问题已清" : stats.openProblems ? "待处理" : "待检查", value: stats.openProblems, unit: "条", detail: stats.openProblems ? "未关闭的问题条目" : "暂无待处理问题", done: reviewDone, queue: "openProblem" },
-    { index: 6, title: "成果导出", note: "检查成果并保存导出版本", status: state.exportVersions.length ? "已有版本" : tableDone ? "可导出草稿" : "待处理", value: state.exportVersions.length, unit: "版", detail: state.exportVersions.length ? "已保存正式成果" : "尚无正式成果", done: state.exportVersions.length > 0, focus: "export" }
-  ];
+  const next = !stats.tableRows
+    ? { title: "导入第一批材料", note: "从已有 TXT、CSV 或 JSON 开始，也可以先处理扫描古籍。", action: "打开材料准备", target: 'data-view="ingest"' }
+    : stats.unreviewedRows
+      ? { title: "继续人工审校", note: `${formatCount(stats.unreviewedRows)} 条尚未确认，先核对原文与字段。`, action: "进入待确认队列", target: 'data-dashboard-queue="unreviewed"' }
+      : stats.openProblems
+        ? { title: "处理开放问题", note: `${formatCount(stats.openProblems)} 条仍有待解决的问题。`, action: "进入问题队列", target: 'data-dashboard-queue="openProblem"' }
+        : { title: "检查交付成果", note: "当前审校队列已处理，可以检查导出条件。", action: "检查成果", target: 'data-home-focus="export"' };
   return `
-    <section class="dash-panel workflow-panel">
-      <div class="dash-panel-head">
-        <h2>工作流程</h2>
-        <span>当前工作区</span>
+    <section class="dash-panel dashboard-focus" aria-label="下一步工作">
+      <div class="focus-copy">
+        <p class="focus-eyebrow">下一步工作</p>
+        <h2>${escapeHtml(next.title)}</h2>
+        <p>${escapeHtml(next.note)}</p>
       </div>
-      <section class="material-preparation" aria-label="材料准备">
-        <div><h3>材料准备</h3><p>扫描古籍先入库；已有文本或整理表可直接导入。</p></div>
-        <div class="material-preparation-actions">
-          <button type="button" data-view="ingest">古籍入库<span>版本登记 · OCR · 逐页校对（本地）</span></button>
-          <button type="button" data-home-focus="file">导入已有材料<span>TXT / CSV / JSON</span></button>
-        </div>
-      </section>
-      <div class="workflow-list">
-        ${steps.map((step) => `
-        <article class="workflow-row">
-          <div class="step-index">${step.index}</div>
-          <div class="step-main"><strong>${escapeHtml(step.title)}</strong><span>${escapeHtml(step.note)}</span></div>
-          <div class="step-status ${step.done ? "done" : "pending"}"><i></i>${escapeHtml(step.status)}</div>
-          <div class="step-count"><strong>${formatCount(step.value)} <em>${escapeHtml(step.unit)}</em></strong><span>${escapeHtml(step.detail)}</span></div>
-          <button type="button" class="icon-control" ${step.queue ? `data-dashboard-queue="${step.queue}"` : ""} ${step.view ? `data-view="${step.view}"` : ""} ${step.detailMode ? `data-detail-mode="${step.detailMode}"` : ""} ${step.focus ? `data-home-focus="${step.focus}"` : ""} aria-label="进入${escapeHtml(step.title)}" title="进入${escapeHtml(step.title)}">›</button>
-          <span class="step-more">⌄</span>
-        </article>
-        `).join("")}
+      <div class="focus-actions">
+        <button type="button" class="focus-primary" ${next.target}>${escapeHtml(next.action)} <span aria-hidden="true">→</span></button>
       </div>
     </section>
   `;
 }
 
+function dashboardPath() {
+  return `<nav class="dash-panel workflow-path" aria-label="工作流程">
+    <button type="button" data-view="ingest"><b>1</b><span>准备材料</span></button>
+    <a href="./team-tasks.html"><b>2</b><span>分配任务</span></a>
+    <a href="./review.html"><b>3</b><span>文件审核</span></a>
+    <button type="button" data-view="detail" data-detail-mode="review"><b>4</b><span>回检与导出</span></button>
+  </nav>`;
+}
+
 function dashboardProjectCard() {
   const stats = projectDashboardStats();
   const progress = stats.tableRows ? Math.floor((stats.readyRows / stats.tableRows) * 100) : 0;
-  const workspaceShortId = ensureWorkspaceId().slice(0, 8);
-  const recentItems = state.uploadLog.slice(-4).reverse();
   return `
     <section class="dash-card current-project">
       <div class="side-card-head"><h2>当前项目</h2><button type="button" class="icon-control" data-workspace-list aria-label="切换工作区" title="切换工作区">⇄</button></div>
       <div class="project-title-row"><h3>${escapeHtml(state.datasetName || "空白隔离工作区")}</h3><span>${hasWorkspaceData() ? "进行中" : "待导入"}</span></div>
-      <dl class="project-meta">
-        <div><dt>工作区</dt><dd>${escapeHtml(workspaceShortId)}</dd></div>
-        <div><dt>保存时间</dt><dd>${escapeHtml(formatLocalTime(state.lastSavedAt))}</dd></div>
-        <div><dt>处理方式</dt><dd>${window.CalligraphySession ? "服务端按账号隔离" : "浏览器本地隔离"}</dd></div>
-        <div><dt>字段模板</dt><dd>${escapeHtml(templateById(state.schemaTemplateId)?.name || "书论字段模板")}</dd></div>
-        <div><dt>项目描述</dt><dd>${escapeHtml(hasWorkspaceData() ? "当前数据来自本地导入文件，可继续定位、回检、修订与导出。" : "还没有导入材料。请先导入 CSV/JSON 或工作区 JSON。")}</dd></div>
-      </dl>
       <div class="progress-block">
-        <div><strong>交付就绪</strong><span>当前主表</span></div>
+        <div><strong>交付就绪</strong><span>${formatCount(stats.readyRows)} / ${formatCount(stats.tableRows)} 条</span></div>
         <b>${progress}%</b><i><span style="width:${progress}%"></span></i>
-        <p>可交付 ${formatCount(stats.readyRows)} 条 / 共 ${formatCount(stats.tableRows)} 条</p>
       </div>
-      <div class="data-overview">
-        <h3>数据概览</h3>
-        <dl>
-          <div><dt>原文页</dt><dd>${formatCount(stats.materials)} 页</dd></div>
-          <div><dt>导入文件</dt><dd>${formatCount(stats.imported)} 份</dd></div>
-          <div><dt>原文已关联</dt><dd>${formatCount(stats.located)} 条</dd></div>
-          <div><dt>摘录已匹配</dt><dd>${formatCount(stats.matchedRows)} 条</dd></div>
-          <div><dt>人工已确认</dt><dd>${formatCount(stats.confirmedRows)} 条</dd></div>
-          <div><dt>问题未关闭</dt><dd>${formatCount(stats.openProblems)} 条</dd></div>
+      <details class="project-extra"><summary>工作区信息</summary>
+        <dl class="project-meta">
+          <div><dt>工作区</dt><dd>${escapeHtml(ensureWorkspaceId().slice(0, 8))}</dd></div>
+          <div><dt>保存时间</dt><dd>${escapeHtml(formatLocalTime(state.lastSavedAt))}</dd></div>
+          <div><dt>处理方式</dt><dd>${window.CalligraphySession ? "服务端按账号隔离" : "浏览器本地隔离"}</dd></div>
+          <div><dt>字段模板</dt><dd>${escapeHtml(templateById(state.schemaTemplateId)?.name || "书论字段模板")}</dd></div>
         </dl>
-      </div>
-      <div class="quick-actions">
-        <h3>快捷操作</h3>
-        <div>
-          <button type="button" data-view="ingest">古籍入库</button>
-          <button type="button" data-home-focus="file">导入已有材料</button>
-          <button type="button" data-home-focus="schema">字段模板</button>
-          <button type="button" data-view="detail" data-detail-mode="table">原文定位</button>
-          <button type="button" data-view="detail" data-detail-mode="table">打开统一主表</button>
-          <button type="button" data-view="detail" data-detail-mode="review">回检队列</button>
-          <button type="button" data-home-focus="export" ${state.rows.length || state.exportVersions.length ? "" : "disabled"}>成果导出</button>
-        </div>
-      </div>
-    </section>
-    <section class="dash-card recent-visits">
-      <h2>最近导入</h2>
-      ${recentItems.length ? `
-        <ol>
-          ${recentItems.map((item) => `<li><span>${escapeHtml(item.name || item.type || "导入文件")}</span><time>${escapeHtml(formatLocalTime(item.at || item.time))}</time></li>`).join("")}
-        </ol>
-      ` : `<p class="dash-empty">暂无导入记录</p>`}
+      </details>
     </section>
   `;
 }
@@ -1875,35 +1841,6 @@ function dashboardLogTable() {
         </table>
       ` : `<div class="dash-empty-panel"><strong>暂无流程日志</strong><span>导入文件、回检或导出后会在这里记录。</span></div>`}
     </section>
-  `;
-}
-
-function dashboardRightColumn() {
-  const stats = projectDashboardStats();
-  const count = (key) => stats.assessment.checks.find((item) => item.key === key)?.count || 0;
-  const queue = [
-    ["待人工确认", stats.unreviewedRows, "审校状态", "unreviewed"],
-    ["定位待核对", count("unlocated"), "原文比对", "unlocated"],
-    ["问题未关闭", stats.openProblems, "问题记录", "openProblem"]
-  ];
-  const risks = stats.assessment.checks.filter((item) => item.count);
-  const quality = [
-    ["原文关联率", percentage(stats.located, stats.tableRows)],
-    ["精确命中率", percentage(stats.exactHits, stats.tableRows)],
-    ["审校确认率", percentage(stats.confirmedRows, stats.tableRows)],
-    ["字段完整率", percentage(Math.max(0, stats.tableRows - stats.missingRequiredRows), stats.tableRows)]
-  ];
-  const activity = state.uploadLog.slice(-3).reverse().map((item) => [item.message || item.name || "导入本地文件", formatLocalTime(item.at || item.time)]);
-  return `
-    ${cloudStatusPanel()}
-    <section class="dash-panel queue-panel-home">
-      <div class="dash-panel-head"><h2>当前队列</h2><button type="button" class="icon-control" data-dashboard-queue="blocked" aria-label="查看待办" title="查看待办">›</button></div>
-      <div class="queue-tabs"><button type="button" data-dashboard-queue="ready">可交付（${formatCount(stats.readyRows)}）</button><button type="button" data-dashboard-queue="unreviewed">待确认（${formatCount(stats.unreviewedRows)}）</button><button type="button" data-dashboard-queue="blocked" title="按条目去重，包含未确认及其他阻塞原因">阻塞（${formatCount(stats.blockedRows)}）</button></div>
-      <table class="queue-table"><thead><tr><th>任务类型</th><th>数量</th><th>依据</th><th>操作</th></tr></thead><tbody>${queue.map((row) => `<tr><td>${escapeHtml(row[0])}</td><td>${formatCount(row[1])}</td><td>${escapeHtml(row[2])}</td><td><button type="button" class="icon-control" data-dashboard-queue="${row[3]}" ${row[1] ? "" : "disabled"} aria-label="处理${escapeHtml(row[0])}" title="处理${escapeHtml(row[0])}">›</button></td></tr>`).join("")}</tbody></table>
-    </section>
-    <section class="dash-panel side-list risk-list"><div class="dash-panel-head"><h2 title="同一条目可能有多项阻塞原因，各项数量不可相加">交付阻塞原因</h2><button type="button" class="icon-control" data-home-focus="export" aria-label="检查成果" title="检查成果">›</button></div>${risks.length ? `<ul>${risks.map((item, index) => `<li><span><i>${index + 1}</i>${escapeHtml(item.label)}</span><button type="button" data-dashboard-queue="${item.key}" aria-label="查看${escapeHtml(item.label)}">${formatCount(item.count)} 条</button></li>`).join("")}</ul>` : `<p class="dash-empty">${stats.tableRows ? "当前主表无交付阻塞" : "尚无条目可检查"}</p>`}</section>
-    <section class="dash-panel side-list quality-list"><div class="dash-panel-head"><h2>数据质量</h2><button type="button" class="icon-control" data-quality-export ${stats.tableRows ? "" : "disabled"} aria-label="查看报告" title="查看报告">›</button></div><ul>${quality.map((item) => `<li><span>${escapeHtml(item[0])}</span><b>${escapeHtml(item[1])}</b></li>`).join("")}</ul></section>
-    <section class="dash-panel side-list activity-list"><div class="dash-panel-head"><h2>操作动态</h2><button type="button" class="icon-control" disabled aria-label="查看全部" title="查看全部">›</button></div>${activity.length ? `<ul>${activity.map((item) => `<li><span>${escapeHtml(item[0])}</span><b>${escapeHtml(item[1])}</b></li>`).join("")}</ul>` : `<p class="dash-empty">暂无操作动态</p>`}</section>
   `;
 }
 
@@ -2725,6 +2662,29 @@ function fieldColumnClass(field) {
   return `field-col field-${String(field?.id || "").replace(/[^a-z0-9_-]/gi, "-")}`;
 }
 
+function isReviewFocusLayout() {
+  return state.detailMode === "review" && state.reviewFocusLayout
+    && !state.aiPanelOpen && !state.batchMode && !state.tableFocus;
+}
+
+function reviewQueueList(rows) {
+  if (!rows.length) return resultTable(rows);
+  return `<div class="table-shell review-queue-shell"><ol class="review-queue-list">
+    ${rows.map((row) => {
+      const issue = row.issueReason || fieldValue(row, "issue") || row.triageStatus || row.status || "待人工判断";
+      const quote = fieldValue(row, "quote") || row.quote || "无摘录";
+      const author = fieldValue(row, "author") || row.author || "未标注条目";
+      const review = reviewLabel(row);
+      return `<li><button type="button" class="review-queue-item ${row.id === state.selectedId ? "selected" : ""}" data-row-id="${escapeHtml(row.id)}" aria-current="${row.id === state.selectedId ? "true" : "false"}">
+        <span class="review-queue-top"><strong>${escapeHtml(author)}</strong><small>${escapeHtml(row.pageNo || "无页码")}</small></span>
+        <span class="review-queue-issue">${escapeHtml(clip(issue, 48))}</span>
+        <span class="review-queue-excerpt">${escapeHtml(clip(quote, 66))}</span>
+        <span class="review-queue-bottom"><small>${escapeHtml(row.id)}</small><em class="${review.tone}">${escapeHtml(review.label)}</em></span>
+      </button></li>`;
+    }).join("")}
+  </ol></div>`;
+}
+
 function resultTable(rows) {
   if (!rows.length) {
     const readyQueue = state.qualityFocus?.mode === "dashboard" && state.qualityFocus.key === "ready";
@@ -2814,7 +2774,7 @@ function findApproxRange(content, needle) {
   return null;
 }
 
-function highlightedSource(row) {
+function highlightedSource(row, fullPage = false) {
   if (state.sourceStatus === "loading") return "<p class='source-placeholder'>正在读取原文页...</p>";
   if (state.sourceStatus === "missing") return "<p class='source-placeholder'>这一行没有可访问的原文页。</p>";
   if (state.sourceStatus === "error") return "<p class='source-placeholder'>原文页读取失败。请同时上传对应 page_*.txt，或检查 source_file/page_no。</p>";
@@ -2824,8 +2784,8 @@ function highlightedSource(row) {
   if (!range) return `<pre>${escapeHtml(state.sourceText)}</pre>`;
   const [start, end] = range;
   const margin = 60;
-  const contextStart = Math.max(0, start - margin);
-  const contextEnd = Math.min(state.sourceText.length, end + margin);
+  const contextStart = fullPage ? 0 : Math.max(0, start - margin);
+  const contextEnd = fullPage ? state.sourceText.length : Math.min(state.sourceText.length, end + margin);
   const prefix = contextStart > 0 ? "..." : "";
   const suffix = contextEnd < state.sourceText.length ? "..." : "";
   return `
@@ -2849,7 +2809,7 @@ function detailCardContent(row) {
         <span>${escapeHtml(row.pageNo || "无页码")}</span>
         <span>${escapeHtml(row.sourceFile || "无原文文件")}</span>
       </div>
-      ${reviewMode ? `<blockquote>${escapeHtml(quote || "无摘录")}</blockquote>${reviewControls(row)}` : ""}
+      ${reviewMode && !isReviewFocusLayout() ? `<blockquote>${escapeHtml(quote || "无摘录")}</blockquote>${reviewControls(row)}` : ""}
       <dl>
         ${orderedSchema().map((field) => `
           <dt>${escapeHtml(field.label)}</dt>
@@ -2867,7 +2827,7 @@ function detailCardContent(row) {
   `;
 }
 
-function reviewControls(row) {
+function reviewControls(row, compact = false) {
   return `
     <div class="review-actions">
       <button type="button" class="nav-action" data-row-action="previous" data-row-id="${escapeHtml(row.id)}" aria-label="上一条" title="上一条">‹</button>
@@ -2881,8 +2841,7 @@ function reviewControls(row) {
       <button type="button" class="secondary-action" data-row-action="edit" data-row-id="${escapeHtml(row.id)}" aria-label="修改字段" title="修改字段">改</button>
       <button type="button" class="danger icon-only" data-row-action="delete" data-row-id="${escapeHtml(row.id)}" aria-label="删除条目" title="删除条目">×</button>
     </div>
-    ${problemTagControls(row)}
-    ${problemStatusControls(row)}
+    ${compact ? `<details class="review-extra-controls"><summary>问题标签与处理状态</summary>${problemTagControls(row)}${problemStatusControls(row)}</details>` : `${problemTagControls(row)}${problemStatusControls(row)}`}
   `;
 }
 
@@ -2891,8 +2850,12 @@ function reviewFocusCard(row) {
   const issue = row.issueReason || fieldValue(row, "issue") || row.triageStatus || row.status || "待人工判断";
   const advice = row.manualAdvice || row.recommendation || "核对原文、页码、摘录和字段后确认。";
   const quality = sourceQuality(row, false);
+  const focused = isReviewFocusLayout();
+  const reviewed = state.rows.filter((item) => item.reviewed).length;
+  const progress = state.rows.length ? Math.round(reviewed / state.rows.length * 100) : 0;
   return `
     <section class="review-focus-card ${quality.tone}">
+      ${focused ? `<div class="review-focus-progress"><span>全表已确认 <strong>${reviewed} / ${state.rows.length}</strong></span><div role="progressbar" aria-label="全表已确认进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><i style="width:${progress}%"></i></div></div>` : ""}
       <div class="review-focus-head">
         <div>
           <span>审核焦点</span>
@@ -2901,7 +2864,7 @@ function reviewFocusCard(row) {
         ${confidencePill(row)}
       </div>
       <p class="review-focus-advice">${escapeHtml(advice)}</p>
-      <blockquote>${escapeHtml(quote || "无摘录")}</blockquote>
+      ${focused ? reviewControls(row, true) : `<blockquote>${escapeHtml(quote || "无摘录")}</blockquote>`}
       <div class="review-focus-meta">
         <span>${escapeHtml(row.sourceFile || "无原文文件")}</span>
         <span>${escapeHtml(row.pageNo || "无页码")}</span>
@@ -3103,7 +3066,8 @@ function sourceCardContent(row) {
           ${quality.factors.map((factor) => `<span class="${factor.ok ? "ok" : "warn"}">${escapeHtml(factor.label)}</span>`).join("")}
         </div>
       </div>
-      ${highlightedSource(row)}
+      ${isReviewFocusLayout() ? `<blockquote class="review-source-quote">${escapeHtml(quote || "无摘录")}</blockquote>` : ""}
+      ${highlightedSource(row, isReviewFocusLayout())}
   `;
 }
 
@@ -4100,8 +4064,6 @@ function modeSummaryPanel(rows) {
   const stats = state.manifest.stats;
   if (state.detailMode !== "review") {
     const items = [
-      ["全量行", state.rows.length],
-      ["当前视图", rows.length],
       ["字段待补", stats.invalidRows],
       ["精确命中", stats.exactHits],
     ];
@@ -4113,7 +4075,6 @@ function modeSummaryPanel(rows) {
   }
 
   const issueItems = [
-    ["当前队列", rows.length],
     ["人工标注", state.rows.filter((row) => row.flagged).length],
     ["命中异常", state.rows.filter(sourceNeedsReview).length],
     ["字段待补", state.manifest.stats.invalidRows],
@@ -4229,11 +4190,10 @@ function detailPanel(row) {
       </div>
       <div class="detail-dock-body">
         ${state.detailMode === "review" ? `
-          ${reviewFocusCard(row)}
-          ${sourceCard(row)}
-          ${detailCard(row)}
-          ${historyPanel(row)}
-          ${researchCard(row)}
+          ${isReviewFocusLayout() ? `
+            <div class="review-evidence-pane">${sourceCard(row)}</div>
+            <div class="review-decision-pane">${reviewFocusCard(row)}${detailCard(row)}${historyPanel(row)}${researchCard(row)}</div>
+          ` : `${reviewFocusCard(row)}${sourceCard(row)}${detailCard(row)}${historyPanel(row)}${researchCard(row)}`}
         ` : `
           ${sourceCard(row)}
           ${detailCard(row)}
@@ -4248,6 +4208,11 @@ function detailPanel(row) {
 function updateSelectedRowDom() {
   document.querySelectorAll("tbody tr[data-row-id]").forEach((row) => {
     row.classList.toggle("selected", row.dataset.rowId === state.selectedId);
+  });
+  document.querySelectorAll(".review-queue-item[data-row-id]").forEach((item) => {
+    const selected = item.dataset.rowId === state.selectedId;
+    item.classList.toggle("selected", selected);
+    item.setAttribute("aria-current", String(selected));
   });
 }
 
@@ -4417,6 +4382,7 @@ function selectResult(rowId) {
   updateDetailDom(row);
   const detailBody = document.querySelector(".detail-dock-body");
   if (detailBody) detailBody.scrollTop = 0;
+  document.querySelectorAll(".review-evidence-pane, .review-decision-pane").forEach((pane) => { pane.scrollTop = 0; });
   revealSelectedRow();
   if (row?.sourceFile && state.sourceStatus === "loading") {
     loadSelectedSource({ loadingRendered: true, requestId });
@@ -4425,7 +4391,7 @@ function selectResult(rowId) {
 
 function revealSelectedRow() {
   const shell = document.querySelector(".table-shell");
-  const row = [...document.querySelectorAll("tbody tr[data-row-id]")].find((item) => item.dataset.rowId === state.selectedId);
+  const row = [...document.querySelectorAll("tbody tr[data-row-id], .review-queue-item[data-row-id]")].find((item) => item.dataset.rowId === state.selectedId);
   if (!shell || !row) return;
   const bounds = shell.getBoundingClientRect();
   const item = row.getBoundingClientRect();
@@ -5828,14 +5794,16 @@ function reviewToolbar() {
   return `
     <div class="review-toolbar">
       <span>已确认 <strong>${stats.confirmed}</strong></span>
-      <span>已修改 <strong>${stats.edited}</strong></span>
-      <span>人工标注 <strong>${stats.flagged}</strong></span>
       <span>问题队列 <strong>${stats.problem}</strong></span>
       <span>字段待补 <strong>${stats.invalid}</strong></span>
-      <span>缺必填 <strong>${stats.missingRequired}</strong></span>
-      <button type="button" data-trash-open>回收站 ${state.trashRows.length}</button>
-      <button type="button" data-review-undo ${state.undoAction ? "" : "disabled"} aria-label="撤销最近操作" title="${state.undoAction ? "撤销" + escapeHtml(state.undoAction.label) : "暂无可撤销操作"}">↶</button>
-      <button type="button" data-review-reset>重置审校</button>
+      <details class="review-toolbar-more"><summary>更多统计与操作</summary>
+        <span>已修改 <strong>${stats.edited}</strong></span>
+        <span>人工标注 <strong>${stats.flagged}</strong></span>
+        <span>缺必填 <strong>${stats.missingRequired}</strong></span>
+        <button type="button" data-trash-open>回收站 ${state.trashRows.length}</button>
+        <button type="button" data-review-undo ${state.undoAction ? "" : "disabled"} aria-label="撤销最近操作" title="${state.undoAction ? "撤销" + escapeHtml(state.undoAction.label) : "暂无可撤销操作"}">↶</button>
+        <button type="button" data-review-reset>重置审校</button>
+      </details>
     </div>
   `;
 }
@@ -6226,6 +6194,7 @@ function localWorkspaceList() {
       if (Array.isArray(payload?.rows)) items.push({
         id: key.slice(WORKSPACE_STORAGE_PREFIX.length),
         name: payload.datasetName || "未命名工作区",
+        bookTask: bookTaskFromTitle(payload.bookTask?.title),
         count: payload.rows.length, at: payload.savedAt || ""
       });
     } catch { /* Ignore unrelated or unreadable backups. */ }
@@ -6333,6 +6302,49 @@ function switchLocalWorkspace(id) {
   loadSelectedSource();
 }
 
+function activateBookTask(value) {
+  const task = bookTaskFromTitle(typeof value === "string" ? value : value?.bookTitle || value?.title || value?.sourceName);
+  if (!task) return false;
+  if (cloudReady()) {
+    window.alert("云端当前只支持单工作区。请在本地古籍任务中导入，避免把不同书的材料混入云端主表。");
+    return false;
+  }
+  if (state.bookTask?.key === task.key) return true;
+  const existing = localWorkspaceList().find((item) => item.bookTask?.key === task.key);
+  if (existing) {
+    switchLocalWorkspace(existing.id);
+    return state.workspaceId === existing.id;
+  }
+  if (!saveWorkspace()) return false;
+  const previous = state.workspaceId;
+  const before = { ...state };
+  const id = newWorkspaceId();
+  const payload = {
+    ...workspacePayload(), workspaceId: id, datasetName: task.title, bookTask: task,
+    rows: [], originalRows: [], trashRows: [], importReports: [], exportVersions: [],
+    undoAction: null, selectedId: "", uploadedPages: {}, uploadLog: [], reviewState: reviewDefaults(),
+    savedAt: new Date().toISOString()
+  };
+  try {
+    const serialized = JSON.stringify(payload);
+    workspaceStorage.setItem(storageKey(id), serialized);
+    workspaceStorage.setItem(WORKSPACE_POINTER_KEY, id);
+    if (!loadWorkspace(id)) throw new Error("任务读取失败");
+    state.workspaceListOpen = false;
+    state.filter = "all";
+    state.query = "";
+    state.qualityFocus = null;
+    render();
+    return true;
+  } catch {
+    Object.assign(state, before);
+    try { workspaceStorage.setItem(WORKSPACE_POINTER_KEY, previous); } catch { /* The current task remains in memory. */ }
+    state.saveError = "古籍任务创建失败，当前工作区保持不变。";
+    window.alert(state.saveError);
+    return false;
+  }
+}
+
 function workflowModal() {
   const row = state.rows.find((item) => item.id === state.resolutionRowId);
   if (row) return `
@@ -6348,12 +6360,12 @@ function workflowModal() {
   const isTrash = state.trashOpen;
   const items = isTrash ? state.trashRows : localWorkspaceList();
   return `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="${isTrash ? "回收站" : "切换工作区"}">
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="${isTrash ? "回收站" : "切换古籍任务或工作区"}">
       <section class="edit-modal workflow-modal">
-        <div class="modal-head"><h2>${isTrash ? "回收站" : "本地工作区"}</h2><button type="button" data-workflow-close aria-label="关闭" title="关闭">×</button></div>
+        <div class="modal-head"><h2>${isTrash ? "回收站" : "古籍任务与工作区"}</h2><button type="button" data-workflow-close aria-label="关闭" title="关闭">×</button></div>
         <div class="workflow-list-scroll">
           ${items.map((item) => `<article>
-            <div><strong>${escapeHtml(isTrash ? item.id : item.name)}</strong><p>${escapeHtml(isTrash ? clip(item.quote, 100) : item.count + " 条 · " + formatLocalTime(item.at))}</p></div>
+            <div><strong>${escapeHtml(isTrash ? item.id : item.name)}</strong><p>${escapeHtml(isTrash ? clip(item.quote, 100) : (item.bookTask ? "古籍任务 · " : "原有工作区 · ") + item.count + " 条 · " + formatLocalTime(item.at))}</p></div>
             <button type="button" ${isTrash ? "data-trash-restore" : "data-workspace-switch"}="${escapeHtml(item.id)}" ${!isTrash && (item.id === state.workspaceId || cloudReady()) ? "disabled" : ""}>${isTrash ? "恢复" : item.id === state.workspaceId ? "当前" : "打开"}</button>
           </article>`).join("") || "<p>暂无记录</p>"}
         </div>
@@ -6451,6 +6463,7 @@ function renderShell(content) {
           <div class="brand-copy"><h1>书论工作区</h1><span>${sectionLabel}</span></div>
         </div>
         <div class="top-utility">
+          <a class="review-entry-link" href="./team-tasks.html" title="古籍任务发布与分工">团队任务</a>
           <a class="review-entry-link" href="./review.html" target="_blank" rel="noopener" title="打开文件审核与汇总，无需登录">进入审核</a>
           <label><span>⌕</span><input type="search" value="${escapeHtml(state.query)}" placeholder="全局搜索（Ctrl+K）" data-global-search /></label>
           ${topUserControl()}
@@ -6468,9 +6481,7 @@ function renderShell(content) {
         </div>
         <nav class="drawer-nav">
           <button type="button" class="${state.view === "home" ? "active" : ""}" data-view="home" ${state.view === "home" ? "aria-current='page'" : ""}>工作台</button>
-          <span class="drawer-section-label">材料准备</span>
-          <button type="button" data-home-focus="file">材料库</button>
-          <button type="button" class="${state.view === "ingest" ? "active" : ""}" data-view="ingest" ${state.view === "ingest" ? "aria-current='page'" : ""}>古籍入库</button>
+          <button type="button" class="${state.view === "ingest" ? "active" : ""}" data-view="ingest" ${state.view === "ingest" ? "aria-current='page'" : ""}>材料准备</button>
           <a href="./team-tasks.html">团队任务</a>
           <span class="drawer-section-label">整理与审校</span>
           <button type="button" class="${state.view === "detail" && state.detailMode === "table" ? "active" : ""}" data-view="detail" data-detail-mode="table" ${state.view === "detail" && state.detailMode === "table" ? "aria-current='page'" : ""}>统一主表</button>
@@ -6508,16 +6519,16 @@ function renderShell(content) {
 
 function renderHome() {
   renderShell(`
-    <section class="dashboard-grid">
-      <aside class="dashboard-left">
-        ${dashboardProjectCard()}
-      </aside>
-      <main class="dashboard-center">
+    <section class="dashboard-grid dashboard-grid-focused">
+      <main class="dashboard-center" aria-label="工作区待办">
         ${dashboardWorkflow()}
-        ${dashboardLogTable()}
+        ${dashboardPath()}
       </main>
-      <aside class="dashboard-right">
-        ${dashboardRightColumn()}
+      <aside class="dashboard-right" aria-label="项目概况">
+        ${dashboardProjectCard()}
+        <details class="dash-card dashboard-utilities"><summary>协作状态与流程日志</summary>
+          <div class="dashboard-utilities-body">${cloudStatusPanel()}${dashboardLogTable()}</div>
+        </details>
       </aside>
     </section>
   `);
@@ -6528,13 +6539,14 @@ function renderDetail() {
   reconcileBatchSelection();
   const rows = visibleRows();
   const row = selectedRow();
+  const focusLayout = isReviewFocusLayout();
   state.selectedId = row?.id || "";
   if (state.researchRowId !== state.selectedId || state.researchWorkspaceId !== state.workspaceId) resetResearchForRow(row);
   if (state.aiRowId !== state.selectedId || state.aiWorkspaceId !== state.workspaceId) resetAiForRow(row);
   else invalidateAiCandidate(row);
 
   renderShell(`
-    <section class="review-screen ${state.detailCollapsed ? "detail-collapsed" : ""} ${state.railCollapsed || state.tableFocus ? "rail-collapsed" : ""} ${state.tableFocus ? "table-focus" : ""} ${state.tableHeaderCollapsed ? "table-head-collapsed" : ""} ${state.aiPanelOpen ? "ai-review-open" : ""} ${state.aiPanelOpen ? `ai-mobile-${state.aiMobilePane}` : ""}">
+    <section class="review-screen ${focusLayout ? "review-focus-layout" : ""} ${state.detailCollapsed ? "detail-collapsed" : ""} ${state.railCollapsed || state.tableFocus ? "rail-collapsed" : ""} ${state.tableFocus ? "table-focus" : ""} ${state.tableHeaderCollapsed ? "table-head-collapsed" : ""} ${state.aiPanelOpen ? "ai-review-open" : ""} ${state.aiPanelOpen ? `ai-mobile-${state.aiMobilePane}` : ""}">
       <aside class="dataset-rail">
         <button type="button" class="rail-collapse-control ${state.railCollapsed ? "active" : ""}" data-rail-toggle aria-pressed="${String(state.railCollapsed)}" aria-label="${state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏"}" title="${state.railCollapsed ? "显示左侧栏" : "隐藏左侧栏"}"></button>
         <div class="rail-identity">
@@ -6546,25 +6558,16 @@ function renderDetail() {
           <summary>审校状态</summary>
           ${reviewToolbar()}
         </details>
-        <details class="rail-section" open>
-          <summary>导入队列</summary>
+        <details class="rail-section">
+          <summary>材料与质量</summary>
           ${triageStatusPanel()}
-        </details>
-        <details class="rail-section">
-          <summary>字段质量</summary>
           ${fieldQualityPanel()}
-        </details>
-        <details class="rail-section">
-          <summary>工作区管理</summary>
-          ${workspaceActions()}
-          ${templatePanel()}
-        </details>
-        <details class="rail-section">
-          <summary>上传处理</summary>
           ${uploadLog()}
         </details>
         <details class="rail-section">
-          <summary>附表分布</summary>
+          <summary>工作区工具</summary>
+          ${workspaceActions()}
+          ${templatePanel()}
           <div class="bars compact">${appendixBars()}</div>
         </details>
       </aside>
@@ -6584,13 +6587,14 @@ function renderDetail() {
           </div>
           <div class="panel-tools">
             <div class="visible-count">${rows.length} / ${state.rows.length}</div>
+            ${state.detailMode === "review" ? `<button type="button" class="review-layout-toggle" data-review-layout-toggle aria-pressed="${String(focusLayout)}">${focusLayout ? "表格视图" : "逐条审校"}</button>` : ""}
             ${tableViewActions()}
           </div>
         </div>
         ${modeSummaryPanel(rows)}
         ${resultsControlPanel(rows)}
         ${batchActionBar()}
-        ${resultTable(rows)}
+        ${focusLayout ? reviewQueueList(rows) : resultTable(rows)}
       </section>
       ${detailPanel(row)}
       ${state.aiPanelOpen ? aiReviewPanel(row) : ""}
@@ -6600,7 +6604,7 @@ function renderDetail() {
 }
 
 function renderAncientIngest() {
-  renderShell(window.AncientIngestUI?.render?.() || `<section class="ingest-loading">古籍入库模块加载失败</section>`);
+  renderShell(window.AncientIngestUI?.render?.() || `<section class="ingest-loading">材料准备模块加载失败</section>`);
   window.AncientIngestUI?.attach?.();
 }
 
@@ -6616,6 +6620,10 @@ function localDemoSessionAvailable() {
   const loopback = ["localhost", "127.0.0.1", "::1"].includes(hostname);
   const loginPreview = /(?:^|[?&])login=1(?:&|$)/.test(String(location.search || ""));
   return loopback && !loginPreview;
+}
+
+function teamTasksLoginRequested() {
+  return window.CalligraphySession && new URL(location.href).searchParams.get("next") === "team-tasks";
 }
 
 function restoreLocalDemoSession() {
@@ -6667,6 +6675,8 @@ function renderEntry() {
   const signingIn = state.entryStage === "signin";
   const registering = state.entryStage === "register";
   const authenticating = signingIn || registering;
+  document.body?.setAttribute("data-entry-stage", authenticating ? "auth" : "welcome");
+  const teamTasksEntry = teamTasksLoginRequested();
   app.innerHTML = `
     <main class="entry-gate ${registering ? "register-stage" : signingIn ? "signin-stage" : "welcome-stage"}">
       ${authenticating ? `
@@ -6688,14 +6698,14 @@ function renderEntry() {
             </form>
           ` : `
             <form class="entry-login-form" id="entryLoginForm" autocomplete="off">
-              <header><h1 id="entryLoginTitle">登录工作区</h1><p>进入书论材料整理与审校平台</p></header>
+              <header><h1 id="entryLoginTitle">${teamTasksEntry ? "登录团队任务" : "登录工作区"}</h1><p>${teamTasksEntry ? "使用工作区账号进入分工页面" : "进入书论材料整理与审校平台"}</p></header>
               <label><span>账号</span><input type="text" name="account" value="${escapeHtml(state.entryAccount)}" autocomplete="username" autocapitalize="none" spellcheck="false" required /></label>
               <label><span>密码</span><input type="password" name="password" autocomplete="current-password" required autofocus aria-invalid="${String(Boolean(state.entryError))}" /></label>
               ${emailMemoryEnabled() ? `<label class="entry-remember"><input type="checkbox" name="rememberEmail" ${state.entryRememberEmail ? "checked" : ""} /><span>在此设备记住账号</span></label>` : ""}
               <p class="entry-login-error" role="alert" aria-live="polite">${escapeHtml(state.entryError)}</p>
               <button type="submit" class="entry-login-submit">登录</button>
               ${window.CalligraphySession ? `<p class="entry-register-help">五用户隔离模拟 · 请使用测试账号登录</p>` : `<div class="entry-auth-switch"><span>还没有账号？</span><button type="button" data-entry-register>邮箱免密注册</button></div>`}
-              <button type="button" class="entry-login-back" data-entry-back>返回介绍</button>
+              ${teamTasksEntry ? "" : `<button type="button" class="entry-login-back" data-entry-back>返回介绍</button>`}
             </form>
           `}
         </section>
@@ -6850,7 +6860,7 @@ function activateWorkspaceTool(tool) {
 
 function currentSectionLabel() {
   if (state.view === "home") return "工作台";
-  if (state.view === "ingest") return "古籍入库";
+  if (state.view === "ingest") return "材料准备";
   return state.detailMode === "review" ? "回检修订" : "统一主表";
 }
 
@@ -7208,6 +7218,11 @@ function handleWorkbenchShortcut(event) {
 }
 
 function attachDetailEvents() {
+  document.querySelector("[data-review-layout-toggle]")?.addEventListener("click", () => {
+    state.reviewFocusLayout = !state.reviewFocusLayout;
+    state.detailCollapsed = false;
+    render();
+  });
   document.querySelector("[data-detail-toggle]")?.addEventListener("click", toggleDetailDock);
   document.querySelector("[data-filter-toggle]")?.addEventListener("click", toggleFilters);
   document.querySelectorAll("[data-rail-toggle]").forEach((button) => {
@@ -7506,7 +7521,7 @@ function confirmPendingImport() {
   }
   const plan = pendingImportPlan();
   if (!saveWorkspace()) return false;
-  const keys = ["rows", "originalRows", "workspaceId", "datasetName", "reviewState",
+  const keys = ["rows", "originalRows", "workspaceId", "datasetName", "bookTask", "reviewState",
     "trashRows", "undoAction", "uploadedPages", "uploadLog", "importReports", "exportVersions", "schema",
     "schemaTemplateId", "schemaVersion", "promptVersion", "selectedId"];
   const before = Object.fromEntries(keys.map((key) => [key, state[key]]));
@@ -7515,6 +7530,7 @@ function confirmPendingImport() {
     resetBatchUiState();
     state.workspaceId = newWorkspaceId();
     state.datasetName = pending.workspace?.datasetName || pending.name;
+    state.bookTask = bookTaskFromTitle(pending.workspace?.bookTask?.title);
     state.reviewState = { ...reviewDefaults(), ...(pending.workspace?.reviewState || {}) };
     state.trashRows = (pending.workspace?.trashRows || []).map(makeResult);
     state.undoAction = null;
@@ -7726,6 +7742,10 @@ async function loadBundledSampleData() {
 async function init() {
   if (window.CalligraphySession) {
     await window.CalligraphySession.ready;
+    if (window.CalligraphySession.user && teamTasksLoginRequested()) {
+      location.replace("./team-tasks.html");
+      return;
+    }
     state.entryStage = window.CalligraphySession.user ? "workspace" : "signin";
     if (!window.CalligraphySession.user) { state.manifest = buildManifest([]); render(); return; }
   }
@@ -7733,6 +7753,9 @@ async function init() {
   window.AncientIngestUI?.configure?.({
     rerender: () => render(),
     importFiles: (files) => processFiles(files),
+    activateBookTask,
+    bookTasks: () => localWorkspaceList().filter((item) => item.bookTask).map((item) => ({ ...item.bookTask, workspaceId: item.id, count: item.count })),
+    currentBookTask: () => state.bookTask,
   });
   await initCloudRuntime();
   restoreRememberedEmail();

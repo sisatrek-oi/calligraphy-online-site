@@ -59,7 +59,13 @@ export function exportText({ part, person, pages, reviews, sourceForPage = page 
       `状态：${isVerified(draft, sourceForPage(page)) ? '已校验' : draft.text !== undefined ? '草稿' : '未开始'}`,
       `校验人：${draft.verifiedBy || person}`, `校验时间：${draft.verifiedAt || '—'}`,
       ...Object.entries(CHECKS).map(([key, label]) => `${draft.checks?.[key] ? '[x]' : '[ ]'} ${label}`),
-      `疑问与处理：${review.question || '—'}`, '【正文·一栏一行】', draft.text || '（未录入）', '');
+      `疑问与处理：${review.question || '—'}`,
+      ...(draft.edits?.length ? ['【直接替换记录】', ...draft.edits.map((edit) => {
+        const line = edit.lineEnd && edit.lineEnd !== edit.line ? `第 ${edit.line} 行至第 ${edit.lineEnd} 行` : `第 ${edit.line} 行`;
+        const chars = edit.charStart === edit.charEnd ? `第 ${edit.charStart} 字` : `第 ${edit.charStart}–${edit.charEnd} 字`;
+        return `${line}·${chars}：${edit.before || '（删除）'} → ${edit.after || '（删除）'}`;
+      })] : []),
+      '【正文·一栏一行】', draft.text || '（未录入）', '');
   }
   return content.join('\n');
 }

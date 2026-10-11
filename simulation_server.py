@@ -105,14 +105,14 @@ class SimulationHandler(WorkspaceHandler):
 
     def _static(self):
         path = unquote(urlparse(self.path).path)
-        if path == '/review.html':
+        if path in {'/review.html', '/team-tasks.html', '/screening.html'}:
             # Independent static file exchange UI, containing no server/private data.
             super().do_GET()
             return
         if path in {'/', '/index.html'}:
             page = (ROOT / 'index.html').read_text()
             page = page.replace('<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>', '')
-            page = page.replace('<div id="app"></div>', '<div id="app"></div>\n<script src="/src/simulation-session.js"></script>')
+            page = page.replace('<div id="app"></div>', '<div id="app"></div>\n<script src="/src/simulation-session.js?v=20260929-unified-login"></script>')
             data = page.encode()
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
@@ -121,6 +121,10 @@ class SimulationHandler(WorkspaceHandler):
             self.wfile.write(data)
             return
         target = (ROOT / path.lstrip('/')).resolve()
+        if (path.startswith('/screening-data/') and target.is_relative_to(ROOT / 'screening-data')
+                and target.suffix.lower() in {'.json', '.txt', '.pdf', '.jpg', '.jpeg'} and target.is_file()):
+            super().do_GET()
+            return
         if (not path.startswith('/src/') or not target.is_relative_to(ROOT / 'src')
                 or target.suffix not in {'.js', '.css', '.png'} or not target.is_file()):
             raise AuthError('not found', 404)
@@ -132,7 +136,8 @@ class SimulationHandler(WorkspaceHandler):
             path = urlparse(self.path).path
             method = self.command
             if method == 'GET' and path == '/api/simulation/me':
-                self._send_json({'user': self.server.store.user(self.token()), 'simulation': True})
+                user = self.server.store.user(self.token())
+                self._send_json({'user': user, 'role': self.server.store.task_role(user) if user else None, 'simulation': True})
                 return
             if method == 'POST' and path == '/api/simulation/login':
                 payload = self._body()
@@ -163,6 +168,32 @@ class SimulationHandler(WorkspaceHandler):
                 self._send_json(self.server.store.write(self.username, self._body(17_000_000)))
             elif method == 'GET' and path == '/api/config':
                 self._send_json({'enabled': False, 'aiEnabled': False, 'simulation': True})
+            elif path.startswith('/api/team-tasks'):
+                store = self.server.store
+                book_units = re.fullmatch(r'/api/team-tasks/books/([a-f0-9]{16})/units', path)
+                book_publish = re.fullmatch(r'/api/team-tasks/books/([a-f0-9]{16})/publish', path)
+                unit = re.fullmatch(r'/api/team-tasks/units/([a-f0-9]{16})(?:/(save|submit|decide|assign))?', path)
+                if method == 'GET' and path == '/api/team-tasks':
+                    self._send_json({'user': self.username, 'role': store.task_role(self.username),
+                                     'books': store.list_books(self.username)})
+                elif method == 'POST' and path == '/api/team-tasks/books':
+                    self._send_json(store.create_book(self.username, self._body()))
+                elif book_units and method == 'GET':
+                    self._send_json({'units': store.list_units(self.username, book_units[1])})
+                elif book_units and method == 'POST':
+                    self._send_json(store.add_unit(self.username, book_units[1], self._body(1_500_000)))
+                elif book_publish and method == 'POST':
+                    self._body()
+                    self._send_json(store.publish_book(self.username, book_publish[1]))
+                elif unit and method == 'GET' and not unit[2]:
+                    self._send_json(store.get_unit(self.username, unit[1]))
+                elif unit and method == 'POST' and unit[2] in {'save', 'submit', 'decide', 'assign'}:
+                    payload = self._body(1_500_000)
+                    action = {'save': store.save_unit, 'submit': store.submit_unit,
+                              'decide': store.decide_unit, 'assign': store.assign_unit}[unit[2]]
+                    self._send_json(action(self.username, unit[1], payload))
+                else:
+                    raise AuthError('not found', 404)
             elif path.startswith('/api/ancient-ingest/') and method in {'GET', 'POST'}:
                 valid = re.fullmatch(r'/api/ancient-ingest/(?:pdfs(?:/import)?|jobs(?:/[a-f0-9]{12}(?:/(?:pause|resume|extract)|/pages/-?\d+(?:/preview)?|/outputs/(?:pages\.csv|evidence\.csv|ocr-manifest\.json))?)?)', path)
                 if not valid:
