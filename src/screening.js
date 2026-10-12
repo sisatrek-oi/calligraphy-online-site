@@ -1,3 +1,4 @@
+import { copyText } from './clipboard.js?v=20261012-copy';
 import { readJson, createMaterialLoader } from './screening-loader.js?v=20261012-lazy';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261003-trim';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
@@ -389,13 +390,13 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
       <div id="saveRecovery"></div><div id="messageSlot"></div>
       <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, sourceText(item)) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${isVerified(r.collation, sourceText(item)) ? '已校验' : r.collation?.text !== undefined ? '草稿' : r.seen ? '已看' : '待校'}</small></button>`; }).join('')}</div></aside>
       <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已校验。Alt + ← / → 翻页。</p></div></section>
-      <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>框选文字后右键可直接替换；点击“编辑本页”打开完整编辑器。</small></div><button type="button" id="openTextEditor">编辑本页</button></div><div class="form-body">
+      <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>框选文字后右键可直接替换；点击“编辑本页”打开完整编辑器。</small></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制本页</button><button type="button" id="openTextEditor">编辑本页</button></div></div><div class="form-body">
         <div class="source-version-bar"><label for="sourceVersion">校勘底稿<select id="sourceVersion">${sourceVersionOptions()}</select></label><button type="button" id="useSourceVersion" ${page().contextual ? '' : 'disabled'}>采用此版本到编辑器</button><span id="sourceVersionMeta">${esc(sourceMeta(p))}${current().collation?.text !== undefined ? ' · 当前页已有本机草稿' : ''}</span></div>
         <div class="editor-main">
         <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
         <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
         <div class="change-log" id="changeLog" aria-live="polite">${editHistoryMarkup(draft().edits || [])}</div>
-        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后下载 TXT 文件</small></div><div class="drawer-head-actions"><button type="button" id="exportCurrentPage" class="drawer-save">下载本页 TXT</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div><details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
+        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后下载 TXT 文件</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" id="exportCurrentPage" class="drawer-save">下载本页 TXT</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div><details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
         <div class="validation" id="validation" aria-live="polite"></div>
         <div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.[key] ? 'checked' : ''} />${label}</label>`).join('')}</div>
         <label>疑问与处理<textarea id="question" rows="2" placeholder="例如：第 3 栏有缺字；页眉已移除；跨页接第…页">${esc(review.question || '')}</textarea></label>
@@ -469,6 +470,27 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
 
   function backup() {
     download(`第${part}份-初筛进度备份.json`, JSON.stringify(payload(), null, 2), 'application/json;charset=utf-8');
+  }
+
+  async function copyCurrentPage(button) {
+    const number = page().page;
+    const text = String(draft().text || '');
+    if (!text.trim()) { state.error = '本页正文为空，暂无可复制内容。'; showMessage(); return; }
+    button.disabled = true;
+    const label = '复制本页';
+    try {
+      await copyText(text);
+      button.textContent = '已复制';
+      state.error = '';
+      state.notice = `第 ${number} 页校勘正文已复制到剪贴板，可直接粘贴。`;
+      setTimeout(() => { if (button.isConnected) button.textContent = label; }, 2000);
+    } catch {
+      const editor = page().page === number ? app.querySelector(state.reviewOpen ? '#editText' : '#collationText') : null;
+      if (editor) { editor.focus({ preventScroll: true }); editor.select(); }
+      state.error = editor
+        ? '浏览器未允许自动复制，已选中本页正文。请使用系统“复制”或按 Ctrl+C（Mac：⌘C）。'
+        : `第 ${number} 页自动复制失败，请回到该页重试。`;
+    } finally { button.disabled = false; showMessage(); }
   }
 
   function exportCurrentPage() {
@@ -577,6 +599,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
       app.querySelector('#openTextEditor')?.focus({ preventScroll: true });
       return;
     }
+    if (button.hasAttribute('data-copy-current')) return copyCurrentPage(button);
     if (button.id === 'exportCurrentPage') return exportCurrentPage();
     if (button.id === 'retrySave') return persist();
     if (['backup', 'rescueBackup'].includes(button.id)) {

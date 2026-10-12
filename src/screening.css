@@ -34,3 +34,7 @@
 @media(max-width:760px){.review-drawer.review-controls{right:10px;bottom:16px;width:min(570px,calc(100vw - 20px));max-height:min(70vh,620px);border-radius:10px}.drawer-head{padding:8px 10px}.drawer-body{padding:8px 10px 12px}.drawer-editor #editText{height:clamp(140px,26vh,220px)}}
 @media(max-width:420px){.drawer-head-actions{gap:3px}.drawer-head button{font-size:10px;padding:4px 6px}}
 @media(max-width:760px){.source-version-bar{grid-template-columns:1fr auto;gap:5px;padding:5px 6px}.source-version-bar label{min-width:0}.source-version-bar select{max-width:110px}.source-version-bar span{grid-column:1/-1}.source-version-bar button{font-size:10px}}
+
+/* Keep both copy entries in the existing single-screen toolbar. */
+.txt-actions{display:flex;align-items:center;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end}.txt-actions button{font-size:11px;min-height:27px;padding:4px 8px}
+@media(max-width:600px){.drawer-head{flex-wrap:wrap}.drawer-head-actions{flex-wrap:wrap}.txt-actions{max-width:120px}}
