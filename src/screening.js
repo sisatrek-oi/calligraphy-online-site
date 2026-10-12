@@ -2,6 +2,7 @@ import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, ex
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { createProgressStore, initialPageIndex, nextPendingIndex, progressSummary } from './screening-workflow.js?v=20261009-flow';
 import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-theory';
+import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rate';
 
 (() => {
   const app = document.querySelector('#screeningApp');
@@ -127,7 +128,10 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     const changed = Object.hasOwn(patch, 'text') && (reset || patch.text !== draft().text);
     if (Object.hasOwn(patch, 'text') && !changed) return;
     const clearHistory = changed && !Object.hasOwn(patch, 'edits');
-    record({ collation: { ...draft(), ...patch, ...(changed ? { checks: {} } : {}), ...(clearHistory || reset ? { edits: [] } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
+    const existingBaseline = current().collation?.metricBaseline;
+    const metricBaseline = reset ? { version: 1, text: String(patch.text || ''), label: sourceLabel() }
+      : existingBaseline || (changed ? { version: 1, text: String(draft().text || ''), label: sourceLabel() } : undefined);
+    record({ collation: { ...draft(), ...patch, ...(metricBaseline ? { metricBaseline } : {}), ...(changed ? { checks: {} } : {}), ...(clearHistory || reset ? { edits: [] } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
     const preview = app.querySelector('#collationText');
     if (preview && preview.value !== draft().text) preview.value = draft().text;
     showMessage();
@@ -400,7 +404,7 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
     app.innerHTML = `<main class="page">
       <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / 成员 ${part} / 原 PDF ${state.data.start}–${state.data.end} 页</span><h1>原文对照校勘</h1><p>① 对照原页整理栏序　② 逐字校勘　③ 校验并导出 TXT</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
-        <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载全书保守版</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载全书语义版</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
+        <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表（含修改率）</button><button type="button" id="exportMetrics">导出修改率汇总</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载全书保守版</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载全书语义版</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
           <button type="button" id="backup">导出进度备份</button><label class="file-button">导入进度<input id="backupFile" type="file" accept="application/json,.json" /></label>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
@@ -629,14 +633,19 @@ import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-th
       else { state.notice = '本份全部校验完成，请导出 TXT 与校验表交回负责人。'; render(); }
       return;
     }
+    if (button.id === 'exportMetrics') {
+      download(`第${part}份-修改率汇总.csv`, metricsCsv({ part, person: state.person.trim(), pages: state.data.pages, reviews: state.reviews, savedAt: state.savedAt, unsaved: Boolean(state.saveProblem) }));
+      state.notice = '已发起修改率汇总下载；无明确底稿的旧草稿显示为空。';
+      showMessage(); return;
+    }
     if (button.id === 'exportTxt' || button.id === 'exportChecks') {
       if (!state.person.trim()) { state.error = '请先填写校勘人真实姓名，再导出。'; showMessage(); app.querySelector('#person').focus(); return; }
       if (button.id === 'exportTxt') download(`第${part}份-逐页校勘.txt`, exportText({ part, person: state.person.trim(), pages: state.data.pages, reviews: state.reviews, sourceForPage: sourceText }), 'text/plain;charset=utf-8');
       else {
-        const rows = [['原PDF物理页', '分册页', '校勘状态', '栏序核对', '逐字核对', '跨页核对', '格式问题', '提醒', '疑问与处理', '直接替换记录', '校验人', '校验时间'],
+        const rows = [['原PDF物理页', '分册页', '校勘状态', '净修改率(%)', '栏序核对', '逐字核对', '跨页核对', '格式问题', '提醒', '疑问与处理', '直接替换记录', '校验人', '校验时间'],
           ...state.data.pages.map(item => {
             const review = state.reviews[item.page] || {}, d = review.collation || {}, v = validateDraft(d, sourceText(item));
-            return [item.page, item.local, isVerified(d, sourceText(item)) ? '已校验' : d.text !== undefined ? '草稿' : '未开始', ...Object.keys(CHECKS).map(key => d.checks?.[key] ? '是' : ''),
+            return [item.page, item.local, isVerified(d, sourceText(item)) ? '已校验' : d.text !== undefined ? '草稿' : '未开始', pageMetrics(item, review).modificationRate, ...Object.keys(CHECKS).map(key => d.checks?.[key] ? '是' : ''),
               d.text !== undefined ? v.errors.join('；') : '', v.warnings.join('；'), review.question || '', (d.edits || []).map(editSummary).join('；'), d.verifiedBy || state.person.trim(), d.verifiedAt || ''];
           })];
         download(`第${part}份-TXT校验表.csv`, rows.map(row => row.map(csvCell).join(',')).join('\r\n'));
