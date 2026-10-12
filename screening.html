@@ -9,7 +9,22 @@
 </head>
 <body>
   <header class="topbar"><a href="./team-tasks.html">← 团队任务</a><span>书论工作区 · 原文对照校勘</span></header>
-  <div id="screeningApp"><p class="loading">正在读取页码索引…</p></div>
-  <script type="module" src="./src/screening.js?v=20261012-export-rate"></script>
+  <div id="screeningApp"><div class="loading"><p id="startupStatus" role="status">正在加载校勘工作区…</p><button id="startupRetry" type="button" hidden>重试加载</button></div></div>
+  <script>
+    // Keep feedback available even if the module itself cannot be downloaded.
+    const host = document.getElementById('screeningApp');
+    const timer = setTimeout(() => {
+      if (host.querySelector('#startupStatus')) {
+        document.getElementById('startupStatus').textContent = '页面程序加载较慢，请检查网络；可重试加载。本机进度保留。';
+        document.getElementById('startupRetry').hidden = false;
+      }
+    }, 12000);
+    document.getElementById('startupRetry').onclick = () => location.reload();
+    import('./src/screening.js?v=20261012-lazy').then(() => clearTimeout(timer)).catch(() => {
+      clearTimeout(timer);
+      document.getElementById('startupStatus').textContent = '页面程序未能载入，请检查网络后重试。本机进度保留。';
+      document.getElementById('startupRetry').hidden = false;
+    });
+  </script>
 </body>
 </html>

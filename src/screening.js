@@ -1,3 +1,4 @@
+import { readJson, createMaterialLoader } from './screening-loader.js?v=20261012-lazy';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261003-trim';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { createProgressStore, initialPageIndex, nextPendingIndex, progressSummary } from './screening-workflow.js?v=20261009-flow';
@@ -10,7 +11,9 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
   const state = { data: null, index: 0, reviews: {}, files: new Map(), imageUrl: '', imageReady: false,
     person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, zoom: 100, validation: false, resetPending: false, highlight: true, reviewOpen: false, sourceVersion: 'normalized' };
   state.selectionMenu = { open: false, start: 0, end: 0, text: '', x: 0, y: 0, targetId: '' };
-  let editorObserver;
+  let editorObserver, materialLoader;
+  let selectionRequest = 0;
+  let exporting = false;
   const esc = (value = '') => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
   const key = () => `shulun-screening-v1-part-${part}`;
@@ -283,33 +286,6 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
     if (complete) complete.textContent = isVerified(draft(), sourceText(page())) ? '已校验 · 继续待校页' : '校验本页并继续';
   }
 
-  function attachOcr(source) {
-    const text = source.replace(/^\uFEFF/, '');
-    const headings = [...text.matchAll(/^===== 原 PDF 物理页 (\d+)｜分册第 (\d+) 页 =====\r?$/gm)];
-    if (headings.length !== state.data.pages.length) throw new Error('线上 OCR 页数与页码索引不匹配');
-    headings.forEach((heading, index) => {
-      const item = state.data.pages[index];
-      if (Number(heading[1]) !== item.page || Number(heading[2]) !== item.local)
-        throw new Error(`线上 OCR 第 ${index + 1} 页与页码索引不匹配`);
-      item.ocr = text.slice(heading.index + heading[0].length, headings[index + 1]?.index ?? text.length).trim();
-    });
-  }
-
-  function attachContextual(payload) {
-    if (!payload || payload.version !== 1 || payload.part !== part || !Array.isArray(payload.pages)) return false;
-    const byPage = new Map(payload.pages.map(item => [Number(item.page), item]));
-    if (state.data.pages.some(item => !byPage.has(item.page))) return false;
-    state.data.pages.forEach(item => {
-      const contextual = byPage.get(item.page);
-      item.contextual = {
-        conservative: String(contextual.conservative || ''),
-        normalized: String(contextual.normalized || ''),
-        uncertainties: Array.isArray(contextual.uncertainties) ? contextual.uncertainties : [],
-      };
-    });
-    return true;
-  }
-
   function payload() {
     return { version: 1, part, person: state.person, reviews: state.reviews,
       lastPage: page().page, savedAt: state.savedAt };
@@ -466,10 +442,16 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
     history.replaceState(null, '', url);
   }
 
-  function select(index, notice = '') {
+  async function select(index, notice = '') {
+    const request = ++selectionRequest;
+    const target = Math.max(0, Math.min(state.data.pages.length - 1, index));
+    state.notice = `正在读取第 ${state.data.pages[target].page} 页材料…`; state.error = ''; showMessage();
+    try { await materialLoader.ensurePage(state.data.pages[target].page); }
+    catch (error) { if (request === selectionRequest) { state.error = `${error.message}。请再次点击目标页重试。`; showMessage(); } return false; }
+    if (request !== selectionRequest) return false;
     if (state.saveProblem && !persist()) { app.querySelector('#saveRecovery')?.scrollIntoView({ block: 'nearest' }); return false; }
     closeSelectionMenu();
-    state.index = Math.max(0, Math.min(state.data.pages.length - 1, index));
+    state.index = target;
     state.validation = false;
     state.resetPending = false;
     syncUrl();
@@ -540,10 +522,20 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
     render();
   }
 
-  app.addEventListener('click', (event) => {
+  app.addEventListener('click', async (event) => {
     if (state.selectionMenu.open && !event.target.closest('#selectionMenu') && !event.target.closest('#editText, #collationText')) closeSelectionMenu();
     const button = event.target.closest('button');
-    if (!button || !state.data) return;
+    if (!button) return;
+    if (button.id === 'retryLoad') { await init(); return; }
+    if (!state.data || !app.querySelector('#pageList')) return;
+    if (['exportTxt', 'exportChecks', 'exportMetrics'].includes(button.id)) {
+      if (exporting) return;
+      exporting = true; button.disabled = true;
+      state.notice = '正在准备完整导出材料，请稍候…'; state.error = ''; showMessage();
+      try { await materialLoader.ensureAll(); }
+      catch (error) { state.error = `${error.message}。未生成不完整文件，请再次点击导出重试。`; showMessage(); return; }
+      finally { exporting = false; button.disabled = false; }
+    }
     if (button.dataset.locateEdit !== undefined) {
       locateEdit(Number(button.dataset.locateEdit));
       return;
@@ -592,7 +584,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
     }
     if (button.id === 'reloadProgress') {
       if (!confirm('载入本机最新进度会替换本页未保存的修改。请确认已下载备份，再继续。')) return;
-      if (restore()) { state.notice = '已载入本机最新进度。'; state.error = ''; render(); }
+      if (restore()) { await select(state.index, '已载入本机最新进度。'); }
       else updateSaveStatus();
       return;
     }
@@ -749,6 +741,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
         if (!Array.isArray(pages) || pages.length !== state.data.allPages.length ||
             pages.some((item, index) => item.page !== state.data.allPages[index].page || typeof item.ocr !== 'string'))
           throw new Error('定位页与本份页段不匹配');
+        await materialLoader.ensureAll();
         state.data.allPages.forEach((item, index) => { item.ocr = pages[index].ocr; delete item.layout; });
         state.notice = '已载入本地 OCR 对照；请以扫描图核对。'; render();
       } catch (error) { state.error = error.message || '本地 OCR 载入失败'; showMessage(); }
@@ -760,9 +753,12 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
         if (saved.version !== 1 || saved.part !== part || !saved.reviews || typeof saved.reviews !== 'object' || Array.isArray(saved.reviews))
           throw new Error('进度备份与本份页段不匹配');
         if ((Object.keys(state.reviews).length || state.saveProblem) && !confirm('导入会替换本份在当前浏览器的进度，包括其他标签页的更新。请确认已备份，再继续。')) return;
+        const restoredIndex = initialPageIndex(state.data.pages, null, saved.lastPage ?? page().page);
+        await materialLoader.ensurePage(state.data.pages[restoredIndex].page);
+        ++selectionRequest;
         progressStore.allowBackupReplacement();
         state.reviews = saved.reviews; state.person = String(saved.person || '');
-        state.index = initialPageIndex(state.data.pages, null, saved.lastPage ?? page().page);
+        state.index = restoredIndex;
         syncUrl(); persist();
         state.notice = state.saveProblem ? '' : '进度备份已导入，可继续逐页校勘。'; render();
       } catch (error) { state.error = error.message || '进度备份读取失败'; showMessage(); }
@@ -782,30 +778,10 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
   async function init() {
     if (![1, 2, 3, 4].includes(part)) { app.innerHTML = '<p class="loading">请选择团队任务中的第 1–4 份初筛工作项。</p>'; return; }
     try {
-      const [response, ocrResponse, layoutResponse, contextualResponse] = await Promise.all([
-        fetch(`./screening-data/part-${part}.json`, { cache: 'no-store' }),
-        fetch(`./screening-data/part-${part}-ocr.txt`, { cache: 'no-store' }),
-        fetch(`./screening-data/part-${part}-layout.json`, { cache: 'no-store' }).catch(() => null),
-        fetch(`./screening-data/part-${part}-contextual.json`, { cache: 'no-store' }).catch(() => null),
-      ]);
-      if (!response.ok) throw new Error('页码索引未找到');
-      state.data = await response.json();
-      if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1) throw new Error('页码索引不完整');
-      if (ocrResponse.ok) attachOcr(await ocrResponse.text());
-      else state.error = '线上 OCR 未能载入；可下载全文或载入本地 OCR，对照时仍以扫描图为准。';
-      if (contextualResponse?.ok) {
-        try {
-          if (!attachContextual(await contextualResponse.json())) state.notice = '清洗版数据与本份页码不匹配，当前显示原始 OCR。';
-        } catch { state.notice = '清洗版数据读取失败，当前显示原始 OCR。'; }
-      } else state.notice = '清洗版尚未载入，当前显示原始 OCR。';
-      if (layoutResponse?.ok) {
-        try {
-          const layout = await layoutResponse.json();
-          if (layout.version === 1 && layout.part === part && layout.pages?.length === state.data.pages.length &&
-              layout.pages.every((item, index) => item.page === state.data.pages[index].page && typeof item.text === 'string' && item.text.replace(/\s/g, '') === (state.data.pages[index].ocr || '').replace(/\s/g, '')))
-            state.data.pages.forEach((item, index) => { item.layout = layout.pages[index]; });
-        } catch { /* Missing layout suggestions must never prevent source review. */ }
-      }
+      app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261012-lazy`);
+      if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
+      materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;
       state.data.pages = state.data.allPages.filter(item => isTaskPage(item.page));
       restore();
@@ -818,9 +794,11 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
         state.index = index < 0 ? state.data.pages.length - 1 : index;
         if (!isTaskPage(targetPage)) state.notice = `第 ${targetPage} 页为${excludedPages[targetPage]}，已移出任务，已转到第 ${page().page} 页。`;
       }
+      app.innerHTML = `<p class="loading" role="status">页码索引已就绪，正在读取第 ${page().page} 页材料…</p>`;
+      await materialLoader.ensurePage(page().page);
       syncUrl();
       render();
-    } catch (error) { app.innerHTML = `<p class="loading" role="alert">${esc(error.message)}。请刷新页面，或联系负责人检查静态站文件。</p>`; }
+    } catch (error) { app.innerHTML = `<div class="loading" role="alert">${esc(error.message)}。本机校勘进度保留。<p><button id="retryLoad" type="button">重试加载</button></p></div>`; }
   }
   window.addEventListener('resize', revealCurrentPage);
   window.addEventListener('beforeunload', event => {
