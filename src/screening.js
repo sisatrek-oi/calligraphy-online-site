@@ -696,6 +696,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
   }
 
   app.addEventListener('keydown', (event) => {
+    if (!state.data || !app.querySelector('#pageList')) return;
     if (event.key === 'Escape' && state.selectionMenu.open) {
       closeSelectionMenu();
       return;
