@@ -1,4 +1,4 @@
-import { makeDraft } from './collation-core.js?v=20261003-trim';
+import { makeDraft } from './collation-core.js?v=20261013-typo-only';
 const compact = text => String(text ?? '').replace(/\s/gu, '');
 // Layout may only change whitespace. It must never introduce or omit glyphs.
 export function originalDraftText(item) {

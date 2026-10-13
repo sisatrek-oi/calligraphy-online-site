@@ -11,14 +11,36 @@ test('formatting preserves source characters, column order, and Latin spacing', 
   assert.equal(numberLines('[009] 甲\n[003] 乙'), '[001] 甲\n[002] 乙');
 });
 
-test('unresolved characters and broken numbering cannot count as verified', () => {
-  const checks = { order:true, wording:true, continuity:true };
-  for (const text of ['', '[002] 甲', '[001] □', '[001] 【待核：字】', '[001]']) {
+test('only missing body blocks the typo-only round; symbols and format remain advisory', () => {
+  const checks = { wording:true };
+  for (const text of ['', '  \n ', '[001]', '[001] \n[002] ']) {
     assert.ok(validateDraft({ text }).errors.length);
     assert.equal(isVerified({text, checks, verified:true}), false);
   }
-  assert.equal(isVerified({text:'[001] 甲', checks, verified:true}), true);
+  for (const text of ['[002] 甲', '甲，乙。', '[001] □', '[001] 【待核：字】', '[001] 甲\n[002]', '[001] 【空白页】']) {
+    assert.deepEqual(validateDraft({ text }).errors, []);
+    assert.equal(isVerified({ text, checks, verified:true }), true);
+  }
+  const unusual = validateDraft({text:'甲□\n甲□'}, '原有正文有很多个字');
+  assert.ok(unusual.warnings.some(w => w.includes('20%')));
+  assert.ok(unusual.warnings.some(w => w.includes('相同')));
+  assert.ok(unusual.warnings.some(w => w.includes('标记')));
+  assert.equal(isVerified({text:'甲□\n甲□', checks, verified:true}), true);
   assert.equal(isVerified({text:'[001] 甲', checks:{order:true}, verified:true}), false);
+  assert.equal(isVerified({text:'[001] 甲', checks, verified:false}), false);
+});
+
+test('old completed pages stay verified and partial old drafts never become completed', () => {
+  const legacy = {text:'[001] 甲', checks:{order:true,wording:true,continuity:true}, verified:true};
+  assert.equal(isVerified(legacy), true);
+  assert.equal(isVerified({...legacy, verified:false}), false);
+  assert.equal(isVerified({text:'甲', checks:{wording:true}}), false);
+  assert.equal(isVerified(null), false);
+  const out = exportText({part:2, person:'测试', pages:[{page:259,local:1}], reviews:{259:{collation:legacy}}});
+  assert.match(out, /状态：已校验/);
+  assert.match(out, /\[x\] 已对照原页核对本页错字/);
+  assert.match(out, /标点、符号、栏序和跨页衔接不属于本轮必检项/);
+  assert.equal(out.includes('已核对本页首尾'), false);
 });
 
 test('TXT export preserves every page and differentiates drafts, old seen flags, and verification', () => {

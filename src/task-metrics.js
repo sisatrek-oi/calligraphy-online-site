@@ -1,4 +1,4 @@
-import { isVerified } from './collation-core.js?v=20261003-trim';
+import { isVerified } from './collation-core.js?v=20261013-typo-only';
 import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
 
 export const METRICS_VERSION = 'collation-v1';

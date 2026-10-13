@@ -1,9 +1,7 @@
 import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
 // Raw OCR remains immutable. These helpers format a draft, never certify its reading order.
 export const CHECKS = {
-  order: '已按原页核对栏序（正文通常右→左、栏内上→下）',
-  wording: '已逐字核对，检查错字、漏字、标点及页眉页码',
-  continuity: '已核对本页首尾与前后页衔接',
+  wording: '已对照原页核对本页错字',
 };
 
 export function numberLines(text) {
@@ -31,13 +29,13 @@ export function validateDraft(draft = {}, raw = '') {
   const text = String(draft.text || '');
   const lines = text.split(/\r?\n/).filter(line => line.trim());
   const errors = [], warnings = [];
-  if (!lines.length) errors.push('正文为空，请先生成分栏草稿。');
+  if (!text.replace(/^\s*\[\d+\]\s*/gm, '').trim()) errors.push('正文为空，请先录入文字；空白扫描页可填【空白页】。');
   lines.forEach((line, index) => {
     const match = line.match(/^\[(\d+)\]\s*(.*)$/);
-    if (!match || Number(match[1]) !== index + 1) errors.push(`第 ${index + 1} 行编号不连续，点击“重新编号”修复。`);
-    else if (!match[2].trim()) errors.push(`第 ${index + 1} 栏没有文字。`);
+    if (!match || Number(match[1]) !== index + 1) warnings.push(`第 ${index + 1} 行未编号或编号不连续，可按需“重新编号”，不影响本轮完成。`);
+    else if (!match[2].trim()) warnings.push(`第 ${index + 1} 栏没有文字，可稍后整理。`);
   });
-  if (/[□�]|【待核[^】]*】/.test(text)) errors.push('仍有 □、替换符或【待核…】标记，请保留草稿并记录疑问。');
+  if (/[□�]|【待核[^】]*】/.test(text)) warnings.push('保留了 □、替换符或【待核…】标记，可留待后续复核，不影响本轮完成。');
   const count = value => [...value.matchAll(/\p{Script=Han}/gu)].length;
   const before = count(raw), after = count(text);
   if (before && Math.abs(after - before) / before > .2) warnings.push(`汉字数从 ${before} 变为 ${after}，变化超过 20%，请检查漏栏或重复。`);
@@ -51,7 +49,7 @@ export function isVerified(draft = {}, raw = '') {
 }
 
 export function exportText({ part, person, pages, reviews, sourceForPage = page => page.ocr }) {
-  const content = [`《历代书法论文选》｜第 ${part} 份｜逐页 TXT 校勘`, `导出人：${person}`, '说明：栏号按阅读顺序排列；未开始、草稿、已校验分别记录。已校验为成员人工确认。', ''];
+  const content = [`《历代书法论文选》｜第 ${part} 份｜逐页 TXT 校勘`, `导出人：${person}`, '说明：已校验表示成员已完成本轮错字核对；标点、符号、栏序和跨页衔接不属于本轮必检项，待核标记保留。未开始、草稿、已校验分别记录。', ''];
   for (const page of pages) {
     if (!isTaskPage(page.page)) continue;
     const review = reviews[page.page] || {}, draft = review.collation || {};

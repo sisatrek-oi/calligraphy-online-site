@@ -1,11 +1,11 @@
-import { draftForPage, originalDraftText } from './ocr-source-policy.js?v=20261013-ocr-safe';
+import { draftForPage, originalDraftText } from './ocr-source-policy.js?v=20261013-typo-only';
 import { copyText } from './clipboard.js?v=20261012-copy';
 import { readJson, createMaterialLoader } from './screening-loader.js?v=20261012-lazy';
-import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261003-trim';
+import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261013-typo-only';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
-import { createProgressStore, initialPageIndex, nextPendingIndex, progressSummary } from './screening-workflow.js?v=20261009-flow';
+import { createProgressStore, initialPageIndex, nextPendingIndex, progressSummary } from './screening-workflow.js?v=20261013-typo-only';
 import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-theory';
-import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rate';
+import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only';
 
 (() => {
   const app = document.querySelector('#screeningApp');
@@ -30,7 +30,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
   const sourceLabel = () => '原始 OCR';
   const draft = () => draftForPage(page(), current());
   const layoutNote = () => page().layout?.method === 'aligned-lines' ? '已按逐栏 OCR 对齐分栏；栏界为机器建议，请看图核对。'
-    : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；页眉、标点与错字请看图核对。' : '本页缺少可靠栏界，暂保留原段落。请按原页拆栏或合并行。';
+    : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；本轮只需对照原页修改错字。' : '本页保留原段落；本轮无需整理分栏格式。';
   const verifiedCount = () => state.data.pages.filter(item => isVerified(state.reviews[item.page]?.collation, sourceText(item))).length;
 
   function editLocation(text, index) {
@@ -262,7 +262,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
   function updateValidation() {
     const result = validateDraft(draft(), sourceText(page()));
     const slot = app.querySelector('#validation');
-    if (slot) slot.innerHTML = `<span>${result.lines} 栏 · ${result.chars} 汉字 · ${isVerified(draft(), sourceText(page())) ? '已校验' : '待人工校验'}</span>${state.validation ? `<ul>${[...result.errors, ...result.warnings].map(message => `<li>${esc(message)}</li>`).join('') || '<li>模板格式通过；字序和文字准确性仍须人工核对。</li>'}</ul>` : ''}`;
+    if (slot) slot.innerHTML = `<span>${result.lines} 栏 · ${result.chars} 汉字 · ${isVerified(draft(), sourceText(page())) ? '已校验' : '待人工校验'}</span>${state.validation ? `<ul>${[...result.errors, ...result.warnings].map(message => `<li>${esc(message)}</li>`).join('') || '<li>未发现文本提醒；错字仍需对照原页核对。</li>'}</ul>` : ''}`;
     for (const checkbox of app.querySelectorAll('[data-check]')) checkbox.checked = Boolean(draft().checks?.[checkbox.dataset.check]);
     const progress = app.querySelector('#progress');
     if (progress) progress.textContent = `已校验 ${verifiedCount()} / ${state.data.pages.length} 页`;
@@ -273,7 +273,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
       row.classList.toggle('done', verified);
     }
     const complete = app.querySelector('#verifyNext');
-    if (complete) complete.textContent = isVerified(draft(), sourceText(page())) ? '已校验 · 继续待校页' : '校验本页并继续';
+    if (complete) complete.textContent = isVerified(draft(), sourceText(page())) ? '已校验 · 继续待校页' : '完成本页并继续';
   }
 
   function payload() {
@@ -368,7 +368,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
     const review = current();
     const candidates = Array.isArray(review.candidates) ? review.candidates : [];
     app.innerHTML = `<main class="page">
-      <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / 成员 ${part} / 原 PDF ${state.data.start}–${state.data.end} 页</span><h1>原文对照校勘</h1><p>① 对照原页整理栏序　② 逐字校勘　③ 校验并导出 TXT</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
+      <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / 成员 ${part} / 原 PDF ${state.data.start}–${state.data.end} 页</span><h1>原文对照校勘</h1><p>本轮只改错字 · 标点、符号和排版可保持原样</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
         <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表（含修改率）</button><button type="button" id="exportMetrics">导出修改率汇总</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
@@ -387,9 +387,8 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
         <div class="change-log" id="changeLog" aria-live="polite">${editHistoryMarkup(draft().edits || [])}</div>
         </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后下载 TXT 文件</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" id="exportCurrentPage" class="drawer-save">下载本页 TXT</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div><details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
         <div class="validation" id="validation" aria-live="polite"></div>
-        <div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.[key] ? 'checked' : ''} />${label}</label>`).join('')}</div>
-        <label>疑问与处理<textarea id="question" rows="2" placeholder="例如：第 3 栏有缺字；页眉已移除；跨页接第…页">${esc(review.question || '')}</textarea></label>
-        <p class="hint">格式检查不判断古籍文字正误。修改正文会清除本页校验勾选；已看扫描图不等于已校验。</p>
+        <label>备注（选填）<textarea id="question" rows="2" placeholder="可记下看不清的字，留待后续复核；无需为格式或符号填写说明">${esc(review.question || '')}</textarea></label>
+        <p class="hint">本轮只核对错字，标点、符号和分栏提醒不影响完成。修改正文后需重新确认。</p>
         <details class="secondary-review"><summary>证据候选与旧初筛记录（${candidates.length} 条）</summary>
         <div class="form-actions"><button type="button" id="markSeen" class="primary">${review.seen ? '撤销已看标记' : '已看这页扫描图'}</button>${review.seen ? '<span class="hint">已记录看图；可继续补充候选。</span>' : ''}</div>
         <label class="check"><input id="redoOcr" type="checkbox" ${review.redoOcr ? 'checked' : ''} /> 需重做 OCR</label>
@@ -399,7 +398,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
           <label>连续原文摘录<textarea name="quote" rows="2" required></textarea></label><label>风格描述依据<textarea name="basis" rows="2" required></textarea></label>
           <label>不确定或待核事项<textarea name="uncertainty" rows="2"></textarea></label><button type="submit">添加本页候选</button></form>
         <h3>交回负责人</h3><p class="hint">两张 CSV 保留未审核页的空行，负责人可据此检查遗漏。请同时留存进度备份。</p><div class="form-actions"><button type="button" id="exportPages" class="primary">导出逐页表</button><button type="button" id="exportCandidates">导出候选表</button></div>
-      </details><div class="form-actions drawer-actions"><button id="validate">检查格式</button><button id="verifyNext" class="primary">校验本页并继续待校页</button></div></div></aside></div></section></div>
+      </details></div><div class="drawer-footer"><div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.[key] ? 'checked' : ''} />${label}</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">查看文本提醒</button><button id="verifyNext" class="primary">完成本页并继续</button></div></div></aside></div></section></div>
       <div id="selectionMenu" class="selection-menu" role="dialog" aria-label="替换选中文字" hidden>
         <div class="selection-menu-title"><strong>替换选中文字</strong><span data-selection-count></span></div>
         <div class="selection-preview">“<span data-selection-text></span>”</div>
@@ -615,8 +614,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
       const problems = [...validation.errors];
       if (!state.person.trim()) problems.unshift('请填写校勘人真实姓名。');
       if (!state.imageReady) problems.push('原页尚未载入，请载入后核对。');
-      if (!Object.keys(CHECKS).every(key => draft().checks?.[key])) problems.push('请逐项完成并勾选三项人工核对。');
-      if (validation.warnings.length && !current().question?.trim()) problems.push('字数变化或重复栏提示需要在“疑问与处理”中说明。');
+      if (!Object.keys(CHECKS).every(key => draft().checks?.[key])) problems.push('请勾选“已对照原页核对本页错字”。');
       if (problems.length) { state.error = problems.join(' '); showMessage();
         app.querySelector(!state.person.trim() ? '#person' : validation.errors.length ? '#editText' : !Object.keys(CHECKS).every(key => draft().checks?.[key]) ? '[data-check]:not(:checked)' : '#question')?.focus(); return; }
       const saved = record({ seen: true, collation: { ...draft(), verified: true, verifiedBy: state.person.trim(), verifiedAt: new Date().toISOString() } });
@@ -637,7 +635,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
       if (!state.person.trim()) { state.error = '请先填写校勘人真实姓名，再导出。'; showMessage(); app.querySelector('#person').focus(); return; }
       if (button.id === 'exportTxt') download(`第${part}份-逐页校勘.txt`, exportText({ part, person: state.person.trim(), pages: state.data.pages, reviews: state.reviews, sourceForPage: sourceText }), 'text/plain;charset=utf-8');
       else {
-        const rows = [['原PDF物理页', '分册页', '校勘状态', '净修改率(%)', '栏序核对', '逐字核对', '跨页核对', '格式问题', '提醒', '疑问与处理', '直接替换记录', '校验人', '校验时间'],
+        const rows = [['原PDF物理页', '分册页', '校勘状态', '净修改率(%)', '错字核对', '正文问题', '提醒（不影响本轮完成）', '备注（选填）', '直接替换记录', '校验人', '校验时间'],
           ...state.data.pages.map(item => {
             const review = state.reviews[item.page] || {}, d = review.collation || {}, v = validateDraft(d, sourceText(item));
             return [item.page, item.local, isVerified(d, sourceText(item)) ? '已校验' : d.text !== undefined ? '草稿' : '未开始', pageMetrics(item, review).modificationRate, ...Object.keys(CHECKS).map(key => d.checks?.[key] ? '是' : ''),

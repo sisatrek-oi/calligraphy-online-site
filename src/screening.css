@@ -38,3 +38,6 @@
 /* Keep both copy entries in the existing single-screen toolbar. */
 .txt-actions{display:flex;align-items:center;gap:5px;flex:none;flex-wrap:wrap;justify-content:flex-end}.txt-actions button{font-size:11px;min-height:27px;padding:4px 8px}
 @media(max-width:600px){.drawer-head{flex-wrap:wrap}.drawer-head-actions{flex-wrap:wrap}.txt-actions{max-width:120px}}
+
+/* Keep the single confirmation and completion action visible while editing. */
+.drawer-footer{flex:none;padding:8px 12px 10px;border-top:1px solid #e4e9e2;background:#fff}.drawer-footer .check{margin:0;font-weight:400}.drawer-footer .drawer-actions{justify-content:space-between;margin-top:6px}
