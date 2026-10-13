@@ -7,6 +7,8 @@ import argparse
 import json
 import re
 from pathlib import Path
+from ocr_integrity import omission_reason
+from contextual_ocr_validate import load_pages
 
 
 def compact(value: str) -> str:
@@ -23,6 +25,14 @@ def main() -> int:
     records = [json.loads(line) for line in args.input.read_text(encoding="utf-8").splitlines() if line.strip()]
     records.sort(key=lambda item: int(item["source_page"]))
     by_page = {int(item["source_page"]): item for item in records}
+    if len(records) != len(by_page):
+        raise SystemExit('duplicate contextual OCR pages')
+    sources = {int(x['page']): x['ocr'] for x in load_pages([args.screening_data / f'part-{n}-ocr.txt' for n in range(1,5)])}
+    for item in records:
+        for key in ['conservative', 'normalized']:
+            if omission_reason(item[key], sources[int(item['source_page'])]):
+                raise SystemExit(f"page {item['source_page']}: {key} omitted source text; refuse publication")
+
     if sorted(by_page) != list(range(1, 1053)):
         raise SystemExit("contextual OCR must cover physical pages 1–1052 exactly")
 
@@ -67,7 +77,7 @@ def main() -> int:
         "",
         "## 使用建议",
         "",
-        "网站保留原始 OCR、保守校验版和语义整理版三个版本。保守版适合逐字回看；语义版适合连续阅读，但含不确定项的页面仍需对照扫描图。",
+        "2026-10-13 起网站仅以原始 OCR 生成新底稿，已保存人工稿保持原样。两版历史模型稿仅供参考，不得直接作为校勘底稿；已检出的缺文及错改页回退原始 OCR，详见 repair-manifest-20261013.json。",
         "",
         "## 差异最大的页面（按去空白后的字数变化排序）",
         "",

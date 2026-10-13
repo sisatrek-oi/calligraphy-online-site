@@ -1,3 +1,4 @@
+import { draftForPage, originalDraftText } from './ocr-source-policy.js?v=20261013-ocr-safe';
 import { copyText } from './clipboard.js?v=20261012-copy';
 import { readJson, createMaterialLoader } from './screening-loader.js?v=20261012-lazy';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261003-trim';
@@ -10,7 +11,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
   const app = document.querySelector('#screeningApp');
   const part = Number(new URLSearchParams(location.search).get('part'));
   const state = { data: null, index: 0, reviews: {}, files: new Map(), imageUrl: '', imageReady: false,
-    person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, zoom: 100, validation: false, resetPending: false, highlight: true, reviewOpen: false, sourceVersion: 'normalized' };
+    person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, zoom: 100, validation: false, resetPending: false, highlight: true, reviewOpen: false };
   state.selectionMenu = { open: false, start: 0, end: 0, text: '', x: 0, y: 0, targetId: '' };
   let editorObserver, materialLoader;
   let selectionRequest = 0;
@@ -25,21 +26,9 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
   const filename = (number) => `page-${String(number).padStart(4, '0')}.jpg`;
   const scanHref = (number) => `./screening-data/scans/${filename(number)}`;
   const pdfHref = (local) => `./screening-data/part-${part}.pdf#page=${local}`;
-  const sourceText = (item) => state.sourceVersion === 'raw' ? item.ocr : item.contextual?.[state.sourceVersion] || item.ocr;
-  const sourceLabel = () => ({ raw: '原始 OCR', conservative: '保守校验版', normalized: '语义整理版' }[state.sourceVersion] || '原始 OCR');
-  const draft = () => current().collation || { text: makeDraft(state.sourceVersion === 'raw' ? (page().layout?.text ?? page().ocr) : sourceText(page())) };
-  const sourceMeta = (item) => {
-    const contextual = item.contextual;
-    if (!contextual) return '清洗结果未载入，当前显示原始 OCR。';
-    const conservative = String(contextual.conservative || '').replace(/\s/g, '');
-    const normalized = String(contextual.normalized || '').replace(/\s/g, '');
-    const delta = normalized.length - conservative.length;
-    const sign = delta > 0 ? '+' : '';
-    return `${sourceLabel()} · ${contextual.uncertainties?.length || 0} 条待核 · 两版字数差 ${sign}${delta}`;
-  };
-  const sourceVersionOptions = () => [
-    ['normalized', '语义整理版'], ['conservative', '保守校验版'], ['raw', '原始 OCR'],
-  ].map(([value, label]) => `<option value="${value}" ${state.sourceVersion === value ? 'selected' : ''}>${label}</option>`).join('');
+  const sourceText = item => item.ocr;
+  const sourceLabel = () => '原始 OCR';
+  const draft = () => draftForPage(page(), current());
   const layoutNote = () => page().layout?.method === 'aligned-lines' ? '已按逐栏 OCR 对齐分栏；栏界为机器建议，请看图核对。'
     : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；页眉、标点与错字请看图核对。' : '本页缺少可靠栏界，暂保留原段落。请按原页拆栏或合并行。';
   const verifiedCount = () => state.data.pages.filter(item => isVerified(state.reviews[item.page]?.collation, sourceText(item))).length;
@@ -134,7 +123,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
     const clearHistory = changed && !Object.hasOwn(patch, 'edits');
     const existingBaseline = current().collation?.metricBaseline;
     const metricBaseline = reset ? { version: 1, text: String(patch.text || ''), label: sourceLabel() }
-      : existingBaseline || (changed ? { version: 1, text: String(draft().text || ''), label: sourceLabel() } : undefined);
+      : existingBaseline || (changed && typeof current().collation?.text !== 'string' ? { version: 1, text: String(draft().text || ''), label: sourceLabel() } : undefined);
     record({ collation: { ...draft(), ...patch, ...(metricBaseline ? { metricBaseline } : {}), ...(changed ? { checks: {} } : {}), ...(clearHistory || reset ? { edits: [] } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
     const preview = app.querySelector('#collationText');
     if (preview && preview.value !== draft().text) preview.value = draft().text;
@@ -381,7 +370,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
     app.innerHTML = `<main class="page">
       <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / 成员 ${part} / 原 PDF ${state.data.start}–${state.data.end} 页</span><h1>原文对照校勘</h1><p>① 对照原页整理栏序　② 逐字校勘　③ 校验并导出 TXT</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
-        <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表（含修改率）</button><button type="button" id="exportMetrics">导出修改率汇总</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载全书保守版</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载全书语义版</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
+        <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表（含修改率）</button><button type="button" id="exportMetrics">导出修改率汇总</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
           <button type="button" id="backup">导出进度备份</button><label class="file-button">导入进度<input id="backupFile" type="file" accept="application/json,.json" /></label>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
@@ -391,7 +380,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
       <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, sourceText(item)) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${isVerified(r.collation, sourceText(item)) ? '已校验' : r.collation?.text !== undefined ? '草稿' : r.seen ? '已看' : '待校'}</small></button>`; }).join('')}</div></aside>
       <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已校验。Alt + ← / → 翻页。</p></div></section>
       <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>框选文字后右键可直接替换；点击“编辑本页”打开完整编辑器。</small></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制本页</button><button type="button" id="openTextEditor">编辑本页</button></div></div><div class="form-body">
-        <div class="source-version-bar"><label for="sourceVersion">校勘底稿<select id="sourceVersion">${sourceVersionOptions()}</select></label><button type="button" id="useSourceVersion" ${page().contextual ? '' : 'disabled'}>采用此版本到编辑器</button><span id="sourceVersionMeta">${esc(sourceMeta(p))}${current().collation?.text !== undefined ? ' · 当前页已有本机草稿' : ''}</span></div>
+        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '已保留本页人工稿及原比较底稿' : '底稿：原始 OCR · 对照扫描图校勘'}</span><span>未核模型稿已停用，历史稿仅供下载参考。</span></div>
         <div class="editor-main">
         <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
         <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
@@ -584,15 +573,6 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
       app.querySelector('#editText')?.focus({ preventScroll: true });
       return;
     }
-    if (button.id === 'useSourceVersion') {
-      if (!page().contextual) return;
-      if (current().collation?.text && !confirm(`用${sourceLabel()}替换当前页编辑草稿？如需保留现有草稿，请先导出进度备份。`)) return;
-      updateDraft({ text: makeDraft(sourceText(page())) }, { reset: true });
-      state.reviewOpen = true;
-      render();
-      app.querySelector('#editText')?.focus({ preventScroll: true });
-      return;
-    }
     if (button.id === 'closeReviewDrawer') {
       state.reviewOpen = false;
       syncReviewDrawer();
@@ -621,7 +601,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
       if (button.id === 'makeDraft' || button.id === 'confirmDraftReset') {
         if (button.id === 'makeDraft' && current().collation?.text) { state.resetPending = true; state.error = ''; showMessage(); return; }
         state.resetPending = false;
-        value = makeDraft(page().layout?.text ?? page().ocr); caret = 0;
+        value = makeDraft(originalDraftText(page())); caret = 0;
         state.notice = layoutNote(); showMessage();
       } else if (button.id === 'renumber') value = numberLines(value);
       else ({ text: value, caret } = moveLine(value, caret, button.id === 'lineUp' ? -1 : 1));
@@ -744,12 +724,6 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
   });
 
   app.addEventListener('change', async (event) => {
-    if (event.target.id === 'sourceVersion') {
-      state.sourceVersion = event.target.value;
-      state.validation = false;
-      render();
-      return;
-    }
     if (event.target.id === 'zoom') { state.zoom = Number(event.target.value); const image = app.querySelector('#scanWrap img'); if (image) image.style.width = `${state.zoom}%`; }
     if (event.target.id === 'jump') {
       jumpTo(event.target.value);
@@ -803,7 +777,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261012-export-rat
     if (![1, 2, 3, 4].includes(part)) { app.innerHTML = '<p class="loading">请选择团队任务中的第 1–4 份初筛工作项。</p>'; return; }
     try {
       app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
-      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261012-lazy`);
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261013-ocr-safe`);
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
       materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;

@@ -24,5 +24,5 @@ test('contextual OCR payloads cover every physical page with both versions', () 
 test('comparison report records the full-book comparison scope', () => {
   const report = fs.readFileSync(new URL('../tasks/2026-10-11-ocr-cleaning/full-book-comparison.md', import.meta.url), 'utf8');
   assert.match(report, /物理页：1052/);
-  assert.match(report, /忽略空白后有差异：756 页/);
+  assert.match(report, /忽略空白后有差异：732 页/);
 });

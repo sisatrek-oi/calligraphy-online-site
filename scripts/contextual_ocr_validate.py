@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""批量用语言模型校验书论 OCR；原始 OCR 永不覆盖。
+"""批量生成 OCR 纠错候选；模型无权改写正文，候选必须看图复核。
 
 运行前设置 MODEL_API_URL、MODEL_API_KEY、MODEL_NAME；也可以直接读取本地 .runtime/model-config.json。
 脚本支持 OpenAI-compatible /chat/completions 和 Anthropic /v1/messages，
@@ -17,6 +17,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from ocr_integrity import validate_batch, source_hash, PIPELINE_VERSION
 
 
 PAGE_RE = re.compile(r"^===== 原 PDF 物理页 (\d+)｜分册第 (\d+) 页 =====\s*$", re.M)
@@ -53,18 +54,11 @@ def prompt_for(batch: list[dict[str, object]], all_pages: list[dict[str, object]
             "ocr": item["ocr"],
             "next_page_context": following,
         }, ensure_ascii=False))
-    return """你是古籍书法论文 OCR 校勘员。请根据 OCR 文本、前后页上下文和现代汉语／书法史语境，校验下面的页段。
-
-硬性规则：
-1. 不凭空补写原文；无法确认的字放入 uncertainties，并在正文保留“□”或“【待核：候选】”。
-2. 保持每页阅读顺序和原有栏号；不要把标题、页眉、页脚偷偷删除。
-3. conservative 保守版只改高度确定的 OCR 错字、标点和明显断行。
-4. normalized 语义版可合并跨栏句子、补正常标点，但仍不能把推测当成确定文字。
-5. 每页必须返回 source_page、conservative、normalized、uncertainties；正文用纯文本。
-
-只返回 JSON，不要 Markdown：
-{"pages":[{"source_page":5,"conservative":"...","normalized":"...","uncertainties":[{"text":"...","reason":"..."}]}]}
-
+    return """你为古籍 OCR 提供待人工看图复核的短语纠错候选。你只收到 OCR 和前后页文本，没有扫描图。
+不得返回重写后的正文；不得依据书法史常识声称高度确定；不得省略、补写、合并原文。
+有疑点可以不给建议。每个 before 必须逐字复制当前页中唯一出现的短原文（包括空格），最多12个非空白字符；after 最多12字。
+reason 解释疑点并注明需看图，不作确定性裁决。不要返回正文、总结或 Markdown。
+只返回 JSON：{"pages":[{"source_page":5,"suggestions":[{"before":"原 OCR 短语","after":"候选","reason":"需看图复核的原因"}]}]}
 待校验页段：
 """ + "\n".join(blocks)
 
@@ -88,15 +82,22 @@ def request_model(prompt: str, url: str, key: str, model: str, timeout: int) -> 
     return json.loads(content)
 
 
-def read_done(path: Path) -> set[int]:
+def read_done(path: Path, pages: list[dict]) -> set[int]:
     if not path.exists():
         return set()
+    sources = {int(item['page']): str(item['ocr']) for item in pages}
     done = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            done.add(int(json.loads(line)["source_page"]))
-        except (ValueError, KeyError, json.JSONDecodeError):
+    for line in path.read_text(encoding='utf-8').splitlines():
+        if not line.strip():
             continue
+        item = json.loads(line)
+        number = item.get('source_page')
+        if (item.get('pipeline_version') != PIPELINE_VERSION or number not in sources
+            or item.get('source_sha256') != source_hash(sources[number])
+            or item.get('conservative') != sources[number] or item.get('normalized') != sources[number]
+            or number in done):
+            raise ValueError('旧版、重复或来源已变化的结果不能续写；请使用新的输出文件，原文件保留')
+        done.add(number)
     return done
 
 
@@ -129,31 +130,29 @@ def main() -> int:
     if args.max_pages:
         pages = pages[:args.max_pages]
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    done = read_done(args.output)
+    try:
+        done = read_done(args.output, pages)
+    except (ValueError, KeyError, TypeError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
     pending = [item for item in pages if int(item["page"]) not in done]
     with args.output.open("a", encoding="utf-8") as output:
         for start in range(0, len(pending), max(1, args.batch_size)):
             batch = pending[start:start + max(1, args.batch_size)]
-            result = None
+            returned = None
             last_error = None
             for attempt in range(1, max(1, args.retries) + 1):
                 try:
                     result = request_model(prompt_for(batch, pages), url, key, model, args.timeout)
-                    returned = {int(item["source_page"]): item for item in result.get("pages", [])}
-                    expected = {int(item["page"]) for item in batch}
-                    if set(returned) != expected:
-                        raise ValueError(f"模型返回页码不完整：期望 {sorted(expected)}，实际 {sorted(returned)}")
-                    for number in sorted(returned):
-                        item = returned[number]
-                        if not isinstance(item.get("conservative"), str) or not isinstance(item.get("normalized"), str) or not isinstance(item.get("uncertainties"), list):
-                            raise ValueError(f"第 {number} 页返回结构不完整")
+                    validated = validate_batch(result, batch)
+                    returned = validated
                     break
-                except (OSError, ValueError, KeyError, json.JSONDecodeError, urllib.error.URLError) as error:
+                except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError, urllib.error.URLError) as error:
                     last_error = error
                     if attempt < max(1, args.retries):
                         print(f"第 {batch[0]['page']} 页批次第 {attempt} 次失败，准备重试：{error}", file=sys.stderr, flush=True)
                         time.sleep(min(10, max(1, args.sleep * 2)))
-            if result is None:
+            if returned is None:
                 print(f"第 {batch[0]['page']} 页批次失败：{last_error}", file=sys.stderr)
                 return 1
             for number in sorted(returned):
