@@ -41,3 +41,5 @@
 
 /* Keep the single confirmation and completion action visible while editing. */
 .drawer-footer{flex:none;padding:8px 12px 10px;border-top:1px solid #e4e9e2;background:#fff}.drawer-footer .check{margin:0;font-weight:400}.drawer-footer .drawer-actions{justify-content:space-between;margin-top:6px}
+
+.source-version-bar .publication-status{color:#295d38;font-size:11px;white-space:nowrap}.published-revision{border:1px solid #bbcebb;border-radius:5px;padding:8px}.published-revision ul{padding-left:18px;line-height:1.7}.published-revision .pending-notes{color:#875519}.published-revision figure{margin:8px 0}.published-revision img{max-width:100%;max-height:300px;object-fit:contain}.published-revision figcaption{font-size:11px}

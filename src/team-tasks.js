@@ -1,3 +1,4 @@
+import { teamRelease } from './team-collation.js?v=20261017-team';
 import { isVerified } from './collation-core.js?v=20261013-typo-only';
 import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 
@@ -85,14 +86,21 @@ import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.
     });
   }
 
+  function releaseMarkup(part) {
+    const release = teamRelease.parts[part];
+    return release ? `<span class="local-progress">团队回收：${release.complete}页已修改完毕 · ${release.pending}页已修订待核</span>` : '';
+  }
+  function releaseLinks(part) {
+    return teamRelease.parts[part] ? `<a href="./screening-data/part-${part}-collated.txt" download>已修订 TXT</a><a href="./screening-data/part-${part}-collated-status.csv" download>修改状态表</a>` : '';
+  }
   function offline() {
     shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>选择自己的页段，左右对照原页与 TXT，逐页校勘后导出。</p></header>
       <div class="overview-stats" aria-label="当前任务规模"><div><strong>1</strong><span>当前批次</span></div><div><strong>4</strong><span>连续页段</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮校勘页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已校验</span></div></div>
       <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 原文校勘</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>已移除封面、目录及版权编印信息共 11 页；保留原 PDF 页码，四人各校一段。</p></div><span class="task-state">材料已备齐</span></div>
         <div class="overview-list-head"><h3>分工与材料</h3><span>按原 PDF 物理页定位</span></div>
-        <div class="overview-unit-list">${screeningRanges.map(([start, end], index) => `<article class="overview-unit"><div class="unit-number">0${index + 1}</div><div class="unit-copy"><strong>审核成员 ${index + 1}</strong><span>第 ${start}–${end} 页 · ${taskPageCount(start, end)} 页需校勘</span><span class="local-progress" data-local-progress="${index + 1}">读取本机进度…</span></div><div class="unit-actions"><a class="unit-primary" data-continue-part="${index + 1}" href="./screening.html?part=${index + 1}">进入对照校勘 →</a><a href="${taskOcrHref(index + 1)}" download>任务 TXT</a><a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div></article>`).join('')}</div>
+        <div class="overview-unit-list">${screeningRanges.map(([start, end], index) => `<article class="overview-unit"><div class="unit-number">0${index + 1}</div><div class="unit-copy"><strong>审核成员 ${index + 1}</strong><span>第 ${start}–${end} 页 · ${taskPageCount(start, end)} 页需校勘</span><span class="local-progress" data-local-progress="${index + 1}">读取本机进度…</span>${releaseMarkup(index + 1)}</div><div class="unit-actions"><a class="unit-primary" data-continue-part="${index + 1}" href="./screening.html?part=${index + 1}">进入对照校勘 →</a><a href="${taskOcrHref(index + 1)}" download>任务 TXT</a>${releaseLinks(index + 1)}<a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div></article>`).join('')}</div>
         <div class="overview-handoff"><strong>交付方式</strong><span>本轮只对照原页修改错字，每页勾选一次即可完成；标点、符号和排版可保持原样。导出“校勘 TXT”和“校验表”交回负责人。</span></div></section>
-      <p class="overview-note">静态站不识别成员身份，也不汇总各人的实时进度；审核记录保存在当前浏览器。OCR 未校勘，请以扫描图核对。</p>
+      <p class="overview-note">静态站不识别成员身份，也不汇总各人的实时进度；审核记录保存在当前浏览器。已合入团队复核稿100页（2026-10-17）；93页已修改完毕，7页保留待核。其余页面仍以扫描图核对。</p>
       <section class="overview-secondary"><div><span class="eyebrow">独立批次入口</span><h2>旧条目文件审核</h2><p>旧 188 条字段审核与本轮全书初筛分开处理，不计入上方任务规模。</p></div><a href="./review.html">进入文件审核 →</a></section></div>`);
     updateOfflineProgress();
   }

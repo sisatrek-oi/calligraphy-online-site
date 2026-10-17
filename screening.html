@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>原文对照校勘 · 书论工作区</title>
   <link rel="icon" type="image/png" href="./src/assets/shulun-mark.png" />
-  <link rel="stylesheet" href="./src/screening.css?v=20261013-typo-only" />
+  <link rel="stylesheet" href="./src/screening.css?v=20261017-team" />
 </head>
 <body>
   <header class="topbar"><a href="./team-tasks.html">← 团队任务</a><span>书论工作区 · 原文对照校勘</span></header>
@@ -20,7 +20,7 @@
       }
     }, 12000);
     document.getElementById('startupRetry').onclick = () => location.reload();
-    import('./src/screening.js?v=20261013-typo-only').then(() => clearTimeout(timer)).catch(() => {
+    import('./src/screening.js?v=20261017-team').then(() => clearTimeout(timer)).catch(() => {
       clearTimeout(timer);
       document.getElementById('startupStatus').textContent = '页面程序未能载入，请检查网络后重试。本机进度保留。';
       document.getElementById('startupRetry').hidden = false;

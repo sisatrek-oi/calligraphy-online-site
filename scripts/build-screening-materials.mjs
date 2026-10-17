@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import { validCollation, publicationSummary } from '../src/team-collation.js';
 const root = new URL('../screening-data/', import.meta.url);
 fs.mkdirSync(new URL('materials/', root), { recursive: true });
 for (let part = 1; part <= 4; part++) {
@@ -9,11 +10,19 @@ for (let part = 1; part <= 4; part++) {
   const headings = [...ocr.matchAll(/^===== 原 PDF 物理页 (\d+)｜分册第 (\d+) 页 =====\r?$/gm)];
   const layout = JSON.parse(read('-layout.json'));
   const contextual = JSON.parse(read('-contextual.json'));
+  const publishedPath = new URL(`part-${part}-collated.json`, root);
+  const published = fs.existsSync(publishedPath) ? JSON.parse(fs.readFileSync(publishedPath, 'utf8')) : null;
+  if (published && (published.version !== 1 || published.part !== part || !Array.isArray(published.pages))) throw new Error('Invalid collated source');
+  const collated = new Map();
+  for (const item of published?.pages || []) {
+    if (!validCollation(item, item.page) || collated.has(item.page) || !index.pages.some(p => p.page === item.page)) throw new Error('Invalid collated page');
+    collated.set(item.page, item);
+  }
   if (headings.length !== index.pages.length) throw new Error('OCR page count mismatch');
   const pages = index.pages.map((item, i) => {
     if (+headings[i][1] !== item.page || layout.pages[i].page !== item.page || contextual.pages[i].page !== item.page) throw new Error('Source page mismatch');
     const {conservative, normalized, uncertainties} = contextual.pages[i];
-    return {page:item.page,ocr:ocr.slice(headings[i].index+headings[i][0].length,headings[i+1]?.index??ocr.length).trim(),layout:layout.pages[i],contextual:{conservative,normalized,uncertainties}};
+    return {page:item.page,ocr:ocr.slice(headings[i].index+headings[i][0].length,headings[i+1]?.index??ocr.length).trim(),layout:layout.pages[i],contextual:{conservative,normalized,uncertainties},...(collated.has(item.page)?{collated:collated.get(item.page)}:{})};
   });
   const materials = {};
   for (let offset = 0; offset < pages.length; offset += 16) {
@@ -24,5 +33,6 @@ for (let part = 1; part <= 4; part++) {
     fs.writeFileSync(new URL(name, root), content);
     for (const item of chunk) materials[item.page] = name;
   }
-  fs.writeFileSync(new URL(`part-${part}-index.json`, root), JSON.stringify({...index,materials})+'\n');
+  const indexPages = index.pages.map(item => collated.has(item.page) ? {...item,publication:publicationSummary(collated.get(item.page))} : item);
+  fs.writeFileSync(new URL(`part-${part}-index.json`, root), JSON.stringify({...index,pages:indexPages,materials})+'\n');
 }

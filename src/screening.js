@@ -1,6 +1,7 @@
-import { draftForPage, originalDraftText } from './ocr-source-policy.js?v=20261013-typo-only';
+import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=20261017-team';
+import { publicationLabel } from './team-collation.js?v=20261017-team';
 import { copyText } from './clipboard.js?v=20261012-copy';
-import { readJson, createMaterialLoader } from './screening-loader.js?v=20261012-lazy';
+import { readJson, createMaterialLoader } from './screening-loader.js?v=20261017-team';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261013-typo-only';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { createProgressStore, initialPageIndex, nextPendingIndex, progressSummary } from './screening-workflow.js?v=20261013-typo-only';
@@ -27,7 +28,8 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
   const scanHref = (number) => `./screening-data/scans/${filename(number)}`;
   const pdfHref = (local) => `./screening-data/part-${part}.pdf#page=${local}`;
   const sourceText = item => item.ocr;
-  const sourceLabel = () => '原始 OCR';
+  const sourceLabel = () => page().collated ? `团队校订版 ${page().collated.reviewedAt}` : '原始 OCR';
+  const rowLabel = (item, review) => isVerified(review.collation, sourceText(item)) ? '已校验' : review.collation?.text !== undefined ? '草稿' : publicationLabel(item) || (review.seen ? '已看' : '待校');
   const draft = () => draftForPage(page(), current());
   const layoutNote = () => page().layout?.method === 'aligned-lines' ? '已按逐栏 OCR 对齐分栏；栏界为机器建议，请看图核对。'
     : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；本轮只需对照原页修改错字。' : '本页保留原段落；本轮无需整理分栏格式。';
@@ -269,7 +271,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     for (const row of app.querySelectorAll('[data-index]')) {
       const item = state.data.pages[Number(row.dataset.index)], review = state.reviews[item.page] || {};
       const verified = isVerified(review.collation, sourceText(item));
-      row.querySelector('small').textContent = verified ? '已校验' : review.collation?.text !== undefined ? '草稿' : review.seen ? '已看' : '待校';
+      row.querySelector('small').textContent = rowLabel(item, review);
       row.classList.toggle('done', verified);
     }
     const complete = app.querySelector('#verifyNext');
@@ -363,6 +365,19 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     if (button) button.disabled = !current().seen && !state.imageReady;
   }
 
+  function publishedMarkup(p) {
+    const r = p.collated;
+    if (!r) return '';
+    return `<details class="ocr published-revision" id="publishedRevision"><summary>团队校订版 ${esc(r.reviewedAt)} · ${esc(publicationLabel(p))}</summary>
+      <p>已逐页对照扫描图复核。本机人工稿另行保留；此处为发布正文。</p>
+      <div class="tools"><a href="./screening-data/part-${part}-collated.txt" download>下载本份已修订 TXT</a><a href="./screening-data/part-${part}-collated-status.csv" download>下载处理状态表</a></div>
+      ${r.pending.length ? `<ul class="pending-notes">${r.pending.map(q => `<li>待核：${esc(q.before)} — ${esc(q.note)}</li>`).join('')}</ul>` : ''}
+      <pre>${esc(r.text)}</pre>
+      ${(r.facsimiles || []).map(f => `<figure><img src="${esc(f.src)}" alt="${esc(f.caption)}"><figcaption>${esc(f.caption)}</figcaption></figure>`).join('')}
+      <ul>${r.corrections.map(c => `<li>${esc(c.before)} → ${esc(c.after)}；${esc(c.note)}</li>`).join('') || '<li>复核未发现需进一步修改的文字。</li>'}${r.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+    </details>`;
+  }
+
   function render() {
     const p = page();
     const review = current();
@@ -377,15 +392,15 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
           <label class="file-button">或选择图片<input id="scanFiles" type="file" accept="image/jpeg" multiple /></label>
           <label class="file-button">载入本地 OCR<input id="locatorFile" type="file" accept="text/html,.html" /></label></div></details></div></details></div></section>
       <div id="saveRecovery"></div><div id="messageSlot"></div>
-      <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, sourceText(item)) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${isVerified(r.collation, sourceText(item)) ? '已校验' : r.collation?.text !== undefined ? '草稿' : r.seen ? '已看' : '待校'}</small></button>`; }).join('')}</div></aside>
+      <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, sourceText(item)) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${esc(rowLabel(item, r))}</small></button>`; }).join('')}</div></aside>
       <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已校验。Alt + ← / → 翻页。</p></div></section>
       <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>框选文字后右键可直接替换；点击“编辑本页”打开完整编辑器。</small></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制本页</button><button type="button" id="openTextEditor">编辑本页</button></div></div><div class="form-body">
-        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '已保留本页人工稿及原比较底稿' : '底稿：原始 OCR · 对照扫描图校勘'}</span><span>未核模型稿已停用，历史稿仅供下载参考。</span></div>
+        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '已保留本页人工稿及原比较底稿' : `底稿：${sourceLabel()} · 对照扫描图校勘`}</span>${p.collated ? `<strong class="publication-status">团队：${esc(publicationLabel(p))}</strong><button type="button" id="openPublished">查看校订版与记录</button>` : '<span>未核模型稿已停用，历史稿仅供下载参考。</span>'}</div>
         <div class="editor-main">
         <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
         <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
         <div class="change-log" id="changeLog" aria-live="polite">${editHistoryMarkup(draft().edits || [])}</div>
-        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后下载 TXT 文件</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" id="exportCurrentPage" class="drawer-save">下载本页 TXT</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div><details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
+        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后下载 TXT 文件</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" id="exportCurrentPage" class="drawer-save">下载本页 TXT</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div>${publishedMarkup(p)}<details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
         <div class="validation" id="validation" aria-live="polite"></div>
         <label>备注（选填）<textarea id="question" rows="2" placeholder="可记下看不清的字，留待后续复核；无需为格式或符号填写说明">${esc(review.question || '')}</textarea></label>
         <p class="hint">本轮只核对错字，标点、符号和分栏提醒不影响完成。修改正文后需重新确认。</p>
@@ -536,6 +551,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     if (state.selectionMenu.open && !event.target.closest('#selectionMenu') && !event.target.closest('#editText, #collationText')) closeSelectionMenu();
     const button = event.target.closest('button');
     if (!button) return;
+    if (button.id === 'openPublished') { state.reviewOpen = true; render(); const details = app.querySelector('#publishedRevision'); details.open = true; details.scrollIntoView({ block: 'nearest' }); return; }
     if (button.id === 'retryLoad') { await init(); return; }
     if (!state.data || !app.querySelector('#pageList')) return;
     if (['exportTxt', 'exportChecks', 'exportMetrics'].includes(button.id)) {
@@ -600,7 +616,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
       if (button.id === 'makeDraft' || button.id === 'confirmDraftReset') {
         if (button.id === 'makeDraft' && current().collation?.text) { state.resetPending = true; state.error = ''; showMessage(); return; }
         state.resetPending = false;
-        value = makeDraft(originalDraftText(page())); caret = 0;
+        value = defaultDraftText(page()); caret = 0;
         state.notice = layoutNote(); showMessage();
       } else if (button.id === 'renumber') value = numberLines(value);
       else ({ text: value, caret } = moveLine(value, caret, button.id === 'lineUp' ? -1 : 1));
@@ -775,7 +791,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     if (![1, 2, 3, 4].includes(part)) { app.innerHTML = '<p class="loading">请选择团队任务中的第 1–4 份初筛工作项。</p>'; return; }
     try {
       app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
-      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261013-ocr-safe`);
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261017-team`);
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
       materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;

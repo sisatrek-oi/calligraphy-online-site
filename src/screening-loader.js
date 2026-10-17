@@ -1,3 +1,4 @@
+import { validCollation, publicationSummary } from './team-collation.js?v=20261017-team';
 // Keep the deadline active through body parsing, not just response headers.
 export async function readJson(url, { fetcher = fetch, timeoutMs = 15000 } = {}) {
   const controller = new AbortController();
@@ -34,11 +35,15 @@ export function createMaterialLoader(data, options = {}) {
           payload.pages.every((item, i) => item.page === expected[i].page &&
             typeof item.ocr === 'string' && typeof item.layout?.text === 'string' &&
             typeof item.contextual?.normalized === 'string' && typeof item.contextual?.conservative === 'string' &&
-            Array.isArray(item.contextual?.uncertainties));
+            Array.isArray(item.contextual?.uncertainties) &&
+            (item.collated === undefined ? expected[i].publication === undefined :
+              validCollation(item.collated, item.page) &&
+              JSON.stringify(publicationSummary(item.collated)) === JSON.stringify(expected[i].publication)));
         if (!valid) throw new Error('本页材料不完整或与页码索引不匹配');
         // Attach only after validating the entire chunk. Never touch local reviews.
         for (const item of payload.pages) Object.assign(pages.get(item.page), {
           ocr: item.ocr, layout: item.layout, contextual: item.contextual,
+          ...(item.collated ? { collated: item.collated } : {}),
         });
       }).catch(error => { requests.delete(path); throw error; });
       requests.set(path, request);

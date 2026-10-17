@@ -7,5 +7,8 @@ export function originalDraftText(item) {
 }
 export function draftForPage(item, review = {}) {
   // Preserve the original object including verification, edits and metricBaseline.
-  return review.collation || { text: makeDraft(originalDraftText(item)) };
+  return review.collation || { text: defaultDraftText(item) };
+}
+export function defaultDraftText(item) {
+  return item.collated ? item.collated.text : makeDraft(originalDraftText(item));
 }
