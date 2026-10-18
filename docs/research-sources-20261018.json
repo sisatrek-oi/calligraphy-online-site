@@ -1,0 +1,123 @@
+{
+  "accessed": "2026-10-18",
+  "reviewType": "定向一手文献调研，非穷尽检索或系统综述",
+  "concepts": [
+    "书论文本可靠性与不确定性",
+    "命题可验证性",
+    "OCR版面与置信校准",
+    "HCSU与书法视觉评测",
+    "视觉依赖与上下文冲突",
+    "配对评估与拒答覆盖率"
+  ],
+  "selection": "标准组织、论文官方页面或原文、作者官方仓库/数据卡；不使用二手博客作为事实依据",
+  "sources": [
+    {
+      "id": "S01",
+      "title": "HCSU: A Dataset and Benchmark for Fine-Grained Historical Calligraphy Style Understanding",
+      "url": "https://arxiv.org/html/2607.04147v1",
+      "version": "2026 preprint v1",
+      "use": "§3.4、4.1、5.3；真实/随机/GPT描述消融，以及图像与描述的评测结构",
+      "limitation": "不是书论因果效用实验；不将描述分数当独立视觉真值",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S02",
+      "title": "HCSU official dataset card",
+      "url": "https://huggingface.co/datasets/Tongji209/HCSU",
+      "version": "card V1.1; revision 77b5185a2b1405beea27ba1bc424b06787241bd8",
+      "use": "版本、许可及新增属性元数据",
+      "limitation": "只核数据卡及API；本轮未下载或逐图核验",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S03",
+      "title": "HCSU original-plan dataset mirror",
+      "url": "https://huggingface.co/datasets/YAN-LIU05/HCSU",
+      "version": "card V1.0; revision 5f450035ad15f39f63f0d50097025d5676c0eeaf",
+      "use": "确认原方案引用的镜像与官方当前快照不同",
+      "limitation": "未自动切换原方案的数据版本",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S04",
+      "title": "TEI P5: Representation of Primary Sources",
+      "url": "https://tei-c.org/release/doc/tei-p5-doc/en/html/PH.html",
+      "version": "P5 4.12.0",
+      "use": "缺失、难辨与原始文献表达",
+      "limitation": "仅借用可追溯表达原则；没有实施TEI转换",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S05",
+      "title": "TEI P5: Certainty, Precision, and Responsibility",
+      "url": "https://tei-c.org/release/doc/tei-p5-doc/en/html/CE.html",
+      "version": "P5 4.12.0",
+      "use": "明确不确定性和责任归属",
+      "limitation": "表达规范不保证内容判断正确",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S06",
+      "title": "TEI P5: g element",
+      "url": "https://tei-c.org/release/doc/tei-p5-doc/en/html/ref-g.html",
+      "version": "P5 4.12.0",
+      "use": "以标识关联非标准字符或字形",
+      "limitation": "不把任一猜测Unicode视为已核定字形",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S07",
+      "title": "OmniDocBench official repository",
+      "url": "https://github.com/opendatalab/OmniDocBench",
+      "version": "official README accessed 2026-10-18",
+      "use": "文字、版面和阅读顺序拆分评估",
+      "limitation": "通用PDF基准不可直接估计本项目古籍竖排表现；CVPR网页未成功打开，未记为全文阅读",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S08",
+      "title": "Are We on the Right Way for Evaluating Large Vision-Language Models?",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/2f8ee6a3d766b426d2618e555b5aeb39-Abstract-Conference.html",
+      "version": "NeurIPS 2024 (MMStar)",
+      "use": "视觉不必要题与泄漏对多模态评测的干扰",
+      "limitation": "本轮核读官方摘要；未验证本项目具体模型",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S09",
+      "title": "Context-faithful Prompting for Large Language Models",
+      "url": "https://aclanthology.org/2023.findings-emnlp.968/",
+      "version": "Findings of EMNLP 2023; DOI 10.18653/v1/2023.findings-emnlp.968",
+      "use": "上下文冲突及服从上下文问题",
+      "limitation": "文本任务的方法依据，不外推书法视觉提升幅度",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S10",
+      "title": "On Calibration of Modern Neural Networks",
+      "url": "https://proceedings.mlr.press/v70/guo17a.html",
+      "version": "ICML 2017; PMLR 70:1321–1330",
+      "use": "模型置信度与正确概率的校准区分",
+      "limitation": "未证明本项目OCR分数已校准；不直接套用温度缩放",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S11",
+      "title": "The Hitchhiker’s Guide to Testing Statistical Significance in Natural Language Processing",
+      "url": "https://aclanthology.org/P18-1128/",
+      "version": "ACL 2018",
+      "use": "统计检验需匹配任务和采样结构",
+      "limitation": "本轮核读官方条目；按作品分组的具体方案属于本项目拟议设计",
+      "accessed": "2026-10-18"
+    },
+    {
+      "id": "S12",
+      "title": "On the Foundations of Noise-free Selective Classification",
+      "url": "https://jmlr.org/papers/v11/el-yaniv10a.html",
+      "version": "JMLR 2010; 11(53):1605–1641",
+      "use": "选择性分类的风险与覆盖率",
+      "limitation": "理论无噪声条件不代表本项目专家标签无误",
+      "accessed": "2026-10-18"
+    }
+  ]
+}

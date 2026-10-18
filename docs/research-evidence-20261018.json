@@ -1,0 +1,170 @@
+{
+  "date": "2026-10-18",
+  "publications": [
+    {
+      "part": 1,
+      "pages": 30,
+      "completed": 26,
+      "pendingPages": 4,
+      "pendingPositions": 4,
+      "blankPages": 4,
+      "source": "screening-data/part-1-collated.json",
+      "sha256": "68ddc810723b7f9e3295ab76bfa2c81c299ee219dfd03d951df3030b17fad251"
+    },
+    {
+      "part": 2,
+      "pages": 70,
+      "completed": 67,
+      "pendingPages": 3,
+      "pendingPositions": 4,
+      "blankPages": 5,
+      "source": "screening-data/part-2-collated.json",
+      "sha256": "8823318a8465a417c81c37aaf903780f4e0c55864a8e2d82f46b67ddad1f0fef"
+    },
+    {
+      "part": 4,
+      "pages": 15,
+      "completed": 9,
+      "pendingPages": 6,
+      "pendingPositions": 7,
+      "blankPages": 0,
+      "source": "screening-data/part-4-collated.json",
+      "sha256": "a2eaadea86a86a52eb388d7ab3940045f33c5becdf6bec14eebb6a0baecda5b0"
+    }
+  ],
+  "totals": {
+    "pages": 115,
+    "completed": 102,
+    "pendingPages": 13,
+    "pendingPositions": 15,
+    "blankPages": 9
+  },
+  "frozenOcrAnalysis": {
+    "source": "2026-10-18-ocr-error-analysis/summary.json",
+    "sha256": "242af21af4a8585edf135e8624ceda753f756a009b084b5384fa7a73ff467eaa",
+    "pages": 400,
+    "referencePages": 108,
+    "referenceCharacters": 32647,
+    "comparableRegions": 4342,
+    "knownErrorRegions": 158,
+    "knownCharacterErrors": 167,
+    "thresholdCoverage": [
+      {
+        "threshold": "<0.85",
+        "regions": 68,
+        "regionSharePercent": 1.57,
+        "knownErrorRegions": 17,
+        "knownErrorCoveragePercent": 10.76
+      },
+      {
+        "threshold": "<0.90",
+        "regions": 284,
+        "regionSharePercent": 6.54,
+        "knownErrorRegions": 52,
+        "knownErrorCoveragePercent": 32.91
+      },
+      {
+        "threshold": "<0.93",
+        "regions": 756,
+        "regionSharePercent": 17.41,
+        "knownErrorRegions": 93,
+        "knownErrorCoveragePercent": 58.86
+      },
+      {
+        "threshold": "<0.97",
+        "regions": 2082,
+        "regionSharePercent": 47.95,
+        "knownErrorRegions": 136,
+        "knownErrorCoveragePercent": 86.08
+      }
+    ],
+    "highConfidenceKnownErrorRegions": 22,
+    "limitation": "历史已发现错误的回顾性覆盖；未重跑纠错后的分析，不是未来召回率或当前错误概率"
+  },
+  "additionalTargetedPending": [
+    {
+      "part": 4,
+      "page": 828,
+      "region": "p0828-c07-s03",
+      "status": "已重OCR·待核",
+      "source": "screening-data/part-4-targeted.json",
+      "sourceSha256": "885e6ef7f005c8b1e05c035fe47ce7d46edc338d28924b9622b3e4cfe6bd9a9c"
+    }
+  ],
+  "classificationExamples": [
+    {
+      "page": 790,
+      "line": 8,
+      "quote": "文字之变流皆因自然，非有人造之也。",
+      "classificationProposal": "历史解释",
+      "verificationProposal": "历史材料与版本考证；不能由单张字图验证",
+      "pageStatus": "已修改完毕",
+      "revision": "team-part4-20261018",
+      "imageSha256": "1d11c2cabd3cf63d5f50ba31a740873961842470ce1d987633fa748154ce1ed6",
+      "textSha256": "21cd6c3cfa42b54ce5088b4722a885acea5fcec7742f6f8a05c121eda9a91a7a",
+      "status": "分类示例，未做独立专家内容核验，不写入主表"
+    },
+    {
+      "page": 797,
+      "line": 2,
+      "quote": "亦当为书家第一法则也。",
+      "classificationProposal": "规范评价",
+      "verificationProposal": "记录评价者立场；不直接转成视觉真假题",
+      "pageStatus": "已修改完毕",
+      "revision": "team-part4-20261018",
+      "imageSha256": "48bc3f94122086675d710bd3e5463e37d745d3920d3916cfb74fc4a033bd3302",
+      "textSha256": "f2bd784835c5f9306cf908698fcc5aa6047069762b6a80753991ec981607b2b3",
+      "status": "分类示例，未做独立专家内容核验，不写入主表"
+    },
+    {
+      "page": 800,
+      "line": 13,
+      "quote": "以方作秦分，以圆作汉分。",
+      "classificationProposal": "实践主张",
+      "verificationProposal": "可研究局部方圆；不能据成品图推出练习的因果效果",
+      "pageStatus": "已修订·待核",
+      "revision": "team-part4-20261018",
+      "imageSha256": "11f162eca0b6a21c79c86b871035c1cde1343a8680f42d8dfb40eea777f7a0fb",
+      "textSha256": "9dd8260a6c4341de144ac4cb7a426a927815a1494c5947652cb0b6bc31dcb364",
+      "status": "分类示例，未做独立专家内容核验，不写入主表"
+    },
+    {
+      "page": 801,
+      "line": 5,
+      "quote": "闇然浑古，疏落欹斜",
+      "classificationProposal": "描述与审美混合",
+      "verificationProposal": "疏落/欹斜可尝试定义；浑古先做术语解释",
+      "pageStatus": "已修改完毕",
+      "revision": "team-part4-20261018",
+      "imageSha256": "e26dda01d6e18d256d210abd7a5f119dfb93411665cf11fe3b57d99734c4bd78",
+      "textSha256": "280aab8f8fe39fdcca8793820c8aaaa7672560182be1032654bd1c5a9b1867ca",
+      "status": "分类示例，未做独立专家内容核验，不写入主表"
+    },
+    {
+      "page": 802,
+      "line": 5,
+      "quote": "完白山人之得处在以隶笔为篆",
+      "classificationProposal": "技法解释",
+      "verificationProposal": "需独立作品与技法证据；不等于已证实的创作过程",
+      "pageStatus": "已修改完毕",
+      "revision": "team-part4-20261018",
+      "imageSha256": "f57fa6133bf46b8519aa08178a87997bb0333306acd1af78f806823bde81272d",
+      "textSha256": "9c2e1e3f736f3d2bb2a1928ae43cb4429b8a67075029e99293de18121a408909",
+      "status": "分类示例，未做独立专家内容核验，不写入主表"
+    },
+    {
+      "page": 803,
+      "line": 7,
+      "quote": "然无完白笔力，又无完白新理",
+      "classificationProposal": "比较评价",
+      "verificationProposal": "需解释笔力/新理的判断依据；不直接当视觉标签",
+      "pageStatus": "已修订·待核",
+      "revision": "team-part4-20261018",
+      "imageSha256": "7596ab22d81496b55257184d69c2cdefba2d4f14efd3d503c5d021919648b566",
+      "textSha256": "d82c3a3537805c70d7c4ed153dc0e06db5fd52b0509f7b59f0ded06cb5fb045e",
+      "status": "分类示例，未做独立专家内容核验，不写入主表"
+    }
+  ],
+  "newModelExperimentRuns": 0,
+  "hcsuDownloadedImages": 0
+}
