@@ -1,0 +1,3572 @@
+{
+  "version": 1,
+  "revision": "targeted-20261018",
+  "scope": "62个指定区域；61确认，1待核；整页未校",
+  "regions": [
+    {
+      "id": "p0062-c17-s01",
+      "page": 62,
+      "column": 17,
+      "piece": 1,
+      "box": [
+        158,
+        196,
+        174,
+        248
+      ],
+      "reviewBox": [
+        148,
+        185,
+        215,
+        275
+      ],
+      "consumedColumns": [
+        16,
+        17
+      ],
+      "before": "去。\nX",
+      "after": "法。",
+      "originalPieceText": "X",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原投影把法拆成去与X两栏；扩大原图框后两尺度均识为法。合并原栏16/17，不能仅把X替成法而保留去。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "xx",
+          "scores": [
+            0.45048
+          ],
+          "seconds": 0.019
+        },
+        {
+          "scale": 2,
+          "text": "i",
+          "scores": [
+            0.23127
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [
+        {
+          "scale": 1,
+          "text": "法。",
+          "scores": [
+            0.95034
+          ]
+        },
+        {
+          "scale": 2,
+          "text": "法。",
+          "scores": [
+            0.96646
+          ]
+        }
+      ],
+      "sourceSha256": "1f52d4839233a50fcc16599dab22e50e4c9a7d7dc12bbe60194c46c05cfeb88a",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 1069,
+      "publicationEnd": 1070,
+      "publicationBefore": "庄",
+      "publicationContextBefore": "刘 反 , 子 租 之 鲍 , 故 灵 运 能 书 ,而 特 多 王\n",
+      "publicationContextAfter": "",
+      "publicationBaseSha256": "3a092dfd7db14a2b854f34620f14992395728a70418070120b022e5a044e8f4f",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0062-c17-s01.png"
+    },
+    {
+      "id": "p0077-c09-s02",
+      "page": 77,
+      "column": 9,
+      "piece": 2,
+      "box": [
+        684,
+        813,
+        746,
+        1327
+      ],
+      "reviewBox": [
+        684,
+        813,
+        746,
+        1327
+      ],
+      "consumedColumns": [
+        9
+      ],
+      "before": "《埤仓“广雅》《古今字",
+      "after": "《埤仓》、《广雅》、《古今字",
+      "originalPieceText": "《埤仓“广雅》《古今字",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《埤仓》《广雅》《古今字",
+          "scores": [
+            0.96705
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "《埤仓》《广雅》《古今字",
+          "scores": [
+            0.9696
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "a1f066088ca07fe797a96742661b7ae04e33932388448e3ff2eb6f796ac4627b",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 538,
+      "publicationEnd": 557,
+      "publicationBefore": "硬 仓 《 广 雅 > 全 今 字 语",
+      "publicationContextBefore": "庶 方 南 每 ,无 出 攻 者\n\n狐 初 ,博士 清河 张 所 著 ",
+      "publicationContextAfter": " 8 究 庄重 > 信 > 报 拾得 所 ,增长\n事 类 , 坟 亦 ",
+      "publicationBaseSha256": "ce9bdb6eefc14ae00e50a432274d36163b21b3d68804765474233424424b6f6b",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0077-c09-s02.png"
+    },
+    {
+      "id": "p0077-c09-s03",
+      "page": 77,
+      "column": 9,
+      "piece": 3,
+      "box": [
+        684,
+        1327,
+        746,
+        1744
+      ],
+      "reviewBox": [
+        684,
+        1327,
+        746,
+        1744
+      ],
+      "consumedColumns": [
+        9
+      ],
+      "before": "诂究诸《埤《广",
+      "after": "诂》。究诸《埤》、《广》",
+      "originalPieceText": "诂究诸《埤《广",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "诂》究诸《埤》《广》",
+          "scores": [
+            0.93201
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "诂》究诸《埤》《广》",
+          "scores": [
+            0.93482
+          ],
+          "seconds": 0.014
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "a1f066088ca07fe797a96742661b7ae04e33932388448e3ff2eb6f796ac4627b",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 558,
+      "publicationEnd": 570,
+      "publicationBefore": "8 究 庄重 > 信 >",
+      "publicationContextBefore": "初 ,博士 清河 张 所 著 硬 仓 《 广 雅 > 全 今 字 语 ",
+      "publicationContextAfter": " 报 拾得 所 ,增长\n事 类 , 坟 亦 于 文 为 益 着 也 ;",
+      "publicationBaseSha256": "ce9bdb6eefc14ae00e50a432274d36163b21b3d68804765474233424424b6f6b",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0077-c09-s03.png"
+    },
+    {
+      "id": "p0077-c13-s02",
+      "page": 77,
+      "column": 13,
+      "piece": 2,
+      "box": [
+        364,
+        665,
+        425,
+        1105
+      ],
+      "reviewBox": [
+        364,
+        665,
+        425,
+        1105
+      ],
+      "consumedColumns": [
+        13
+      ],
+      "before": "韦诞河东卫凯二家，",
+      "after": "韦诞、河东卫凯二家，",
+      "originalPieceText": "韦诞河东卫凯二家，",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "韦诞、河东卫凯二家",
+          "scores": [
+            0.84883
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "韦诞河东卫凯二家",
+          "scores": [
+            0.86053
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "a1f066088ca07fe797a96742661b7ae04e33932388448e3ff2eb6f796ac4627b",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 822,
+      "publicationEnd": 838,
+      "publicationBefore": "志 证 河东 卫 谢 二 家 ,",
+      "publicationContextBefore": " 珊 文 ? 代 录 大 同 ,而\n古 字 少 异 。 又 有 京 光",
+      "publicationContextAfter": "并 号 能 第 。 当 时 全 观 榜 题 、 宝 器 之 铬 悉 是",
+      "publicationBaseSha256": "ce9bdb6eefc14ae00e50a432274d36163b21b3d68804765474233424424b6f6b",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0077-c13-s02.png"
+    },
+    {
+      "id": "p0100-c13-s01",
+      "page": 100,
+      "column": 13,
+      "piece": 1,
+      "box": [
+        426,
+        204,
+        442,
+        254
+      ],
+      "reviewBox": [
+        397,
+        190,
+        462,
+        280
+      ],
+      "consumedColumns": [
+        13
+      ],
+      "before": "F",
+      "after": "下。",
+      "originalPieceText": "F",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原框只截到下字局部；扩框后两尺度均识为下。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "F",
+          "scores": [
+            0.34655
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "F",
+          "scores": [
+            0.34268
+          ],
+          "seconds": 0.014
+        }
+      ],
+      "expandedOcr": [
+        {
+          "scale": 1,
+          "text": "下。",
+          "scores": [
+            0.98638
+          ]
+        },
+        {
+          "scale": 2,
+          "text": "下。",
+          "scores": [
+            0.98746
+          ]
+        }
+      ],
+      "sourceSha256": "853241d83e62c35b6e9026adbee2d7e780b50e130f10aa15d11907dec0f6ae57",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 665,
+      "publicationEnd": 668,
+      "publicationBefore": "下 。",
+      "publicationContextBefore": " 什 , 终 成 别 构 一 体 。 此 九 人 , 允 为 上 之\n",
+      "publicationContextAfter": "\n\n张 超生 并 部 信道 刘 德 升 若 吊 。 衬 定 于 丰 卫",
+      "publicationBaseSha256": "0506e58b10e5766598fa9c760e4b5a5313e57c18579c22e79bbb07228902dd84",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。经回图复核，将同一裁片对应的前一误识字/引号并入替换。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0100-c13-s01.png"
+    },
+    {
+      "id": "p0106-c16-s02",
+      "page": 106,
+      "column": 16,
+      "piece": 2,
+      "box": [
+        146,
+        774,
+        205,
+        1218
+      ],
+      "reviewBox": [
+        146,
+        774,
+        205,
+        1218
+      ],
+      "consumedColumns": [
+        16
+      ],
+      "before": "女」、安」必」、互",
+      "after": "「女」、「安」、「必」、「互」",
+      "originalPieceText": "女」、安」必」、互",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "「女」「安」「必」「互",
+          "scores": [
+            0.88772
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "「女」「安」「必」「互",
+          "scores": [
+            0.91389
+          ],
+          "seconds": 0.022
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "0c7a57d7f2a5d38b939ca17e7909cc19e6965f88bc80e77911d4de8974f9f568",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 698,
+      "publicationEnd": 712,
+      "publicationBefore": "女 ]- 安 ]- 必 五]",
+      "publicationContextBefore": "以 -入 ] 之 类 是 也 。\n\n以 鲜 附 曲 亩 《为 曲 ( ",
+      "publicationContextAfter": " 之 类 是 也 。",
+      "publicationBaseSha256": "776f0d7bd52fea98a217fc056a2ffe5a8cae5b3a39add43ed040d8c07c6b04a5",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0106-c16-s02.png"
+    },
+    {
+      "id": "p0106-c07-s04",
+      "page": 106,
+      "column": 7,
+      "piece": 4,
+      "box": [
+        864,
+        1590,
+        928,
+        2079
+      ],
+      "reviewBox": [
+        864,
+        1590,
+        928,
+        2079
+      ],
+      "consumedColumns": [
+        7
+      ],
+      "before": "」字改「血」从「皿」也。",
+      "after": "」字，改「血」从「皿」也。",
+      "originalPieceText": "」字改「血」从「皿」也。",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "字改「血」从「皿」也",
+          "scores": [
+            0.94547
+          ],
+          "seconds": 0.019
+        },
+        {
+          "scale": 2,
+          "text": "字改「血」从「皿」也",
+          "scores": [
+            0.94849
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "0c7a57d7f2a5d38b939ca17e7909cc19e6965f88bc80e77911d4de8974f9f568",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 330,
+      "publicationEnd": 352,
+      "publicationBefore": "字 , 政 - 血 -从 - 姻 - 也\n[",
+      "publicationContextBefore": " 、 嵌 书 - 稻 字 , 具 去 下 一 点 , 张 书 - 盛 ",
+      "publicationContextAfter": " 盛 -本 从 - 姻 ]\n\n破 当 补 续 王 书 _ 神 字 过 ",
+      "publicationBaseSha256": "776f0d7bd52fea98a217fc056a2ffe5a8cae5b3a39add43ed040d8c07c6b04a5",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0106-c07-s04.png"
+    },
+    {
+      "id": "p0106-c10-s03",
+      "page": 106,
+      "column": 10,
+      "piece": 3,
+      "box": [
+        624,
+        1122,
+        686,
+        1515
+      ],
+      "reviewBox": [
+        624,
+        1122,
+        686,
+        1515
+      ],
+      "consumedColumns": [
+        10
+      ],
+      "before": "须自立其抵背，倕",
+      "after": "须自立其抵背，鍾",
+      "originalPieceText": "须自立其抵背，倕",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图为鍾，旧倕不符。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "须自立其抵背锺",
+          "scores": [
+            0.92154
+          ],
+          "seconds": 0.014
+        },
+        {
+          "scale": 2,
+          "text": "须自立其抵背锺",
+          "scores": [
+            0.92175
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "0c7a57d7f2a5d38b939ca17e7909cc19e6965f88bc80e77911d4de8974f9f568",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 448,
+      "publicationEnd": 464,
+      "publicationBefore": "须 自立 其 抵 肯 , 错 ,",
+      "publicationContextBefore": "是 也 。\n\n分 若 插 背 谓 纵 也 证]- 册 -之 类 ,省 ",
+      "publicationContextAfter": " 王 欧 , 卡 省 守之\n\n合 如 对 目 谓 轿 也 ,八字 { ",
+      "publicationBaseSha256": "776f0d7bd52fea98a217fc056a2ffe5a8cae5b3a39add43ed040d8c07c6b04a5",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0106-c10-s03.png"
+    },
+    {
+      "id": "p0787-c10-s01",
+      "page": 787,
+      "column": 10,
+      "piece": 1,
+      "box": [
+        437,
+        237,
+        501,
+        731
+      ],
+      "reviewBox": [
+        437,
+        237,
+        501,
+        731
+      ],
+      "consumedColumns": [
+        10
+      ],
+      "before": "《华山《石经》“曹全》",
+      "after": "《华山》、《石经》、《曹全》",
+      "originalPieceText": "《华山《石经》“曹全》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《华山》《石经》《曹全》",
+          "scores": [
+            0.981
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "《华山》《石经》《曹全》",
+          "scores": [
+            0.98613
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "38a8625d7f404f87184ccb8b7ab4d01499a4191b4752b4772af955d3ee9ce057",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 545,
+      "publicationEnd": 563,
+      "publicationBefore": "《华山 人 右 经 }《 奋 全 :",
+      "publicationContextBefore": "变 为 波 确 策 ,未 通 分 于 是 《从 方 “< 己 莽 》\n",
+      "publicationContextAfter": "等 碑 ,从 扁 已 极 没 砍 分 此, 如 体 成 拓 。 夫 汉",
+      "publicationBaseSha256": "bf9529fa907a6df7d047a41ecfc76fac8079bc4f064e5a84c1d434040f4e71a6",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0787-c10-s01.png"
+    },
+    {
+      "id": "p0787-c08-s03",
+      "page": 787,
+      "column": 8,
+      "piece": 3,
+      "box": [
+        605,
+        1127,
+        663,
+        1521
+      ],
+      "reviewBox": [
+        605,
+        1127,
+        663,
+        1521
+      ],
+      "consumedColumns": [
+        8
+      ],
+      "before": "《裴岑》《尊楗阁》",
+      "after": "《裴岑》、《尊楗阁》",
+      "originalPieceText": "《裴岑》《尊楗阁》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《裴岑》《尊楗阁》",
+          "scores": [
+            0.92838
+          ],
+          "seconds": 0.014
+        },
+        {
+          "scale": 2,
+          "text": "《裴岑》《尊楗阁》",
+          "scores": [
+            0.92609
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "38a8625d7f404f87184ccb8b7ab4d01499a4191b4752b4772af955d3ee9ce057",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 433,
+      "publicationEnd": 448,
+      "publicationBefore": "《而 崔 》《 壮 权 阁 《",
+      "publicationContextBefore": "\n碑 体 此 方 席 , 笔 益 茂密 。 至 《 究 锌 《地 间 ",
+      "publicationContextAfter": "个 友 》 等 碑 , 变 辆 为 方 , 浏\n狂 成 简 ,类 成 ",
+      "publicationBaseSha256": "bf9529fa907a6df7d047a41ecfc76fac8079bc4f064e5a84c1d434040f4e71a6",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0787-c08-s03.png"
+    },
+    {
+      "id": "p0787-c08-s02",
+      "page": 787,
+      "column": 8,
+      "piece": 2,
+      "box": [
+        605,
+        728,
+        663,
+        1127
+      ],
+      "reviewBox": [
+        605,
+        728,
+        663,
+        1127
+      ],
+      "consumedColumns": [
+        8
+      ],
+      "before": "至《褒斜》《都阁》",
+      "after": "至《褒斜》、《郙阁》",
+      "originalPieceText": "至《褒斜》《都阁》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "郙阁的郙右阝左甫；新OCR鄘不采纳。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "至《褒斜》《鄘阁》",
+          "scores": [
+            0.90505
+          ],
+          "seconds": 0.014
+        },
+        {
+          "scale": 2,
+          "text": "至《褒斜》《鄘阁》",
+          "scores": [
+            0.90715
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "38a8625d7f404f87184ccb8b7ab4d01499a4191b4752b4772af955d3ee9ce057",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 420,
+      "publicationEnd": 432,
+      "publicationBefore": "至 《 究 锌 《地 间",
+      "publicationContextBefore": " 三 公 山 》《 息 否\n碑 体 此 方 席 , 笔 益 茂密 。 ",
+      "publicationContextAfter": " 《而 崔 》《 壮 权 阁 《个 友 》 等 碑 , 变 辆 为 方",
+      "publicationBaseSha256": "bf9529fa907a6df7d047a41ecfc76fac8079bc4f064e5a84c1d434040f4e71a6",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0787-c08-s02.png"
+    },
+    {
+      "id": "p0791-c11-s03",
+      "page": 791,
+      "column": 11,
+      "piece": 3,
+      "box": [
+        505,
+        1146,
+        561,
+        1638
+      ],
+      "reviewBox": [
+        505,
+        1146,
+        561,
+        1638
+      ],
+      "consumedColumns": [
+        11
+      ],
+      "before": "《石门残刻《郁阁颂》",
+      "after": "《石门残刻》、《郙阁颂》",
+      "originalPieceText": "《石门残刻《郁阁颂》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "补齐郙阁颂；新OCR漏郙，旧郁亦不符。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《石门残刻》《阁颂》",
+          "scores": [
+            0.9634
+          ],
+          "seconds": 0.018
+        },
+        {
+          "scale": 2,
+          "text": "《石门残刻》《阁颂》",
+          "scores": [
+            0.96453
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "7ca52a159d95de32e543f3c53cdd2b94a0117808d4d60bb75fef5076477af6c3",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 780,
+      "publicationEnd": 799,
+      "publicationBefore": "人 有 有 门 残 刻 《南阳 顷 “",
+      "publicationContextBefore": " 石刻 》《 开 通 识 伸 道 石刻 “《 丈 岭 纪 功 碑 》 ",
+      "publicationContextAfter": "《 威 伯 著 碑 》《 杞 淮 表\n纪 》 符 以 第 笔 作 来 ",
+      "publicationBaseSha256": "8fe6987c6aaf640527a8755d5914b6974f7c73eb04e15d09dabf63c7565b18c0",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。经回图复核，将同一裁片对应的前一误识字/引号并入替换。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0791-c11-s03.png"
+    },
+    {
+      "id": "p0791-c11-s04",
+      "page": 791,
+      "column": 11,
+      "piece": 4,
+      "box": [
+        505,
+        1638,
+        561,
+        2112
+      ],
+      "reviewBox": [
+        505,
+        1638,
+        561,
+        2112
+      ],
+      "consumedColumns": [
+        11
+      ],
+      "before": "《戚伯著碑》《杨淮表",
+      "after": "《戚伯著碑》、《杨淮表",
+      "originalPieceText": "《戚伯著碑》《杨淮表",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《戚伯著碑》《杨淮表",
+          "scores": [
+            0.96715
+          ],
+          "seconds": 0.018
+        },
+        {
+          "scale": 2,
+          "text": "《戚伯著碑》《杨淮表",
+          "scores": [
+            0.96971
+          ],
+          "seconds": 0.019
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "7ca52a159d95de32e543f3c53cdd2b94a0117808d4d60bb75fef5076477af6c3",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 799,
+      "publicationEnd": 817,
+      "publicationBefore": "《 威 伯 著 碑 》《 杞 淮 表",
+      "publicationContextBefore": " “《 丈 岭 纪 功 碑 》 人 有 有 门 残 刻 《南阳 顷 “",
+      "publicationContextAfter": "\n纪 》 符 以 第 笔 作 来 者 《 寺 海 相 景 看 错 》 ",
+      "publicationBaseSha256": "8fe6987c6aaf640527a8755d5914b6974f7c73eb04e15d09dabf63c7565b18c0",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0791-c11-s04.png"
+    },
+    {
+      "id": "p0791-c01-s04",
+      "page": 791,
+      "column": 1,
+      "piece": 4,
+      "box": [
+        1307,
+        1524,
+        1370,
+        1920
+      ],
+      "reviewBox": [
+        1307,
+        1524,
+        1370,
+        1920
+      ],
+      "consumedColumns": [
+        1
+      ],
+      "before": "《琅琊刻石》、“泰",
+      "after": "《琅琊刻石》、《泰",
+      "originalPieceText": "《琅琊刻石》、“泰",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《琅琊刻石》《泰",
+          "scores": [
+            0.95294
+          ],
+          "seconds": 0.013
+        },
+        {
+          "scale": 2,
+          "text": "《琅琊刻石》《泰",
+          "scores": [
+            0.95254
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "7ca52a159d95de32e543f3c53cdd2b94a0117808d4d60bb75fef5076477af6c3",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 51,
+      "publicationEnd": 65,
+      "publicationBefore": "《 球 绪 刻 石 》《 泰",
+      "publicationContextBefore": "齐 , 知 文 同 匀 法 是 也 。 今 秦 筑 客 存 者 ,有 ",
+      "publicationContextAfter": " 山 刻 石 》\n《会 舌 刻 石 》《 矶 石门 刻 石 》 第 李",
+      "publicationBaseSha256": "8fe6987c6aaf640527a8755d5914b6974f7c73eb04e15d09dabf63c7565b18c0",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0791-c01-s04.png"
+    },
+    {
+      "id": "p0800-c08-s01",
+      "page": 800,
+      "column": 8,
+      "piece": 1,
+      "box": [
+        787,
+        211,
+        839,
+        628
+      ],
+      "reviewBox": [
+        787,
+        211,
+        839,
+        628
+      ],
+      "consumedColumns": [
+        8
+      ],
+      "before": "“二公山碑》之后也。",
+      "after": "《三公山碑》之后也。",
+      "originalPieceText": "“二公山碑》之后也。",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图为三公山碑，旧二少一横。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《三公山碑》之后也",
+          "scores": [
+            0.92611
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "《三公山碑》之后也",
+          "scores": [
+            0.94715
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "11f162eca0b6a21c79c86b871035c1cde1343a8680f42d8dfb40eea777f7a0fb",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 415,
+      "publicationEnd": 434,
+      "publicationBefore": "人 三 公 山 碑 》 之 后 也 .",
+      "publicationContextBefore": "然 凡 瓦 当 , 漠 绷 第 类 ,应 附 秦 权 、 汉 量 、\n",
+      "publicationContextAfter": "\n\n汉 钟 蜡 文 绢 篆 为 多 ,人 太 官 钟 》《 周 阳 候",
+      "publicationBaseSha256": "c489021922b3a81c4b67457858489630d8225d2ea0c1408cb9bcb1e5c4587285",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0800-c08-s01.png"
+    },
+    {
+      "id": "p0800-c09-s04",
+      "page": 800,
+      "column": 9,
+      "piece": 4,
+      "box": [
+        697,
+        1486,
+        759,
+        1965
+      ],
+      "reviewBox": [
+        697,
+        1486,
+        759,
+        1965
+      ],
+      "consumedColumns": [
+        9
+      ],
+      "before": "壶《虑唬尺》皆扁缪，",
+      "after": "壶》、《虑虒尺》皆扁缪，",
+      "originalPieceText": "壶《虑唬尺》皆扁缪，",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图为虑虒尺；虒为厂下虎形，不采OCR唬/號。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "壶》《虑號尺》皆扁缪",
+          "scores": [
+            0.84364
+          ],
+          "seconds": 0.018
+        },
+        {
+          "scale": 2,
+          "text": "壶》《虑號尺》皆扁缪",
+          "scores": [
+            0.83776
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "11f162eca0b6a21c79c86b871035c1cde1343a8680f42d8dfb40eea777f7a0fb",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 483,
+      "publicationEnd": 503,
+      "publicationBefore": "赤 》《 虚 估 尺 》 演 遍 缪 ,",
+      "publicationContextBefore": "为 多 ,人 太 官 钟 》《 周 阳 候 铀 《了 录 相 府 尘 ",
+      "publicationContextAfter": "性 高\n庙 》《 都 仓 *《 考 成 《上 林 “ 详 最 出 有 ",
+      "publicationBaseSha256": "c489021922b3a81c4b67457858489630d8225d2ea0c1408cb9bcb1e5c4587285",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。经回图复核，将同一裁片对应的前一误识字/引号并入替换。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0800-c09-s04.png"
+    },
+    {
+      "id": "p0800-c05-s01",
+      "page": 800,
+      "column": 5,
+      "piece": 1,
+      "box": [
+        1019,
+        309,
+        1081,
+        754
+      ],
+      "reviewBox": [
+        1019,
+        309,
+        1081,
+        754
+      ],
+      "consumedColumns": [
+        5
+      ],
+      "before": "“骀荡万年瓦》瘦硬绝",
+      "after": "《骀荡万年瓦》瘦硬绝",
+      "originalPieceText": "“骀荡万年瓦》瘦硬绝",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图左旁马，保留骀；两次新OCR胎均不采纳。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《胎荡万年瓦》瘦硬绝",
+          "scores": [
+            0.89881
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "《胎荡万年瓦》瘦硬绝",
+          "scores": [
+            0.89659
+          ],
+          "seconds": 0.02
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "11f162eca0b6a21c79c86b871035c1cde1343a8680f42d8dfb40eea777f7a0fb",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 196,
+      "publicationEnd": 215,
+      "publicationBefore": "《 验 东 万 年 万 》 烽 硬 绝",
+      "publicationContextBefore": "体 亦 四 扁 。 学 者 得 其 笔 意 , 杰 足 成 家 .\n\n",
+      "publicationContextAfter": "伦 《都 梧 空 万 :向 带 尖 脚 ,笔法 鹿 同 学 见 汉 《",
+      "publicationBaseSha256": "c489021922b3a81c4b67457858489630d8225d2ea0c1408cb9bcb1e5c4587285",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0800-c05-s01.png"
+    },
+    {
+      "id": "p0807-c03-s03",
+      "page": 807,
+      "column": 3,
+      "piece": 3,
+      "box": [
+        1198,
+        983,
+        1254,
+        1382
+      ],
+      "reviewBox": [
+        1198,
+        983,
+        1254,
+        1382
+      ],
+      "consumedColumns": [
+        3
+      ],
+      "before": "“冯绲》疏宕则有",
+      "after": "《冯绲》；疏宕则有",
+      "originalPieceText": "“冯绲》疏宕则有",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《冯緄》；疏宕则有",
+          "scores": [
+            0.87468
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "《冯緄》；疏宕则有",
+          "scores": [
+            0.86399
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "cf587357e37414a4971188bdbae5a516df9f0d1aa3bed6a67751389c54c77d5d",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 180,
+      "publicationEnd": 196,
+      "publicationBefore": "《 冯 邹 》, 琉 宕 则 有",
+      "publicationContextBefore": "法 体\n气 益 多 : 验 误 则 有 《 申 看 “《 封 龙山 》",
+      "publicationContextAfter": " 《 西 锋 颁 》《 乳 窗 》《 张 寿 》 高 泽\n则 有 《 ",
+      "publicationBaseSha256": "4185149112af7098e5444323151073ee6cfb198b37b8b86574f48d03ffa5ce5a",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0807-c03-s03.png"
+    },
+    {
+      "id": "p0807-c01-s04",
+      "page": 807,
+      "column": 1,
+      "piece": 4,
+      "box": [
+        1359,
+        1553,
+        1415,
+        2073
+      ],
+      "reviewBox": [
+        1359,
+        1553,
+        1415,
+        2073
+      ],
+      "consumedColumns": [
+        1
+      ],
+      "before": "《裴岑《会仙友题字》",
+      "after": "《裴岑》、《会仙友题字》，",
+      "originalPieceText": "《裴岑《会仙友题字》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《裴岑》《会仙友题字》",
+          "scores": [
+            0.92214
+          ],
+          "seconds": 0.019
+        },
+        {
+          "scale": 2,
+          "text": "《裴岑》《会仙友题字》",
+          "scores": [
+            0.93461
+          ],
+          "seconds": 0.019
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "cf587357e37414a4971188bdbae5a516df9f0d1aa3bed6a67751389c54c77d5d",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 56,
+      "publicationEnd": 75,
+      "publicationBefore": "《 丈 淮 “《 会 仙 友 题字\n首",
+      "publicationContextBefore": "王 上 寿 》《 洋 光 刻 石 》 降 为 《 赛 镍 《好 间 》",
+      "publicationContextAfter": "相 茂 梭 深 ,得 秦 相 笔 意 。 乡 篆 则 有 公 二 公 ",
+      "publicationBaseSha256": "4185149112af7098e5444323151073ee6cfb198b37b8b86574f48d03ffa5ce5a",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0807-c01-s04.png"
+    },
+    {
+      "id": "p0807-c01-s03",
+      "page": 807,
+      "column": 1,
+      "piece": 3,
+      "box": [
+        1359,
+        1110,
+        1415,
+        1553
+      ],
+      "reviewBox": [
+        1359,
+        1110,
+        1415,
+        1553
+      ],
+      "consumedColumns": [
+        1
+      ],
+      "before": "降为《褒斜》《都阁》",
+      "after": "降为《褒斜》、《郙阁》",
+      "originalPieceText": "降为《褒斜》《都阁》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "郙阁的郙右阝左甫；两尺度误读郗，按图纠正。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "降为《褒斜》《郗阁》",
+          "scores": [
+            0.90557
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "降为《褒斜》《郗阁》",
+          "scores": [
+            0.90854
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "cf587357e37414a4971188bdbae5a516df9f0d1aa3bed6a67751389c54c77d5d",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 40,
+      "publicationEnd": 56,
+      "publicationBefore": "降 为 《 赛 镍 《好 间 》",
+      "publicationContextBefore": "谓 八 分 也 。 若 《 赵 王 上 寿 》《 洋 光 刻 石 》 ",
+      "publicationContextAfter": "《 丈 淮 “《 会 仙 友 题字\n首相 茂 梭 深 ,得 秦 相 笔",
+      "publicationBaseSha256": "4185149112af7098e5444323151073ee6cfb198b37b8b86574f48d03ffa5ce5a",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0807-c01-s03.png"
+    },
+    {
+      "id": "p0808-c12-s01",
+      "page": 808,
+      "column": 12,
+      "piece": 1,
+      "box": [
+        443,
+        188,
+        505,
+        585
+      ],
+      "reviewBox": [
+        443,
+        188,
+        505,
+        585
+      ],
+      "consumedColumns": [
+        12
+      ],
+      "before": "下见鍾繇梁鹄书，",
+      "after": "下见鍾繇、梁鹄书，",
+      "originalPieceText": "下见鍾繇梁鹄书，",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "下见鍾繇梁鹄书",
+          "scores": [
+            0.87659
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "下见鍾繇梁鹄书",
+          "scores": [
+            0.8671
+          ],
+          "seconds": 0.014
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "4e0bdc6af498c15bc746e09f2831291338872d7c61683092985d988462a60251",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 749,
+      "publicationEnd": 764,
+      "publicationBefore": "下 见 鲁 账 、 梁 锦 书",
+      "publicationContextBefore": " , 北 游 名 山 , 见 李 斯 、 曾 喜 等 书 ,久之 许\n",
+      "publicationContextAfter": " 又 之 格 下 见 蔡 信人 全 经 兰 二 体 义 于 从 见 处",
+      "publicationBaseSha256": "d6e79c3dc279267a236843d6107e5da7a00372bdfd697368931499c3523e1a2a",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0808-c12-s01.png"
+    },
+    {
+      "id": "p0808-c16-s01",
+      "page": 808,
+      "column": 16,
+      "piece": 1,
+      "box": [
+        129,
+        189,
+        184,
+        586
+      ],
+      "reviewBox": [
+        129,
+        189,
+        184,
+        586
+      ],
+      "consumedColumns": [
+        16
+      ],
+      "before": "休《爨宝子》、《灵",
+      "after": "休》、《爨宝子》、《灵",
+      "originalPieceText": "休《爨宝子》、《灵",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "休》《爨宝子》《灵",
+          "scores": [
+            0.90767
+          ],
+          "seconds": 0.018
+        },
+        {
+          "scale": 2,
+          "text": "休》《爨宝子》《灵",
+          "scores": [
+            0.88823
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "4e0bdc6af498c15bc746e09f2831291338872d7c61683092985d988462a60251",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 977,
+      "publicationEnd": 993,
+      "publicationBefore": "休 “《 黑 宝 子 “《 灵 ",
+      "publicationContextBefore": " : 等 碑 显 用 第 笔者 无 论 。 若 《 谷 朗 》《 奢\n",
+      "publicationContextAfter": "库 辜 :人 《期 户 云 《 吊 比 干 。 闸 用 来 体 信 杨",
+      "publicationBaseSha256": "d6e79c3dc279267a236843d6107e5da7a00372bdfd697368931499c3523e1a2a",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。保留归属下一未复核区域的字/开书名号。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0808-c16-s01.png"
+    },
+    {
+      "id": "p0808-c15-s04",
+      "page": 808,
+      "column": 15,
+      "piece": 4,
+      "box": [
+        203,
+        1671,
+        265,
+        2069
+      ],
+      "reviewBox": [
+        203,
+        1671,
+        265,
+        2069
+      ],
+      "consumedColumns": [
+        15
+      ],
+      "before": "论若《谷朗》“郛",
+      "after": "论。若《谷朗》、《郛",
+      "originalPieceText": "论若《谷朗》“郛",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "论若《谷朗》《郛",
+          "scores": [
+            0.9509
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "论若《谷朗》《郛",
+          "scores": [
+            0.94678
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "4e0bdc6af498c15bc746e09f2831291338872d7c61683092985d988462a60251",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 960,
+      "publicationEnd": 976,
+      "publicationBefore": "论 。 若 《 谷 朗 》《 奢",
+      "publicationContextBefore": " ,人事 仲 藏 “《 者 子 建 : 等 碑 显 用 第 笔者 无 ",
+      "publicationContextAfter": "\n休 “《 黑 宝 子 “《 灵 库 辜 :人 《期 户 云 《 吊 ",
+      "publicationBaseSha256": "d6e79c3dc279267a236843d6107e5da7a00372bdfd697368931499c3523e1a2a",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0808-c15-s04.png"
+    },
+    {
+      "id": "p0810-c06-s01",
+      "page": 810,
+      "column": 6,
+      "piece": 1,
+      "box": [
+        917,
+        142,
+        971,
+        531
+      ],
+      "reviewBox": [
+        917,
+        142,
+        971,
+        531
+      ],
+      "consumedColumns": [
+        6
+      ],
+      "before": "，逼近《石经》矣。",
+      "after": "，逼近《石经》矣。",
+      "originalPieceText": "，逼近《石经》矣。",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": ".逼近《石经》矣。",
+          "scores": [
+            0.91044
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": ".逼近《石经》矣。",
+          "scores": [
+            0.89846
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "77d573e744eee6b5936ad57b0b969ddc542efdcc031f8200d2cf6332de79cef4",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 273,
+      "publicationEnd": 287,
+      "publicationBefore": "_ 通 近 人 经》 关 。",
+      "publicationContextBefore": " 矿 阴 同 家 ,党 权 分 中 妙 品 《站 全 碑 阴 》 .\n",
+      "publicationContextAfter": "\n\n《 杨 报 茶 “《 府 固 。 轴 整 古 秀 ,其 碑 侧 纵",
+      "publicationBaseSha256": "43e0fdffcbe888b83b4dff110594e41b193693bc13fc5ff92195c4371f0574fa",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0810-c06-s01.png"
+    },
+    {
+      "id": "p0810-c04-s03",
+      "page": 810,
+      "column": 4,
+      "piece": 3,
+      "box": [
+        1077,
+        1152,
+        1132,
+        1689
+      ],
+      "reviewBox": [
+        1077,
+        1152,
+        1132,
+        1689
+      ],
+      "consumedColumns": [
+        4
+      ],
+      "before": "“都阁》之遗“孔谦》近之",
+      "after": "《郙阁》之遗，《孔谦》近之。",
+      "originalPieceText": "“都阁》之遗“孔谦》近之",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "郙阁的郙右阝左甫；新OCR郗不采纳。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《郗阁》之遗《孔谦》近之",
+          "scores": [
+            0.89935
+          ],
+          "seconds": 0.02
+        },
+        {
+          "scale": 2,
+          "text": "《郗阁》之遗《孔谦》近之",
+          "scores": [
+            0.90264
+          ],
+          "seconds": 0.021
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "77d573e744eee6b5936ad57b0b969ddc542efdcc031f8200d2cf6332de79cef4",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 177,
+      "publicationEnd": 200,
+      "publicationBefore": "阁 之 中 和 乳 谋 过 之 。 N\n\n. ",
+      "publicationContextBefore": "东海 庙 确 。 体 渐 大 阅 , 然 笔 气 镶 丰厚 /有 估 ",
+      "publicationContextAfter": "《有 娟 闪 风华 艳 钊 ,与 《 韩 救 》《 杨 孟 文 <《 ",
+      "publicationBaseSha256": "43e0fdffcbe888b83b4dff110594e41b193693bc13fc5ff92195c4371f0574fa",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。保留归属下一未复核区域的字/开书名号。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0810-c04-s03.png"
+    },
+    {
+      "id": "p0810-c10-s02",
+      "page": 810,
+      "column": 10,
+      "piece": 2,
+      "box": [
+        593,
+        631,
+        649,
+        1124
+      ],
+      "reviewBox": [
+        593,
+        631,
+        649,
+        1124
+      ],
+      "consumedColumns": [
+        10
+      ],
+      "before": "《灵庙碑阴》“晖福寺》",
+      "after": "《灵庙碑阴》、《晖福寺》",
+      "originalPieceText": "《灵庙碑阴》“晖福寺》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《灵庙碑阴》《晖福寺》",
+          "scores": [
+            0.985
+          ],
+          "seconds": 0.018
+        },
+        {
+          "scale": 2,
+          "text": "《灵庙碑阴》《晖福寺》",
+          "scores": [
+            0.98678
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "77d573e744eee6b5936ad57b0b969ddc542efdcc031f8200d2cf6332de79cef4",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 480,
+      "publicationEnd": 500,
+      "publicationBefore": "《 灵 庙 碑 阴 》《 瞧 福 寺 》",
+      "publicationContextBefore": " 落 过 之 ,或 出 中 项 之\n笔 真 书 之 《 虹 龙 颜 “",
+      "publicationContextAfter": " 所 师 祖 也 。《 扎 窗 碑 阴 v 笔 意 深 古 , 首 人",
+      "publicationBaseSha256": "43e0fdffcbe888b83b4dff110594e41b193693bc13fc5ff92195c4371f0574fa",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0810-c10-s02.png"
+    },
+    {
+      "id": "p0811-c07-s04",
+      "page": 811,
+      "column": 7,
+      "piece": 4,
+      "box": [
+        884,
+        1403,
+        945,
+        1805
+      ],
+      "reviewBox": [
+        884,
+        1403,
+        945,
+        1805
+      ],
+      "consumedColumns": [
+        7
+      ],
+      "before": "若鲁峻》《夏承》",
+      "after": "若《鲁峻》、《夏承》、",
+      "originalPieceText": "若鲁峻》《夏承》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "若《魯峻》《夏承》",
+          "scores": [
+            0.92193
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "若《魯峻》《夏承》",
+          "scores": [
+            0.92273
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "bdbb0f61845f8b207ed7db4ac163b700c69f0809d79c10fedc834577e178b18b",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 459,
+      "publicationEnd": 475,
+      "publicationBefore": "若 《 鲁 峻 》《 夏 天 》",
+      "publicationContextBefore": " 依据 ,此 外 人 华山 辜 》 狼 不 政信 徐 浩 之 说 。 ",
+      "publicationContextAfter": "《 扎 统 》 痊 出 附\n会 。 至 《 遍 间 > 明明 有 书 ",
+      "publicationBaseSha256": "8db0412f91f39be4029813f5cf921c2fa8137786511772dbd2d2ffabb2f9ae6c",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0811-c07-s04.png"
+    },
+    {
+      "id": "p0811-c04-s01",
+      "page": 811,
+      "column": 4,
+      "piece": 1,
+      "box": [
+        1125,
+        325,
+        1187,
+        745
+      ],
+      "reviewBox": [
+        1125,
+        325,
+        1187,
+        745
+      ],
+      "consumedColumns": [
+        4
+      ],
+      "before": "“李孟初》“韩仁》皆",
+      "after": "《李孟初》、《韩仁》皆",
+      "originalPieceText": "“李孟初》“韩仁》皆",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《李孟初》《韩仁》皆",
+          "scores": [
+            0.95994
+          ],
+          "seconds": 0.013
+        },
+        {
+          "scale": 2,
+          "text": "《李孟初》《韩仁》皆",
+          "scores": [
+            0.96258
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "bdbb0f61845f8b207ed7db4ac163b700c69f0809d79c10fedc834577e178b18b",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 182,
+      "publicationEnd": 199,
+      "publicationBefore": "《 李 孟 初 《 韩 仁 》 和",
+      "publicationContextBefore": " 》\n《 杨 孟 文 》《 杰 一 初 》 示 中 之 草 也 。\n\n",
+      "publicationContextAfter": " 以 琉 秀 胜 , 验 茶 有 邻 之 所 祖 。 然 唐 翰 似 ",
+      "publicationBaseSha256": "8db0412f91f39be4029813f5cf921c2fa8137786511772dbd2d2ffabb2f9ae6c",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0811-c04-s01.png"
+    },
+    {
+      "id": "p0811-c13-s03",
+      "page": 811,
+      "column": 13,
+      "piece": 3,
+      "box": [
+        399,
+        1138,
+        461,
+        1562
+      ],
+      "reviewBox": [
+        399,
+        1138,
+        461,
+        1562
+      ],
+      "consumedColumns": [
+        13
+      ],
+      "before": "故以“韩勑为锤书",
+      "after": "故以《韩勑》为鍾书",
+      "originalPieceText": "故以“韩勑为锤书",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图为鍾，旧锤不符；《韩勑》按字形照录。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "故以《韩勑》为鍾书",
+          "scores": [
+            0.91755
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "故以《韩勑》为鍾书",
+          "scores": [
+            0.92732
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "bdbb0f61845f8b207ed7db4ac163b700c69f0809d79c10fedc834577e178b18b",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 836,
+      "publicationEnd": 853,
+      "publicationBefore": "故 以 《加 半 :为 钙 书 ,",
+      "publicationContextBefore": " 误 《 范 式 : 为 蔡 体 , 益 见 唐人 之 好 附会 。 ",
+      "publicationContextAfter": "者 亦 不 信也 。\n\n《华山 碑 兰 司 世 以 季 海 之 故 ,",
+      "publicationBaseSha256": "8db0412f91f39be4029813f5cf921c2fa8137786511772dbd2d2ffabb2f9ae6c",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0811-c13-s03.png"
+    },
+    {
+      "id": "p0814-c09-s05",
+      "page": 814,
+      "column": 9,
+      "piece": 5,
+      "box": [
+        699,
+        1872,
+        761,
+        2121
+      ],
+      "reviewBox": [
+        699,
+        1872,
+        761,
+        2121
+      ],
+      "consumedColumns": [
+        9
+      ],
+      "before": "崔卢之书，",
+      "after": "崔、卢之书，",
+      "originalPieceText": "崔卢之书，",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "崔卢之书",
+          "scores": [
+            0.98433
+          ],
+          "seconds": 0.013
+        },
+        {
+          "scale": 2,
+          "text": "崔卢之书",
+          "scores": [
+            0.98175
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "74a7867e0da945e947982fe5d9b3754e0c121c6cc774fc998ecc841aba583226",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 562,
+      "publicationEnd": 571,
+      "publicationBefore": "扒 卢 之 书 ,",
+      "publicationContextBefore": "目 非 朝廷 女 诺 四方 书 机 ,未 崇 妄 染 。 吏 初 重 ",
+      "publicationContextAfter": "\n而 卢 后 无 人 ; 稚 宗 自 洗 \\ 简 兄弟 外 , 尚 有",
+      "publicationBaseSha256": "f96226b482ba88eb0de634f3fa74c44c45f37861958f567f9a5465b81920f3fe",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0814-c09-s05.png"
+    },
+    {
+      "id": "p0814-c13-s03",
+      "page": 814,
+      "column": 13,
+      "piece": 3,
+      "box": [
+        377,
+        1107,
+        439,
+        1548
+      ],
+      "reviewBox": [
+        377,
+        1107,
+        439,
+        1548
+      ],
+      "consumedColumns": [
+        13
+      ],
+      "before": "卫」慎伯称「锤、梁」",
+      "after": "卫」，慎伯称「鍾、梁」",
+      "originalPieceText": "卫」慎伯称「锤、梁」",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图鍾、梁；旧锤不符。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "卫」慎伯称「鍾梁」",
+          "scores": [
+            0.93633
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "卫」慎伯称「鍾梁」",
+          "scores": [
+            0.93262
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "74a7867e0da945e947982fe5d9b3754e0c121c6cc774fc998ecc841aba583226",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 824,
+      "publicationEnd": 839,
+      "publicationBefore": "评 > 慎 伯 称 量 识 >",
+      "publicationContextBefore": " 括 。 后 世 之 书 , 霸 此 二 派 ,只 可 称 为 -条 ",
+      "publicationContextAfter": " 未 当 也 。 投 卫 钢 草 体 微 首\n班 得 伯 英之 篇 ,",
+      "publicationBaseSha256": "f96226b482ba88eb0de634f3fa74c44c45f37861958f567f9a5465b81920f3fe",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0814-c13-s03.png"
+    },
+    {
+      "id": "p0814-c13-s02",
+      "page": 814,
+      "column": 13,
+      "piece": 2,
+      "box": [
+        377,
+        711,
+        439,
+        1107
+      ],
+      "reviewBox": [
+        377,
+        711,
+        439,
+        1107
+      ],
+      "consumedColumns": [
+        13
+      ],
+      "before": "二派，只可称为一锤",
+      "after": "二派，只可称为「鍾",
+      "originalPieceText": "二派，只可称为一锤",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图为「鍾，竖排开引号被旧OCR认作一，鍾误锤。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "二派只可称为「锺",
+          "scores": [
+            0.84495
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "二派只可称为一锺",
+          "scores": [
+            0.87808
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "74a7867e0da945e947982fe5d9b3754e0c121c6cc774fc998ecc841aba583226",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 808,
+      "publicationEnd": 823,
+      "publicationBefore": "二 派 ,只 可 称 为 -条",
+      "publicationContextBefore": " 于 南 , 开 派 认 于\n北 括 。 后 世 之 书 , 霸 此 ",
+      "publicationContextAfter": " 评 > 慎 伯 称 量 识 > 未 当 也 。 投 卫 钢 草 体 ",
+      "publicationBaseSha256": "f96226b482ba88eb0de634f3fa74c44c45f37861958f567f9a5465b81920f3fe",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0814-c13-s02.png"
+    },
+    {
+      "id": "p0820-c07-s02",
+      "page": 820,
+      "column": 7,
+      "piece": 2,
+      "box": [
+        863,
+        631,
+        917,
+        1020
+      ],
+      "reviewBox": [
+        863,
+        631,
+        917,
+        1020
+      ],
+      "consumedColumns": [
+        7
+      ],
+      "before": "甫驎《高湛也!",
+      "after": "甫驎》《高湛》也！",
+      "originalPieceText": "甫驎《高湛也!",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图为馬旁驎；新OCR两尺度读麟，仍不采纳该误识。补齐书名号。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "甫麟》《高湛》也",
+          "scores": [
+            0.92212
+          ],
+          "seconds": 0.021
+        },
+        {
+          "scale": 2,
+          "text": "甫麟》《高湛》也",
+          "scores": [
+            0.92854
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "070d40aec8a999aac9c7a6f8487adf650d15642e91c893ce6016f7b998effc55",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 360,
+      "publicationEnd": 376,
+      "publicationBefore": "责 腾 》《 高 漠 : 也 :",
+      "publicationContextBefore": "若 《 用 福 寺 》 也 安雅\n之 《 王 僧 , 岂 若 《 皇 ",
+      "publicationContextAfter": "\n\n何 言 有 吏 碑 可 无 周 碑 也 ?古朴 之 《图 恪 》,",
+      "publicationBaseSha256": "baf9aea97582fb5edc2bdd3468aa9a02617fade82aab6a742aa42c3ed4370c79",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。经回图复核，将同一裁片对应的前一误识字/引号并入替换。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0820-c07-s02.png"
+    },
+    {
+      "id": "p0820-c09-s01",
+      "page": 820,
+      "column": 9,
+      "piece": 1,
+      "box": [
+        702,
+        235,
+        757,
+        631
+      ],
+      "reviewBox": [
+        702,
+        235,
+        757,
+        631
+      ],
+      "consumedColumns": [
+        9
+      ],
+      "before": "麟》精美之强独",
+      "after": "驎》；精美之《强独",
+      "originalPieceText": "麟》精美之强独",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图馬旁驎，保留；补齐分号和书名号。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "麟》精美之《强独",
+          "scores": [
+            0.84927
+          ],
+          "seconds": 0.018
+        },
+        {
+          "scale": 2,
+          "text": "麟》精美之《强独",
+          "scores": [
+            0.8388
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "070d40aec8a999aac9c7a6f8487adf650d15642e91c893ce6016f7b998effc55",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 450,
+      "publicationEnd": 466,
+      "publicationBefore": "腾 》, 精 美 之 《 强 独",
+      "publicationContextBefore": " 《 灵 庙 》 奇 质 之 《时 珍 》, 不 如 《 皇 前\n上 ",
+      "publicationContextAfter": " 乐 ” 不 如 《 杨 蛋 》, 峻 整 之 贺 玫 植 》 不 如",
+      "publicationBaseSha256": "baf9aea97582fb5edc2bdd3468aa9a02617fade82aab6a742aa42c3ed4370c79",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0820-c09-s01.png"
+    },
+    {
+      "id": "p0820-c11-s01",
+      "page": 820,
+      "column": 11,
+      "piece": 1,
+      "box": [
+        540,
+        236,
+        595,
+        680
+      ],
+      "reviewBox": [
+        540,
+        236,
+        595,
+        680
+      ],
+      "consumedColumns": [
+        11
+      ],
+      "before": "“温泉颂》有之；洞达",
+      "after": "《温泉颂》有之；洞达",
+      "originalPieceText": "“温泉颂》有之；洞达",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《温泉颂》有之洞达",
+          "scores": [
+            0.94051
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "《温泉颂》有之洞达",
+          "scores": [
+            0.93058
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "070d40aec8a999aac9c7a6f8487adf650d15642e91c893ce6016f7b998effc55",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 585,
+      "publicationEnd": 600,
+      "publicationBefore": "《温泉 颁 有 之 ; 泣 达",
+      "publicationContextBefore": " 。 则 《 吊 比 干 。 有 之 丰 庄 之 《 赵 芬 》 则\n",
+      "publicationContextAfter": " 之 人 仲 思 那 》 则 《 杨 大 眼 # 有 之 , 开 整 ",
+      "publicationBaseSha256": "baf9aea97582fb5edc2bdd3468aa9a02617fade82aab6a742aa42c3ed4370c79",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0820-c11-s01.png"
+    },
+    {
+      "id": "p0826-c05-s02",
+      "page": 826,
+      "column": 5,
+      "piece": 2,
+      "box": [
+        1031,
+        626,
+        1087,
+        1070
+      ],
+      "reviewBox": [
+        1031,
+        626,
+        1087,
+        1070
+      ],
+      "consumedColumns": [
+        5
+      ],
+      "before": "政碑》《张宗碑》《敬",
+      "after": "政碑》、《张宗碑》、《敬",
+      "originalPieceText": "政碑》《张宗碑》《敬",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "政碑》《张宗碑》《敬",
+          "scores": [
+            0.93879
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "政碑》《张宗碑》《敬",
+          "scores": [
+            0.92958
+          ],
+          "seconds": 0.019
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "5f5d1a763aedc17eb1dfa9e6ca9e03e7f19cb96a372b2e9ca90cedbdff713cd9",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 258,
+      "publicationEnd": 275,
+      "publicationBefore": "政 碑 *《 和 宗 碑 》《 微",
+      "publicationContextBefore": "名 “ 王 绍 宗 《 王 征 看 临\n终 口授 钳 》《 独 阪 仁",
+      "publicationContextAfter": " 善 寺 碑 》《 于 考 显 碑 》《 溢 藏 禅师 塔 馆 》 沸",
+      "publicationBaseSha256": "f3767e2001f6f0e8bbc8480219271d79a03c13ac8df16975be75019ad3d71992",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0826-c05-s02.png"
+    },
+    {
+      "id": "p0826-c07-s02",
+      "page": 826,
+      "column": 7,
+      "piece": 2,
+      "box": [
+        869,
+        637,
+        925,
+        1131
+      ],
+      "reviewBox": [
+        869,
+        637,
+        925,
+        1131
+      ],
+      "consumedColumns": [
+        7
+      ],
+      "before": "匹《李夫人》《贾嫔墓",
+      "after": "匹。《李夫人》、《贾嫔墓",
+      "originalPieceText": "匹《李夫人》《贾嫔墓",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "匹《李夫人》《贾嫔墓",
+          "scores": [
+            0.9138
+          ],
+          "seconds": 0.018
+        },
+        {
+          "scale": 2,
+          "text": "匹《李夫人》《贾嫔墓",
+          "scores": [
+            0.91707
+          ],
+          "seconds": 0.019
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "5f5d1a763aedc17eb1dfa9e6ca9e03e7f19cb96a372b2e9ca90cedbdff713cd9",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 407,
+      "publicationEnd": 424,
+      "publicationBefore": "区 。 全 夫人 》《 贯 媒 墓",
+      "publicationContextBefore": " 芯 莫 志 》 体裁 峻 绝 ;\n《 王 留 墓志 》 精 秀 无 ",
+      "publicationContextAfter": " 志 》 劲 折 在 《 刘 玉 *《 充 公 颁 : 之 问 ,《 ",
+      "publicationBaseSha256": "f3767e2001f6f0e8bbc8480219271d79a03c13ac8df16975be75019ad3d71992",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0826-c07-s02.png"
+    },
+    {
+      "id": "p0826-c09-s03",
+      "page": 826,
+      "column": 9,
+      "piece": 3,
+      "box": [
+        707,
+        1108,
+        764,
+        1554
+      ],
+      "reviewBox": [
+        707,
+        1108,
+        764,
+        1554
+      ],
+      "consumedColumns": [
+        9
+      ],
+      "before": "圆劲在《刁遵》《曹",
+      "after": "圆劲在《刁遵》、《曹",
+      "originalPieceText": "圆劲在《刁遵》《曹",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "圆劲在《刁遵》《曹",
+          "scores": [
+            0.92362
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "圆劲在《刁遵》《曹",
+          "scores": [
+            0.91983
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "5f5d1a763aedc17eb1dfa9e6ca9e03e7f19cb96a372b2e9ca90cedbdff713cd9",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 578,
+      "publicationEnd": 594,
+      "publicationBefore": "图 劲 在 《 忆 道 》《 章",
+      "publicationContextBefore": "来\n心 真言 ;神似 《 忆 囊 #《 太 常 寺 孙 张 锐志 = ",
+      "publicationContextAfter": " 子 建 “ 之 问 。《 张 氏 墓 志 》\n骨 血 峻 秀 。《 ",
+      "publicationBaseSha256": "f3767e2001f6f0e8bbc8480219271d79a03c13ac8df16975be75019ad3d71992",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0826-c09-s03.png"
+    },
+    {
+      "id": "p0828-c07-s03",
+      "page": 828,
+      "column": 7,
+      "piece": 3,
+      "box": [
+        700,
+        998,
+        763,
+        1392
+      ],
+      "reviewBox": [
+        700,
+        998,
+        763,
+        1392
+      ],
+      "consumedColumns": [
+        7
+      ],
+      "before": "山洞壑，嶔曦窅，",
+      "after": "山洞壑，【待核：原OCR嶔曦窅】，",
+      "originalPieceText": "山洞壑，嶔曦窅，",
+      "status": "已重OCR·待核",
+      "pending": true,
+      "note": "原图末段复杂罕字的个数/部件与码位未完全确定；两尺度多拆一字。保留原OCR待核标记及原图，不能因候选一致定字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "山洞壑嶔曦宿窅",
+          "scores": [
+            0.73725
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "山洞壑嶔曦宿窅",
+          "scores": [
+            0.75008
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "4c28667d3e8bc0b0a61df141841e7508263a08145c273172f02cd122d60f09ec",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 228,
+      "publicationEnd": 242,
+      "publicationBefore": "山涧 从 鲜 典 窗 窒 ,",
+      "publicationContextBefore": "而\n观 之 采 , 丁 疯 器 汉 , 南 换 吴 越 ,所 见 名 ",
+      "publicationContextAfter": " 志 一 同 者 ,而 雄 奇 秀美 , 道 峭 淡\n宕 之 姿 虽 ",
+      "publicationBaseSha256": "3a672793738de82eba182a7e4f891e1dced17b28054d603d692c41b7365f9c9f",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0828-c07-s03.png"
+    },
+    {
+      "id": "p0828-c07-s01",
+      "page": 828,
+      "column": 7,
+      "piece": 1,
+      "box": [
+        700,
+        181,
+        763,
+        600
+      ],
+      "reviewBox": [
+        700,
+        181,
+        763,
+        600
+      ],
+      "consumedColumns": [
+        7
+      ],
+      "before": "观之罘，西窥鄂汉，",
+      "after": "观之罘，西窥鄂汉，",
+      "originalPieceText": "观之罘，西窥鄂汉，",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "观之罘西窥鄂汉",
+          "scores": [
+            0.97257
+          ],
+          "seconds": 0.014
+        },
+        {
+          "scale": 2,
+          "text": "观之罘西窥鄂汉",
+          "scores": [
+            0.96864
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "4c28667d3e8bc0b0a61df141841e7508263a08145c273172f02cd122d60f09ec",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 195,
+      "publicationEnd": 212,
+      "publicationBefore": "观 之 采 , 丁 疯 器 汉 ,",
+      "publicationContextBefore": " 。 余 尝 北 出 长 城 而 临 六 塞 , 东 泛 沧 海 而\n",
+      "publicationContextAfter": " 南 换 吴 越 ,所 见 名 山涧 从 鲜 典 窗 窒 , 志 一 ",
+      "publicationBaseSha256": "3a672793738de82eba182a7e4f891e1dced17b28054d603d692c41b7365f9c9f",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0828-c07-s01.png"
+    },
+    {
+      "id": "p0828-c11-s02",
+      "page": 828,
+      "column": 11,
+      "piece": 2,
+      "box": [
+        378,
+        570,
+        440,
+        966
+      ],
+      "reviewBox": [
+        378,
+        570,
+        440,
+        966
+      ],
+      "consumedColumns": [
+        11
+      ],
+      "before": "“鞏伏龙《秦从》",
+      "after": "《鞏伏龙》、《秦从》",
+      "originalPieceText": "“鞏伏龙《秦从》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《鞏伏龙》《秦从》",
+          "scores": [
+            0.95894
+          ],
+          "seconds": 0.014
+        },
+        {
+          "scale": 2,
+          "text": "《鞏伏龙》《秦从》",
+          "scores": [
+            0.95652
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "4c28667d3e8bc0b0a61df141841e7508263a08145c273172f02cd122d60f09ec",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 480,
+      "publicationEnd": 496,
+      "publicationBefore": "《 春 伏 龙 《人 秦 从 *",
+      "publicationContextBefore": " 看 》《 灵 庙 》《 期 户 云\n《 吊 上 比 干 《高 植 <",
+      "publicationContextAfter": "《 赵 》《 疮 长 献 造像 》 闪 上 为 汉 分 之 别 子 ,",
+      "publicationBaseSha256": "3a672793738de82eba182a7e4f891e1dced17b28054d603d692c41b7365f9c9f",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0828-c11-s02.png"
+    },
+    {
+      "id": "p0831-c15-s02",
+      "page": 831,
+      "column": 15,
+      "piece": 2,
+      "box": [
+        192,
+        587,
+        252,
+        1006
+      ],
+      "reviewBox": [
+        192,
+        587,
+        252,
+        1006
+      ],
+      "consumedColumns": [
+        15
+      ],
+      "before": "《李纬》《圭峰》亦",
+      "after": "《李纬》、《圭峰》亦",
+      "originalPieceText": "《李纬》《圭峰》亦",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《李纬》《圭峰》亦",
+          "scores": [
+            0.9766
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "《李纬》《圭峰》亦",
+          "scores": [
+            0.98428
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "e3bf8332af65645aa4c74b61f25e33ad257f296dcdbf61203a287312be95783d",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 981,
+      "publicationEnd": 997,
+      "publicationBefore": "《 李 伟 》《 诗 峰 》 亦",
+      "publicationContextBefore": " 北 碑 上 乘 。 至 随 《 宋\n永 贵 》 唐 《于 考 显 “",
+      "publicationContextAfter": " 其 裔 也 。\n\n康有为 广 艺 身 双 村 八 一 九",
+      "publicationBaseSha256": "de2da4e8ea3dfce93dce9555fff65a060654a1ea79bf10439a1f3be6744dd1b9",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0831-c15-s02.png"
+    },
+    {
+      "id": "p0831-c15-s01",
+      "page": 831,
+      "column": 15,
+      "piece": 1,
+      "box": [
+        192,
+        187,
+        252,
+        587
+      ],
+      "reviewBox": [
+        192,
+        187,
+        252,
+        587
+      ],
+      "consumedColumns": [
+        15
+      ],
+      "before": "永贵》唐“于孝显》",
+      "after": "永贵》，唐《于孝显》",
+      "originalPieceText": "永贵》唐“于孝显》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "永贵》唐《于孝显》",
+          "scores": [
+            0.97041
+          ],
+          "seconds": 0.013
+        },
+        {
+          "scale": 2,
+          "text": "永贵》唐《于孝显》",
+          "scores": [
+            0.9786
+          ],
+          "seconds": 0.014
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "e3bf8332af65645aa4c74b61f25e33ad257f296dcdbf61203a287312be95783d",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 965,
+      "publicationEnd": 981,
+      "publicationBefore": "永 贵 》 唐 《于 考 显 “",
+      "publicationContextBefore": "超 妙 理 ,兼备 方 图 ,为 北 碑 上 乘 。 至 随 《 宋\n",
+      "publicationContextAfter": "《 李 伟 》《 诗 峰 》 亦 其 裔 也 。\n\n康有为 广 艺 身",
+      "publicationBaseSha256": "de2da4e8ea3dfce93dce9555fff65a060654a1ea79bf10439a1f3be6744dd1b9",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0831-c15-s01.png"
+    },
+    {
+      "id": "p0831-c14-s01",
+      "page": 831,
+      "column": 14,
+      "piece": 1,
+      "box": [
+        272,
+        187,
+        335,
+        584
+      ],
+      "reviewBox": [
+        272,
+        187,
+        335,
+        584
+      ],
+      "consumedColumns": [
+        14
+      ],
+      "before": "驎《凝禅寺体皆",
+      "after": "驎》、《凝禅寺》体皆",
+      "originalPieceText": "驎《凝禅寺体皆",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "末段原图为馬旁驎，保留；补齐书名号。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "驎《凝禅寺》体皆",
+          "scores": [
+            0.90063
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "驎《凝禅寺》体皆",
+          "scores": [
+            0.89866
+          ],
+          "seconds": 0.013
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "e3bf8332af65645aa4c74b61f25e33ad257f296dcdbf61203a287312be95783d",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 889,
+      "publicationEnd": 905,
+      "publicationBefore": "腾 》《 九 祥 寺 》 体 上",
+      "publicationContextBefore": ",杰出 卫 宗 。《 司 马 元 兴 》《 备 区 训 *《 皇 而\n",
+      "publicationContextAfter": " 相 近 。《 解 伯 达 造像 + 办 有 奇 超 妙 理 ,兼备 ",
+      "publicationBaseSha256": "de2da4e8ea3dfce93dce9555fff65a060654a1ea79bf10439a1f3be6744dd1b9",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。经回图复核，将同一裁片对应的前一误识字/引号并入替换。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0831-c14-s01.png"
+    },
+    {
+      "id": "p0832-c08-s03",
+      "page": 832,
+      "column": 8,
+      "piece": 3,
+      "box": [
+        764,
+        1134,
+        828,
+        1556
+      ],
+      "reviewBox": [
+        764,
+        1134,
+        828,
+        1556
+      ],
+      "consumedColumns": [
+        8
+      ],
+      "before": "汉“子斿残碑》“马",
+      "after": "汉《子斿残碑》；《马",
+      "originalPieceText": "汉“子斿残碑》“马",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "汉《子斿残碑》；《马",
+          "scores": [
+            0.88248
+          ],
+          "seconds": 0.014
+        },
+        {
+          "scale": 2,
+          "text": "汉《子斿残碑》；《马",
+          "scores": [
+            0.90436
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "49566d9d739c37dac888cd654d7381d1d48bddcf3ed20916525a993e38d1fc8f",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 401,
+      "publicationEnd": 414,
+      "publicationBefore": "汉人 诗 残 碑 》《 马",
+      "publicationContextBefore": " 弥 黑 女 碑 : 礁 强 无 下 然 顺 带 质 扑 , 出 于 ",
+      "publicationContextAfter": " 鸣 寺 》 晤 近 之 , 亦 是 卫 派\n唐人 寞 学 之 性 东",
+      "publicationBaseSha256": "a2e585df2138bd20bdbf4970893b4508701d37c30ecb447db594af4017b6e434",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0832-c08-s03.png"
+    },
+    {
+      "id": "p0832-c06-s02",
+      "page": 832,
+      "column": 6,
+      "piece": 2,
+      "box": [
+        925,
+        717,
+        989,
+        1159
+      ],
+      "reviewBox": [
+        925,
+        717,
+        989,
+        1159
+      ],
+      "consumedColumns": [
+        6
+      ],
+      "before": "是锤法“王偃》“王",
+      "after": "是鍾法。《王偃》、《王",
+      "originalPieceText": "是锤法“王偃》“王",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图鍾，旧锤不符。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "是鍾法《王偃》《王",
+          "scores": [
+            0.78665
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "是鍾法《王偃》《王",
+          "scores": [
+            0.8578
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "49566d9d739c37dac888cd654d7381d1d48bddcf3ed20916525a993e38d1fc8f",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 295,
+      "publicationEnd": 313,
+      "publicationBefore": "是 镭 法 “《 生 全 “《 王 ",
+      "publicationContextBefore": " 香 光 亦 其 除 派 也 。\n\n《高 植 “ 体 其 泽 劲 验 ",
+      "publicationContextAfter": "信人 微 有 相近 , 然 泽 十 过 其, 后 世 宣传 , 惟 鲁",
+      "publicationBaseSha256": "a2e585df2138bd20bdbf4970893b4508701d37c30ecb447db594af4017b6e434",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。保留归属下一未复核区域的字/开书名号。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0832-c06-s02.png"
+    },
+    {
+      "id": "p0832-c04-s04",
+      "page": 832,
+      "column": 4,
+      "piece": 4,
+      "box": [
+        1088,
+        1509,
+        1151,
+        1914
+      ],
+      "reviewBox": [
+        1088,
+        1509,
+        1151,
+        1914
+      ],
+      "consumedColumns": [
+        4
+      ],
+      "before": "《王留》《韦利涉》",
+      "after": "《王留》、《韦利涉》",
+      "originalPieceText": "《王留》《韦利涉》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《王留》《韦利涉》",
+          "scores": [
+            0.98193
+          ],
+          "seconds": 0.014
+        },
+        {
+          "scale": 2,
+          "text": "《王留》《韦利涉》",
+          "scores": [
+            0.98464
+          ],
+          "seconds": 0.014
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "49566d9d739c37dac888cd654d7381d1d48bddcf3ed20916525a993e38d1fc8f",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 212,
+      "publicationEnd": 228,
+      "publicationBefore": "《 主 留 》《 韦 利 涉 》",
+      "publicationContextBefore": " 风尘 撩 。 唐 初 小 碑 最 多 此 种 , 若 《 称 兴 :",
+      "publicationContextAfter": "《 马 看\n起 垦 图 :并 其 缩 续 , 流 所 人间 吴兴 香 ",
+      "publicationBaseSha256": "a2e585df2138bd20bdbf4970893b4508701d37c30ecb447db594af4017b6e434",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0832-c04-s04.png"
+    },
+    {
+      "id": "p0840-c02-s03",
+      "page": 840,
+      "column": 2,
+      "piece": 3,
+      "box": [
+        1241,
+        1224,
+        1299,
+        1643
+      ],
+      "reviewBox": [
+        1241,
+        1224,
+        1299,
+        1643
+      ],
+      "consumedColumns": [
+        2
+      ],
+      "before": "阙《温泉颂》辅之。",
+      "after": "阙》、《温泉颂》辅之。",
+      "originalPieceText": "阙《温泉颂》辅之。",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "阙》《温泉颂》辅之",
+          "scores": [
+            0.85144
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "阙》《温泉颂》辅之",
+          "scores": [
+            0.86558
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "f2bd371debe2c69195cc43982c77be5bfca036302e386f9e4090a22e74114b8f",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 53,
+      "publicationEnd": 66,
+      "publicationBefore": "交 《温泉 颁 : 输 之",
+      "publicationContextBefore": "《 奉 福 寺 为 丰厚 茂密 之 宗 人 稳 子 容 “《 梁 石 ",
+      "publicationContextAfter": "\n\n右 四 宗 中\n\n《 张 交 为 质 竖 偏 宕 之 宗 人 马 ",
+      "publicationBaseSha256": "26c5a98e53c43ba15b7d9b464076bd1a2e469bbe7212ccfd4ff80b031c392ede",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0840-c02-s03.png"
+    },
+    {
+      "id": "p0840-c08-s02",
+      "page": 840,
+      "column": 8,
+      "piece": 2,
+      "box": [
+        759,
+        707,
+        814,
+        1152
+      ],
+      "reviewBox": [
+        759,
+        707,
+        814,
+        1152
+      ],
+      "consumedColumns": [
+        8
+      ],
+      "before": "之宗《高湛》“刘懿",
+      "after": "之宗，《高湛》、《刘懿》",
+      "originalPieceText": "之宗《高湛》“刘懿",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "之宗《高湛》《刘懿》",
+          "scores": [
+            0.95515
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "之宗《高湛》《刘懿》",
+          "scores": [
+            0.96025
+          ],
+          "seconds": 0.019
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "f2bd371debe2c69195cc43982c77be5bfca036302e386f9e4090a22e74114b8f",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 281,
+      "publicationEnd": 299,
+      "publicationBefore": "之 宗 人 高 洪 》《 刘 鼠 。",
+      "publicationContextBefore": "王 “《 莉 子 建 : 轴 之\n\n《 刁 攻 :为 虚 和 贺 静 ",
+      "publicationContextAfter": " 畏 之 。\n\n《吴平 忠 候 神道 :为 平整 匀 带 之 宗 人 ",
+      "publicationBaseSha256": "26c5a98e53c43ba15b7d9b464076bd1a2e469bbe7212ccfd4ff80b031c392ede",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0840-c08-s02.png"
+    },
+    {
+      "id": "p0840-c05-s02",
+      "page": 840,
+      "column": 5,
+      "piece": 2,
+      "box": [
+        1000,
+        808,
+        1056,
+        1251
+      ],
+      "reviewBox": [
+        1000,
+        808,
+        1056,
+        1251
+      ],
+      "consumedColumns": [
+        5
+      ],
+      "before": "《王偃》《王僧》《臧",
+      "after": "《王偃》、《王僧》、《臧",
+      "originalPieceText": "《王偃》《王僧》《臧",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《王偃》《王僧》《臧",
+          "scores": [
+            0.90969
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "《王偃》《王僧》《臧",
+          "scores": [
+            0.96163
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "f2bd371debe2c69195cc43982c77be5bfca036302e386f9e4090a22e74114b8f",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 132,
+      "publicationEnd": 151,
+      "publicationBefore": "人 王 人 笨 》《 王 僧 “《 嗪",
+      "publicationContextBefore": "人 马 鸣 寺 辅 之 。\n\n《高 植 :为 泽 劲 质 推 之 宗 ",
+      "publicationContextAfter": " 质 。 输 之。\n\n《 李 超 为 体 骨 峻 美 之 宗 人 解 ",
+      "publicationBaseSha256": "26c5a98e53c43ba15b7d9b464076bd1a2e469bbe7212ccfd4ff80b031c392ede",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0840-c05-s02.png"
+    },
+    {
+      "id": "p0848-c02-s02",
+      "page": 848,
+      "column": 2,
+      "piece": 2,
+      "box": [
+        1246,
+        745,
+        1304,
+        1209
+      ],
+      "reviewBox": [
+        1246,
+        745,
+        1304,
+        1209
+      ],
+      "consumedColumns": [
+        2
+      ],
+      "before": "「将」、「军」、「宁」、「乌」",
+      "after": "「将」、「军」、「宁」、「乌」",
+      "originalPieceText": "「将」、「军」、「宁」、「乌」",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "末字为乌，不采第一尺度的鸟；第二尺度与原图一致。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "「将」「军」「宁」「鸟」",
+          "scores": [
+            0.78372
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "「将」「军」「宁」「乌」",
+          "scores": [
+            0.78761
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "f6e4f289ae9d9f03f6bb8422395bd06612561c46113a4777f84e60e567890f3c",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 35,
+      "publicationEnd": 54,
+      "publicationBefore": "- 将- 军 二 二 宁 ]- 乌 -",
+      "publicationContextBefore": "历代 书法 论文 和 人 三 六\n\n《 灵 庙 碑 阴 \" 佳 绝 其",
+      "publicationContextAfter": "- 洛 -[ 陵 -- 江 “高 ][ 州 -等 字 ,笔墨\n泽 移 ",
+      "publicationBaseSha256": "64eeb07fab49fba56e5aced38a0ea8ef89ad404ccdf5629150bf39b3ac94baf2",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0848-c02-s02.png"
+    },
+    {
+      "id": "p0848-c10-s04",
+      "page": 848,
+      "column": 10,
+      "piece": 4,
+      "box": [
+        603,
+        1459,
+        658,
+        1897
+      ],
+      "reviewBox": [
+        603,
+        1459,
+        658,
+        1897
+      ],
+      "consumedColumns": [
+        10
+      ],
+      "before": "二种争盟，可谓极盛。",
+      "after": "二种争盟，可谓极盛。",
+      "originalPieceText": "二种争盟，可谓极盛。",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "二种争盟可谓极盛",
+          "scores": [
+            0.94335
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "二种争盟可谓极盛",
+          "scores": [
+            0.94237
+          ],
+          "seconds": 0.019
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "f6e4f289ae9d9f03f6bb8422395bd06612561c46113a4777f84e60e567890f3c",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 526,
+      "publicationEnd": 543,
+      "publicationBefore": "种 争 盟 , 可 谓 极 盛 。",
+      "publicationContextBefore": "》 为 方 笔 之 极 物 入 云 峰 》 为 图 笔 之 极 过 ,",
+      "publicationContextAfter": "《 四 山 摩\n崖 通 赤 档 , 备 方 图 ,局 泽 简 称 , ",
+      "publicationBaseSha256": "64eeb07fab49fba56e5aced38a0ea8ef89ad404ccdf5629150bf39b3ac94baf2",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0848-c10-s04.png"
+    },
+    {
+      "id": "p0848-c03-s02",
+      "page": 848,
+      "column": 3,
+      "piece": 2,
+      "box": [
+        1159,
+        616,
+        1222,
+        1087
+      ],
+      "reviewBox": [
+        1159,
+        616,
+        1222,
+        1087
+      ],
+      "consumedColumns": [
+        3
+      ],
+      "before": "“琅琊台》《石经》笔意",
+      "after": "《琅琊台》、《石经》笔意",
+      "originalPieceText": "“琅琊台》《石经》笔意",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《琅琊台》《石经》笔意",
+          "scores": [
+            0.96646
+          ],
+          "seconds": 0.015
+        },
+        {
+          "scale": 2,
+          "text": "《琅琊台》《石经》笔意",
+          "scores": [
+            0.97159
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "f6e4f289ae9d9f03f6bb8422395bd06612561c46113a4777f84e60e567890f3c",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 98,
+      "publicationEnd": 121,
+      "publicationBefore": "“《 现 于 台 》《 石 经 》 笔 意 ,",
+      "publicationContextBefore": "-- 江 “高 ][ 州 -等 字 ,笔墨\n泽 移 ,大 有 合 鼓 ",
+      "publicationContextAfter": "真正 书 之 极 则 ,得 其 指甲 ,可 无 唐 宋 人 人 。\n\n",
+      "publicationBaseSha256": "64eeb07fab49fba56e5aced38a0ea8ef89ad404ccdf5629150bf39b3ac94baf2",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0848-c03-s02.png"
+    },
+    {
+      "id": "p0864-c03-s02",
+      "page": 864,
+      "column": 3,
+      "piece": 2,
+      "box": [
+        1172,
+        661,
+        1236,
+        1055
+      ],
+      "reviewBox": [
+        1172,
+        661,
+        1236,
+        1055
+      ],
+      "consumedColumns": [
+        3
+      ],
+      "before": "卿，谓《醴泉》难学，",
+      "after": "卿，谓《醴泉》难学，",
+      "originalPieceText": "卿，谓《醴泉》难学，",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "卿谓《醴泉》难学",
+          "scores": [
+            0.94542
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "卿谓《醴泉》难学",
+          "scores": [
+            0.94995
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "35b302a543ce3b35a94f21ea7c70c7fd71d08ab511c514f0e0150a54e62df63b",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 123,
+      "publicationEnd": 142,
+      "publicationBefore": "孵 , 调 《 枉 泉 》 礁 学 ,",
+      "publicationContextBefore": "法 。 少 有 入 处 , 仍 苦\n调 琉 .后 见 陈 兰 十 京 ",
+      "publicationContextAfter": " 欧 书 恰 有 小 欧 便 因 碑 辽 可 步 赵 耳 。 习 之 ",
+      "publicationBaseSha256": "46e3307dd2586e566744d26119b84adad0070c08ef59a1b44ccdb259a4082dfc",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0864-c03-s02.png"
+    },
+    {
+      "id": "p0864-c05-s04",
+      "page": 864,
+      "column": 5,
+      "piece": 4,
+      "box": [
+        1013,
+        1598,
+        1074,
+        2094
+      ],
+      "reviewBox": [
+        1013,
+        1598,
+        1074,
+        2094
+      ],
+      "consumedColumns": [
+        5
+      ],
+      "before": "《阁帖》杌之，姜尧章最",
+      "after": "《阁帖》杭之，姜尧章最",
+      "originalPieceText": "《阁帖》杌之，姜尧章最",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图木旁亢，读杭；旧稿及两尺度新OCR均读杌，按图纠正。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《阁帖》杌之姜尧章最",
+          "scores": [
+            0.89345
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "《阁帖》杌之，姜尧章最",
+          "scores": [
+            0.8679
+          ],
+          "seconds": 0.018
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "35b302a543ce3b35a94f21ea7c70c7fd71d08ab511c514f0e0150a54e62df63b",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 314,
+      "publicationEnd": 335,
+      "publicationBefore": "《 阅 帖 》 横 之 , 姜 郑 章 最",
+      "publicationContextBefore": "由 入 也 。 间 及 行 草 , 取 孙 过 庭 《 书 说》 及 ",
+      "publicationContextAfter": "\n称 了 张 艺 索 晴 、 皇 象 章 草 ,以 时 人 罕 及 ,",
+      "publicationBaseSha256": "46e3307dd2586e566744d26119b84adad0070c08ef59a1b44ccdb259a4082dfc",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0864-c05-s04.png"
+    },
+    {
+      "id": "p0864-c04-s03",
+      "page": 864,
+      "column": 4,
+      "piece": 3,
+      "box": [
+        1093,
+        1215,
+        1155,
+        1635
+      ],
+      "reviewBox": [
+        1093,
+        1215,
+        1155,
+        1635
+      ],
+      "consumedColumns": [
+        4
+      ],
+      "before": "公》《元秘塔》“颜",
+      "after": "公》、《元秘塔》、《颜",
+      "originalPieceText": "公》《元秘塔》“颜",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "原图印元秘塔，照录元，不按通行碑名改玄。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "公》《元秘塔》《颜",
+          "scores": [
+            0.91075
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "公》《元秘塔》《颜",
+          "scores": [
+            0.92503
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "35b302a543ce3b35a94f21ea7c70c7fd71d08ab511c514f0e0150a54e62df63b",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 224,
+      "publicationEnd": 235,
+      "publicationBefore": "公元 秘 塔 》《 闫",
+      "publicationContextBefore": " 京 姥 得 力 在 此 也 。 因 站 取 人 主峰 》《 不 蕉 ",
+      "publicationContextAfter": " 家 庙 : 临 之 , 乃 少 解 结\n构 , 盖 虽 小 道 ,非",
+      "publicationBaseSha256": "46e3307dd2586e566744d26119b84adad0070c08ef59a1b44ccdb259a4082dfc",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0864-c04-s03.png"
+    },
+    {
+      "id": "p0871-c06-s01",
+      "page": 871,
+      "column": 6,
+      "piece": 1,
+      "box": [
+        947,
+        217,
+        1010,
+        611
+      ],
+      "reviewBox": [
+        947,
+        217,
+        1010,
+        611
+      ],
+      "consumedColumns": [
+        6
+      ],
+      "before": "之温，鍾繇《雪寒》",
+      "after": "之温，鍾繇《雪寒》、",
+      "originalPieceText": "之温，鍾繇《雪寒》",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "之溫鍾繇《雪寒》",
+          "scores": [
+            0.83837
+          ],
+          "seconds": 0.013
+        },
+        {
+          "scale": 2,
+          "text": "之溫鍾繇《雪寒》",
+          "scores": [
+            0.83669
+          ],
+          "seconds": 0.017
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "92499c20db83d5b8809e6144ffba69b387e1f7d007e26b1426111a0a91f95fc5",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 327,
+      "publicationEnd": 344,
+      "publicationBefore": "之 温 , 钙 三 《 雪 寒 》",
+      "publicationContextBefore": " 之 章 草 , 若 王 导 之 琉 , 竺 勒 之 前 , 谢 安\n",
+      "publicationContextAfter": " 人 内 合 》 之 雅 , 扣 军 《奉贤 “《 散 势 《乡里 “",
+      "publicationBaseSha256": "e493908cd35ae9fe2f44ce8b39afed99b2a14d5f69806448327b35243c257e5d",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0871-c06-s01.png"
+    },
+    {
+      "id": "p0871-c06-s04",
+      "page": 871,
+      "column": 6,
+      "piece": 4,
+      "box": [
+        947,
+        1473,
+        1010,
+        1916
+      ],
+      "reviewBox": [
+        947,
+        1473,
+        1010,
+        1916
+      ],
+      "consumedColumns": [
+        6
+      ],
+      "before": "“苦热》《奉橘》之雄",
+      "after": "《苦热》、《奉橘》之雄",
+      "originalPieceText": "“苦热》《奉橘》之雄",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《苦热》《奉橘》之雄",
+          "scores": [
+            0.89664
+          ],
+          "seconds": 0.017
+        },
+        {
+          "scale": 2,
+          "text": "《苦热》《奉橘》之雄",
+          "scores": [
+            0.90918
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "92499c20db83d5b8809e6144ffba69b387e1f7d007e26b1426111a0a91f95fc5",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 379,
+      "publicationEnd": 397,
+      "publicationBefore": "《 苦 热 》《 奉 桥 》 之 雄",
+      "publicationContextBefore": " 人 内 合 》 之 雅 , 扣 军 《奉贤 “《 散 势 《乡里 “",
+      "publicationContextAfter": " 深 , 献 之\n《地 黄 》《 奉 对 “《 兰 草 》 之 沈 著",
+      "publicationBaseSha256": "e493908cd35ae9fe2f44ce8b39afed99b2a14d5f69806448327b35243c257e5d",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0871-c06-s04.png"
+    },
+    {
+      "id": "p0871-c06-s02",
+      "page": 871,
+      "column": 6,
+      "piece": 2,
+      "box": [
+        947,
+        611,
+        1010,
+        1055
+      ],
+      "reviewBox": [
+        947,
+        611,
+        1010,
+        1055
+      ],
+      "consumedColumns": [
+        6
+      ],
+      "before": "《丙舍》之雅右军《诸",
+      "after": "《丙舍》之雅，右军《诸",
+      "originalPieceText": "《丙舍》之雅右军《诸",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "《丙舍》之雅右军《诸",
+          "scores": [
+            0.94406
+          ],
+          "seconds": 0.016
+        },
+        {
+          "scale": 2,
+          "text": "《丙舍》之雅右军《诸",
+          "scores": [
+            0.95305
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "92499c20db83d5b8809e6144ffba69b387e1f7d007e26b1426111a0a91f95fc5",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 345,
+      "publicationEnd": 365,
+      "publicationBefore": "人 内 合 》 之 雅 , 扣 军 《奉",
+      "publicationContextBefore": " , 竺 勒 之 前 , 谢 安\n之 温 , 钙 三 《 雪 寒 》 ",
+      "publicationContextAfter": "贤 “《 散 势 《乡里 “《 苦 热 》《 奉 桥 》 之 雄 深 ",
+      "publicationBaseSha256": "e493908cd35ae9fe2f44ce8b39afed99b2a14d5f69806448327b35243c257e5d",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0871-c06-s02.png"
+    },
+    {
+      "id": "p0872-c02-s05",
+      "page": 872,
+      "column": 2,
+      "piece": 5,
+      "box": [
+        1217,
+        1844,
+        1280,
+        2071
+      ],
+      "reviewBox": [
+        1217,
+        1844,
+        1280,
+        2071
+      ],
+      "consumedColumns": [
+        2
+      ],
+      "before": "僄过甚，俊",
+      "after": "僄过甚，俊",
+      "originalPieceText": "僄过甚，俊",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "僄过甚俊",
+          "scores": [
+            0.95822
+          ],
+          "seconds": 0.014
+        },
+        {
+          "scale": 2,
+          "text": "僄过甚俊",
+          "scores": [
+            0.95736
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "e2a9cdf3b65ce3b509916c5c607ed5f266fcae5bafaa3fcfc433cdde90c190ac",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 85,
+      "publicationEnd": 92,
+      "publicationBefore": "乔 过 其 俊",
+      "publicationContextBefore": "第 一 。 米 友 仁 书 中 含 ,月 富 外 拓 而 南宫 做人 ",
+      "publicationContextAfter": "\n若 跳 扒 则 有 之 , 殊 失 庄 若 对 越 之 意 , 若 ",
+      "publicationBaseSha256": "f3803e1b4f115332f46694b26b6c3aed22d8f3b91015bb410cf14244847eb5c1",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0872-c02-s05.png"
+    },
+    {
+      "id": "p0872-c03-s03",
+      "page": 872,
+      "column": 3,
+      "piece": 3,
+      "box": [
+        1136,
+        1083,
+        1198,
+        1478
+      ],
+      "reviewBox": [
+        1136,
+        1083,
+        1198,
+        1478
+      ],
+      "consumedColumns": [
+        3
+      ],
+      "before": "书，则深奇穠縟，肌",
+      "after": "书，则深奇穠縟，肌",
+      "originalPieceText": "书，则深奇穠縟，肌",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "书则深奇穠縟肌",
+          "scores": [
+            0.8944
+          ],
+          "seconds": 0.013
+        },
+        {
+          "scale": 2,
+          "text": "书则深奇穠縟肌",
+          "scores": [
+            0.90054
+          ],
+          "seconds": 0.016
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "e2a9cdf3b65ce3b509916c5c607ed5f266fcae5bafaa3fcfc433cdde90c190ac",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 131,
+      "publicationEnd": 145,
+      "publicationBefore": "书 央 深 奇 稻 弓 ,用",
+      "publicationContextBefore": " 扒 则 有 之 , 殊 失 庄 若 对 越 之 意 , 若 小 米 ",
+      "publicationContextAfter": " 态 丰 才 -\n\n后 忠武 书 力 研 徐 地 ,明太 祖 书 梭 ",
+      "publicationBaseSha256": "f3803e1b4f115332f46694b26b6c3aed22d8f3b91015bb410cf14244847eb5c1",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0872-c03-s03.png"
+    },
+    {
+      "id": "p0872-c03-s04",
+      "page": 872,
+      "column": 3,
+      "piece": 4,
+      "box": [
+        1136,
+        1478,
+        1198,
+        1695
+      ],
+      "reviewBox": [
+        1136,
+        1478,
+        1198,
+        1695
+      ],
+      "consumedColumns": [
+        3
+      ],
+      "before": "态丰嫣矣",
+      "after": "态丰嫣矣。",
+      "originalPieceText": "态丰嫣矣",
+      "status": "已修改完毕",
+      "pending": false,
+      "note": "逐字查看原图；保留可辨正文，补齐原图可见的标点/书名号，不以OCR一致代替核字。",
+      "ocr": [
+        {
+          "scale": 1,
+          "text": "态丰嫣矣",
+          "scores": [
+            0.8364
+          ],
+          "seconds": 0.014
+        },
+        {
+          "scale": 2,
+          "text": "态丰嫣矣",
+          "scores": [
+            0.8313
+          ],
+          "seconds": 0.015
+        }
+      ],
+      "expandedOcr": [],
+      "sourceSha256": "e2a9cdf3b65ce3b509916c5c607ed5f266fcae5bafaa3fcfc433cdde90c190ac",
+      "reviewedAt": "2026-10-18",
+      "reviewer": "AI助手逐区对照原图；非独立专家盲标",
+      "publicationStart": 146,
+      "publicationEnd": 153,
+      "publicationBefore": "态 丰 才 -",
+      "publicationContextBefore": "庄 若 对 越 之 意 , 若 小 米 书 央 深 奇 稻 弓 ,用 ",
+      "publicationContextAfter": "\n\n后 忠武 书 力 研 徐 地 ,明太 祖 书 梭 强 无 敌 宁 ",
+      "publicationBaseSha256": "f3803e1b4f115332f46694b26b6c3aed22d8f3b91015bb410cf14244847eb5c1",
+      "boundaryReview": "自动对齐后检查相邻上下文，保留原段落分隔。",
+      "facsimile": "./screening-data/targeted-20261018/crops/p0872-c03-s04.png"
+    }
+  ]
+}

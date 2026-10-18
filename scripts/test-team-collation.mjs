@@ -31,10 +31,10 @@ test('100 reviewed pages have matching source hashes and honest completion label
     const csv = read(`part-${release.part}-collated-status.csv`);
     for (const page of release.pages) {
       assert.ok(txt.includes(page.text));
-      assert.ok(csv.includes(`${page.page},${page.status},${page.corrections.length},${page.pending.length},2026-10-17`));
+      assert.ok(csv.includes(`${page.page},${page.status},${page.corrections.length},${page.pending.length},${page.reviewedAt}`));
     }
   }
-  assert.equal(completed, 93); assert.equal(changes, 73);
+  assert.equal(completed, 93); assert.equal(changes, 83);
   assert.deepEqual(releases[1].pages.map(p=>p.page), Array.from({length:70},(_,i)=>259+i));
 });
 

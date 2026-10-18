@@ -1,4 +1,5 @@
-import { validCollation, publicationSummary } from './team-collation.js?v=20261017-team';
+import { validCollation, publicationSummary } from './team-collation.js?v=20261018-targeted';
+import { validTargeted, targetedSummary } from './targeted-ocr.js?v=20261018-targeted';
 // Keep the deadline active through body parsing, not just response headers.
 export async function readJson(url, { fetcher = fetch, timeoutMs = 15000 } = {}) {
   const controller = new AbortController();
@@ -38,12 +39,16 @@ export function createMaterialLoader(data, options = {}) {
             Array.isArray(item.contextual?.uncertainties) &&
             (item.collated === undefined ? expected[i].publication === undefined :
               validCollation(item.collated, item.page) &&
-              JSON.stringify(publicationSummary(item.collated)) === JSON.stringify(expected[i].publication)));
+              JSON.stringify(publicationSummary(item.collated)) === JSON.stringify(expected[i].publication)) &&
+            (item.targeted === undefined ? expected[i].targetedSummary === undefined :
+              validTargeted(item.targeted, item.page, item.ocr) &&
+              JSON.stringify(targetedSummary(item.targeted)) === JSON.stringify(expected[i].targetedSummary)));
         if (!valid) throw new Error('本页材料不完整或与页码索引不匹配');
         // Attach only after validating the entire chunk. Never touch local reviews.
         for (const item of payload.pages) Object.assign(pages.get(item.page), {
           ocr: item.ocr, layout: item.layout, contextual: item.contextual,
           ...(item.collated ? { collated: item.collated } : {}),
+          ...(item.targeted ? { targeted: item.targeted } : {}),
         });
       }).catch(error => { requests.delete(path); throw error; });
       requests.set(path, request);

@@ -1,7 +1,8 @@
-import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=20261017-team';
-import { publicationLabel } from './team-collation.js?v=20261017-team';
+import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=20261018-targeted';
+import { publicationLabel } from './team-collation.js?v=20261018-targeted';
+import { targetedLabel } from './targeted-ocr.js?v=20261018-targeted';
 import { copyText } from './clipboard.js?v=20261012-copy';
-import { readJson, createMaterialLoader } from './screening-loader.js?v=20261017-team';
+import { readJson, createMaterialLoader } from './screening-loader.js?v=20261018-targeted';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261013-typo-only';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { createProgressStore, initialPageIndex, nextPendingIndex, progressSummary } from './screening-workflow.js?v=20261013-typo-only';
@@ -28,8 +29,8 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
   const scanHref = (number) => `./screening-data/scans/${filename(number)}`;
   const pdfHref = (local) => `./screening-data/part-${part}.pdf#page=${local}`;
   const sourceText = item => item.ocr;
-  const sourceLabel = () => page().collated ? `团队校订版 ${page().collated.reviewedAt}` : '原始 OCR';
-  const rowLabel = (item, review) => isVerified(review.collation, sourceText(item)) ? '已校验' : review.collation?.text !== undefined ? '草稿' : publicationLabel(item) || (review.seen ? '已看' : '待校');
+  const sourceLabel = () => page().collated ? `团队校订版 ${page().collated.reviewedAt}` : page().targeted ? `局部修订版 ${page().targeted.reviewedAt}（整页未校）` : '原始 OCR';
+  const rowLabel = (item, review) => isVerified(review.collation, sourceText(item)) ? '已校验' : review.collation?.text !== undefined ? '草稿' : publicationLabel(item) || targetedLabel(item) || (review.seen ? '已看' : '待校');
   const draft = () => draftForPage(page(), current());
   const layoutNote = () => page().layout?.method === 'aligned-lines' ? '已按逐栏 OCR 对齐分栏；栏界为机器建议，请看图核对。'
     : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；本轮只需对照原页修改错字。' : '本页保留原段落；本轮无需整理分栏格式。';
@@ -366,6 +367,14 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
   }
 
   function publishedMarkup(p) {
+    if (p.targeted) {
+      const t = p.targeted;
+      return `<details class="ocr published-revision" id="publishedRevision"><summary>局部修订版 ${esc(t.reviewedAt)} · ${esc(targetedLabel(p))}</summary>
+        <p>仅下列指定区域已重新OCR并对图；整页其他文字仍未校勘。本机人工稿继续保留。</p>
+        <div class="tools"><a href="./screening-data/part-${part}-targeted.txt" download>下载本份局部修订TXT</a><a href="./screening-data/part-${part}-targeted-status.csv" download>下载局部处理状态</a><a href="./screening-data/targeted-20261018/region-status.csv" download>62区域完整记录</a></div>
+        <ul>${t.regions.map(r => `<li>${esc(r.id)} · ${esc(r.status)}：${esc(r.publicationBefore)} → ${esc(r.after)}；${esc(r.note)} <a href="${esc(r.facsimile)}" target="_blank" rel="noopener">查看裁片</a></li>`).join('')}</ul>
+        <pre>${esc(defaultDraftText(p))}</pre></details>`;
+    }
     const r = p.collated;
     if (!r) return '';
     return `<details class="ocr published-revision" id="publishedRevision"><summary>团队校订版 ${esc(r.reviewedAt)} · ${esc(publicationLabel(p))}</summary>
@@ -395,7 +404,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
       <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.start}" max="${state.data.end}" placeholder="${state.data.start}–${state.data.end}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, sourceText(item)) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${esc(rowLabel(item, r))}</small></button>`; }).join('')}</div></aside>
       <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已校验。Alt + ← / → 翻页。</p></div></section>
       <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>框选文字后右键可直接替换；点击“编辑本页”打开完整编辑器。</small></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制本页</button><button type="button" id="openTextEditor">编辑本页</button></div></div><div class="form-body">
-        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '已保留本页人工稿及原比较底稿' : `底稿：${sourceLabel()} · 对照扫描图校勘`}</span>${p.collated ? `<strong class="publication-status">团队：${esc(publicationLabel(p))}</strong><button type="button" id="openPublished">查看校订版与记录</button>` : '<span>未核模型稿已停用，历史稿仅供下载参考。</span>'}</div>
+        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '已保留本页人工稿及原比较底稿' : `底稿：${sourceLabel()} · 对照扫描图校勘`}</span>${p.collated ? `<strong class="publication-status">团队：${esc(publicationLabel(p))}</strong><button type="button" id="openPublished">查看校订版与记录</button>` : p.targeted ? `<strong class="publication-status">${esc(targetedLabel(p))}</strong><button type="button" id="openPublished">查看区域与记录</button>` : '<span>未核模型稿已停用，历史稿仅供下载参考。</span>'}</div>
         <div class="editor-main">
         <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
         <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
@@ -791,7 +800,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     if (![1, 2, 3, 4].includes(part)) { app.innerHTML = '<p class="loading">请选择团队任务中的第 1–4 份初筛工作项。</p>'; return; }
     try {
       app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
-      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261017-team`);
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261018-targeted`);
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
       materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;

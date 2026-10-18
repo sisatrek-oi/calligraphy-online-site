@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-18",
+  "queue_sha256": "d8ae35b029033c9df9c0afb0e16d758dc5ccdf02b7bd40e50da4fea45447669a",
+  "model": "PP-OCRv6_rec_medium.onnx",
+  "model_sha256": "eef444829dbbe18d7fea59a3f6eb75647518d2b3a9568d27c92e42940204894b",
+  "engine": "3.9.2",
+  "dependencies": {
+    "onnxruntime": "1.30.0",
+    "numpy": "2.4.6",
+    "pillow": "12.3.0"
+  },
+  "regions": 62,
+  "pages": 22,
+  "variants": [
+    "native original box rotated90",
+    "2x Lanczos original box rotated90"
+  ],
+  "old_text_input": false,
+  "remote_image_upload": false,
+  "script_sha256": "64fdaff46b2807261cd795b60eef68bdf6e96fcebcc731a9806248ddd13d6196"
+}

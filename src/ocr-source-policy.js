@@ -10,5 +10,5 @@ export function draftForPage(item, review = {}) {
   return review.collation || { text: defaultDraftText(item) };
 }
 export function defaultDraftText(item) {
-  return item.collated ? item.collated.text : makeDraft(originalDraftText(item));
+  return item.collated ? item.collated.text : makeDraft(item.targeted ? item.targeted.text : originalDraftText(item));
 }

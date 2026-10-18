@@ -1,0 +1,137 @@
+{
+  "date": "2026-10-18",
+  "revision": "targeted-20261018",
+  "base_commit": "f93cd44f9d13cee5e96676a0fdb91d107253236c",
+  "pages": 22,
+  "regions": 62,
+  "confirmed": 61,
+  "pending": 1,
+  "reference_confirmed": 10,
+  "reference_pending": 1,
+  "reference_affected_pages": 10,
+  "reference_log": [
+    {
+      "page": 33,
+      "status": "已修改完毕",
+      "id": "R20261018-D034",
+      "before": "入鸿都观碑",
+      "after": "入鸿都观碣",
+      "note": "原图为碣，撤回参照稿碑的误录。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D034"
+    },
+    {
+      "page": 261,
+      "status": "已修改完毕",
+      "id": "R20261018-D060",
+      "before": "气香吞元",
+      "after": "气吞元",
+      "note": "原图无香，删除参照额外字。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D060"
+    },
+    {
+      "page": 262,
+      "status": "已修改完毕",
+      "id": "R20261018-D062",
+      "before": "咽凝水",
+      "after": "咽凝冰",
+      "note": "原图冰，参照水不符。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D062"
+    },
+    {
+      "page": 263,
+      "status": "已修改完毕",
+      "id": "R20261018-D063",
+      "before": "梁东宫侍书",
+      "after": "梁东官侍书",
+      "note": "原图印官，忠实照录；原书是否讹宫另作文本考证。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D063"
+    },
+    {
+      "page": 269,
+      "status": "已修改完毕",
+      "id": "R20261018-D083",
+      "before": "史惟则，广陵人",
+      "after": "史维则，广陵人",
+      "note": "此处原图糸旁維；仅修本处，正文另处惟则不全局替换。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D083"
+    },
+    {
+      "page": 273,
+      "status": "已修改完毕",
+      "id": "R20261018-D099",
+      "before": "溫晃，太原",
+      "after": "溫晃，太原人",
+      "note": "原图有太原人，补回参照漏人。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D099"
+    },
+    {
+      "page": 274,
+      "status": "已修改完毕",
+      "id": "R20261018-D105",
+      "before": "特乎幼好",
+      "after": "恃乎幼好",
+      "note": "放大确认忄旁恃，撤回上一轮恃改特。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D105"
+    },
+    {
+      "page": 275,
+      "status": "已修改完毕",
+      "id": "R20261018-D109",
+      "before": "沽将实名",
+      "after": "沾将实名",
+      "note": "原图右旁占，读沾。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D109"
+    },
+    {
+      "page": 275,
+      "status": "已修改完毕",
+      "id": "R20261018-D110",
+      "before": "诚怱怱",
+      "after": "诫怱怱",
+      "note": "原图首字誡，纠正诚；后两字保留参照怱字形，不按OCR忽全换。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D110"
+    },
+    {
+      "page": 276,
+      "status": "已修改完毕",
+      "id": "R20261018-D119",
+      "before": "诤为宗",
+      "after": "净为宗",
+      "note": "原图氵旁淨，参照诤不符。",
+      "reviewedAt": "2026-10-18",
+      "sourceDifferenceId": "D119"
+    },
+    {
+      "page": 298,
+      "id": "R20261018-D159",
+      "before": "厌",
+      "after": "【待核：原录厌】",
+      "note": "原图是手旁字，原录厌明显不符；候选扺/扳等的码位仍待核，不凭语义替换。",
+      "status": "已标注·待核",
+      "reviewedAt": "2026-10-18"
+    }
+  ],
+  "raw_ocr_preserved": true,
+  "outside_reviewed_spans_unchanged": true,
+  "parts": {
+    "1": {
+      "pages": 4,
+      "regions": 8,
+      "pending": 0
+    },
+    "4": {
+      "pages": 18,
+      "regions": 54,
+      "pending": 1
+    }
+  }
+}

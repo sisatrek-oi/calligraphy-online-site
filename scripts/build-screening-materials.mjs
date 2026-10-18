@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { validCollation, publicationSummary } from '../src/team-collation.js';
+import { validTargeted, targetedSummary } from '../src/targeted-ocr.js';
 const root = new URL('../screening-data/', import.meta.url);
 fs.mkdirSync(new URL('materials/', root), { recursive: true });
 for (let part = 1; part <= 4; part++) {
@@ -18,11 +19,21 @@ for (let part = 1; part <= 4; part++) {
     if (!validCollation(item, item.page) || collated.has(item.page) || !index.pages.some(p => p.page === item.page)) throw new Error('Invalid collated page');
     collated.set(item.page, item);
   }
+  const targetedPath = new URL(`part-${part}-targeted.json`, root);
+  const targetedPayload = fs.existsSync(targetedPath) ? JSON.parse(fs.readFileSync(targetedPath, 'utf8')) : null;
+  if (targetedPayload && (targetedPayload.version !== 1 || targetedPayload.part !== part || !Array.isArray(targetedPayload.pages))) throw new Error('Invalid targeted source');
+  const targeted = new Map();
+  for (const item of targetedPayload?.pages || []) {
+    if (!validTargeted(item, item.page) || targeted.has(item.page) || collated.has(item.page) || !index.pages.some(p => p.page === item.page)) throw new Error('Invalid targeted page');
+    targeted.set(item.page, item);
+  }
   if (headings.length !== index.pages.length) throw new Error('OCR page count mismatch');
   const pages = index.pages.map((item, i) => {
     if (+headings[i][1] !== item.page || layout.pages[i].page !== item.page || contextual.pages[i].page !== item.page) throw new Error('Source page mismatch');
     const {conservative, normalized, uncertainties} = contextual.pages[i];
-    return {page:item.page,ocr:ocr.slice(headings[i].index+headings[i][0].length,headings[i+1]?.index??ocr.length).trim(),layout:layout.pages[i],contextual:{conservative,normalized,uncertainties},...(collated.has(item.page)?{collated:collated.get(item.page)}:{})};
+    const raw = ocr.slice(headings[i].index+headings[i][0].length,headings[i+1]?.index??ocr.length).trim();
+    if (targeted.has(item.page) && !validTargeted(targeted.get(item.page), item.page, raw)) throw new Error('Targeted base does not match raw OCR');
+    return {page:item.page,ocr:raw,layout:layout.pages[i],contextual:{conservative,normalized,uncertainties},...(collated.has(item.page)?{collated:collated.get(item.page)}:{}),...(targeted.has(item.page)?{targeted:targeted.get(item.page)}:{})};
   });
   const materials = {};
   for (let offset = 0; offset < pages.length; offset += 16) {
@@ -33,6 +44,8 @@ for (let part = 1; part <= 4; part++) {
     fs.writeFileSync(new URL(name, root), content);
     for (const item of chunk) materials[item.page] = name;
   }
-  const indexPages = index.pages.map(item => collated.has(item.page) ? {...item,publication:publicationSummary(collated.get(item.page))} : item);
+  const indexPages = index.pages.map(item => ({...item,
+    ...(collated.has(item.page)?{publication:publicationSummary(collated.get(item.page))}:{}),
+    ...(targeted.has(item.page)?{targetedSummary:targetedSummary(targeted.get(item.page))}:{})}));
   fs.writeFileSync(new URL(`part-${part}-index.json`, root), JSON.stringify({...index,pages:indexPages,materials})+'\n');
 }
