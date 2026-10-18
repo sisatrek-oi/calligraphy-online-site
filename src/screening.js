@@ -2,12 +2,13 @@ import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=2026101
 import { publicationLabel } from './team-collation.js?v=20261018-part4';
 import { targetedLabel } from './targeted-ocr.js?v=20261018-part4';
 import { copyText } from './clipboard.js?v=20261012-copy';
+import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=20261018-bundle';
 import { readJson, createMaterialLoader } from './screening-loader.js?v=20261018-part4';
-import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261013-typo-only';
+import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified } from './collation-core.js?v=20261013-typo-only';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
-import { createProgressStore, initialPageIndex, nextPendingIndex, progressSummary } from './screening-workflow.js?v=20261013-typo-only';
+import { createProgressStore, initialPageIndex, nextPendingIndex } from './screening-workflow.js?v=20261013-typo-only';
 import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-theory';
-import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only';
+import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
 
 (() => {
   const app = document.querySelector('#screeningApp');
@@ -395,9 +396,9 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     app.innerHTML = `<main class="page">
       <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / 成员 ${part} / 原 PDF ${state.data.start}–${state.data.end} 页</span><h1>原文对照校勘</h1><p>本轮只改错字 · 标点、符号和排版可保持原样</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
-        <div class="tools"><button type="button" id="exportTxt" class="primary">导出校勘 TXT</button><button type="button" id="exportChecks">导出校验表（含修改率）</button><button type="button" id="exportMetrics">导出修改率汇总</button><details class="extra-tools"><summary>材料与备份</summary><div class="tools"><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
+        <div class="tools"><button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : '一键导出全部'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。</p><a class="download" href="${taskOcrHref(part)}" download>下载任务 OCR</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
-          <button type="button" id="backup">导出进度备份</button><label class="file-button">导入进度<input id="backupFile" type="file" accept="application/json,.json" /></label>
+          <label class="file-button">导入进度 JSON<input id="backupFile" type="file" accept="application/json,.json" /></label><p class="hint">恢复时先解压交付包，再选择其中的进度备份JSON；旧版备份也可使用。</p>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
           <label class="file-button">或选择图片<input id="scanFiles" type="file" accept="image/jpeg" multiple /></label>
           <label class="file-button">载入本地 OCR<input id="locatorFile" type="file" accept="text/html,.html" /></label></div></details></div></details></div></section>
@@ -410,7 +411,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
         <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
         <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
         <div class="change-log" id="changeLog" aria-live="polite">${editHistoryMarkup(draft().edits || [])}</div>
-        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后下载 TXT 文件</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" id="exportCurrentPage" class="drawer-save">下载本页 TXT</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div>${publishedMarkup(p)}<details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
+        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后整包交回</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" data-export-all class="drawer-save" ${exporting ? 'disabled' : ''}>一键导出全部</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div>${publishedMarkup(p)}<details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
         <div class="validation" id="validation" aria-live="polite"></div>
         <label>备注（选填）<textarea id="question" rows="2" placeholder="可记下看不清的字，留待后续复核；无需为格式或符号填写说明">${esc(review.question || '')}</textarea></label>
         <p class="hint">本轮只核对错字，标点、符号和分栏提醒不影响完成。修改正文后需重新确认。</p>
@@ -422,7 +423,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
         <form id="candidateForm"><div class="row"><label>书家<input name="author" maxlength="100" placeholder="可写待核" /></label><label>书体<input name="style" maxlength="100" placeholder="可写待核" /></label></div>
           <label>连续原文摘录<textarea name="quote" rows="2" required></textarea></label><label>风格描述依据<textarea name="basis" rows="2" required></textarea></label>
           <label>不确定或待核事项<textarea name="uncertainty" rows="2"></textarea></label><button type="submit">添加本页候选</button></form>
-        <h3>交回负责人</h3><p class="hint">两张 CSV 保留未审核页的空行，负责人可据此检查遗漏。请同时留存进度备份。</p><div class="form-actions"><button type="button" id="exportPages" class="primary">导出逐页表</button><button type="button" id="exportCandidates">导出候选表</button></div>
+        <h3>交回负责人</h3><p class="hint">初筛表与候选表一起放入ZIP，未审核页保留空行便于查漏。</p><div class="form-actions"><button type="button" data-export-all class="primary" ${exporting ? 'disabled' : ''}>一键导出全部</button></div>
       </details></div><div class="drawer-footer"><div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.[key] ? 'checked' : ''} />${label}</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">查看文本提醒</button><button id="verifyNext" class="primary">完成本页并继续</button></div></div></aside></div></section></div>
       <div id="selectionMenu" class="selection-menu" role="dialog" aria-label="替换选中文字" hidden>
         <div class="selection-menu-title"><strong>替换选中文字</strong><span data-selection-count></span></div>
@@ -506,42 +507,42 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     } finally { button.disabled = false; showMessage(); }
   }
 
-  function exportCurrentPage() {
-    if (!state.person.trim()) {
-      state.error = '请先填写校勘人真实姓名，再导出本页。';
-      showMessage();
-      app.querySelector('#person')?.focus();
-      return;
-    }
-    const currentPage = page();
-    const text = exportText({ part, person: state.person.trim(), pages: [currentPage], reviews: { [currentPage.page]: current() }, sourceForPage: sourceText });
-    download(`第${part}份-第${currentPage.page}页校勘.txt`, text, 'text/plain;charset=utf-8');
-    state.notice = `已发起第 ${currentPage.page} 页校勘 TXT 下载。`;
-    showMessage();
+  function download(name, textValue, type = 'application/json;charset=utf-8') {
+    downloadBlob(name, new Blob(['\ufeff', textValue], { type }));
   }
-
-  function csvCell(value) { return `"${String(value ?? '').replaceAll('"', '""')}"`; }
-  function download(name, textValue, type = 'text/csv;charset=utf-8') {
-    const url = URL.createObjectURL(new Blob(['\ufeff', textValue], { type }));
+  function downloadBlob(name, blob) {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
-  function exportCsv(kind) {
-    if (!state.person.trim()) { state.error = '请先填写审核人真实姓名，再导出回收表。'; showMessage(); return; }
-    let rows;
-    if (kind === 'pages') {
-      rows = [['原PDF物理页', '分册页', '已看扫描页', '发现候选数', '需重做OCR', '疑问与处理', '审核人'],
-        ...state.data.pages.map((item) => {
-          const review = state.reviews[item.page] || {};
-          return [item.page, item.local, review.seen ? '是' : '', review.seen ? (review.candidates || []).length : '',
-            review.redoOcr ? '是' : '', review.question || '', review.seen ? state.person.trim() : ''];
-        })];
-    } else {
-      rows = [['原PDF物理页', '书家', '书体', '连续原文摘录', '风格描述依据', '不确定或待核事项', '审核人']];
-      for (const item of state.data.pages) for (const candidate of state.reviews[item.page]?.candidates || [])
-        rows.push([item.page, candidate.author, candidate.style, candidate.quote, candidate.basis, candidate.uncertainty, state.person.trim()]);
+  const runBundleExport = createBundleExporter({
+    capture: () => ({ progress: payload(), unsaved: Boolean(state.saveProblem), saveConflict: state.saveConflict,
+      exportedAt: new Date().toISOString() }),
+    loadMaterials: () => materialLoader.ensureAll(),
+    build: snapshot => buildCollationBundle({ ...snapshot, pages: state.data.pages }),
+    download: bundle => downloadBlob(bundle.name, new Blob([bundle.bytes], { type: 'application/zip' })),
+  });
+  async function exportAll() {
+    if (exporting) return;
+    if (!state.person.trim()) { state.error = '请先填写校勘人姓名，再一键导出。'; showMessage(); app.querySelector('#person')?.focus(); return; }
+    exporting = true;
+    for (const b of app.querySelectorAll('#exportBundle, [data-export-all]')) b.disabled = true;
+    state.notice = '正在打包完整交付材料，请稍候…'; state.error = ''; showMessage();
+    try {
+      const bundle = await runBundleExport();
+      const c = bundle.manifest.counts;
+      state.notice = `已发起一个ZIP下载：已校验 ${c.verified} 页、草稿 ${c.draft} 页、未开始 ${c.unstarted} 页。正文、表格和进度备份均在包内，请整包交回。包内为点击时的进度，后续改动请再次导出。${bundle.manifest.unsaved ? '本包包含尚未保存的修改，请保留备份。' : ''}`;
+    } catch (error) {
+      state.error = `${error.message || '打包失败'}。未生成不完整交付包，请再次点击重试；如材料持续无法载入，可先抢救进度。`;
+      state.notice = '';
+      // A network outage must not prevent saving the current in-memory draft.
+      const recovery = app.querySelector('#saveRecovery');
+      if (recovery && !state.saveProblem) recovery.innerHTML = '<div class="message"><button id="rescueBackup">紧急导出进度JSON</button>材料无法载入时，可先保存当前修改。</div>';
+    } finally {
+      exporting = false;
+      for (const b of app.querySelectorAll('#exportBundle, [data-export-all]')) b.disabled = false;
+      showMessage();
     }
-    download(`第${part}份-${kind === 'pages' ? '逐页初筛回收表' : '新证据候选回收表'}.csv`, rows.map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n');
   }
 
   function loadFiles(list) {
@@ -564,14 +565,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     if (button.id === 'openPublished') { state.reviewOpen = true; render(); const details = app.querySelector('#publishedRevision'); details.open = true; details.scrollIntoView({ block: 'nearest' }); return; }
     if (button.id === 'retryLoad') { await init(); return; }
     if (!state.data || !app.querySelector('#pageList')) return;
-    if (['exportTxt', 'exportChecks', 'exportMetrics'].includes(button.id)) {
-      if (exporting) return;
-      exporting = true; button.disabled = true;
-      state.notice = '正在准备完整导出材料，请稍候…'; state.error = ''; showMessage();
-      try { await materialLoader.ensureAll(); }
-      catch (error) { state.error = `${error.message}。未生成不完整文件，请再次点击导出重试。`; showMessage(); return; }
-      finally { exporting = false; button.disabled = false; }
-    }
+    if (button.id === 'exportBundle' || button.hasAttribute('data-export-all')) return exportAll();
     if (button.dataset.locateEdit !== undefined) {
       locateEdit(Number(button.dataset.locateEdit));
       return;
@@ -605,9 +599,8 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
       return;
     }
     if (button.hasAttribute('data-copy-current')) return copyCurrentPage(button);
-    if (button.id === 'exportCurrentPage') return exportCurrentPage();
     if (button.id === 'retrySave') return persist();
-    if (['backup', 'rescueBackup'].includes(button.id)) {
+    if (button.id === 'rescueBackup') {
       backup(); state.notice = '已发起进度备份下载，请在浏览器下载列表确认。'; showMessage(); return;
     }
     if (button.id === 'reloadProgress') {
@@ -649,36 +642,14 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
       const completed = page().page;
       const next = nextPendingIndex(state.data.pages, state.reviews, state.index);
       if (next >= 0) select(next, `第 ${completed} 页已校验并保存；已转到第 ${state.data.pages[next].page} 页继续。`);
-      else { state.notice = '本份全部校验完成，请导出 TXT 与校验表交回负责人。'; render(); }
+      else { state.notice = '本份全部校验完成，请一键导出全部并将ZIP交回负责人。'; render(); }
       return;
-    }
-    if (button.id === 'exportMetrics') {
-      download(`第${part}份-修改率汇总.csv`, metricsCsv({ part, person: state.person.trim(), pages: state.data.pages, reviews: state.reviews, savedAt: state.savedAt, unsaved: Boolean(state.saveProblem) }));
-      state.notice = '已发起修改率汇总下载；无明确底稿的旧草稿显示为空。';
-      showMessage(); return;
-    }
-    if (button.id === 'exportTxt' || button.id === 'exportChecks') {
-      if (!state.person.trim()) { state.error = '请先填写校勘人真实姓名，再导出。'; showMessage(); app.querySelector('#person').focus(); return; }
-      if (button.id === 'exportTxt') download(`第${part}份-逐页校勘.txt`, exportText({ part, person: state.person.trim(), pages: state.data.pages, reviews: state.reviews, sourceForPage: sourceText }), 'text/plain;charset=utf-8');
-      else {
-        const rows = [['原PDF物理页', '分册页', '校勘状态', '净修改率(%)', '错字核对', '正文问题', '提醒（不影响本轮完成）', '备注（选填）', '直接替换记录', '校验人', '校验时间'],
-          ...state.data.pages.map(item => {
-            const review = state.reviews[item.page] || {}, d = review.collation || {}, v = validateDraft(d, sourceText(item));
-            return [item.page, item.local, isVerified(d, sourceText(item)) ? '已校验' : d.text !== undefined ? '草稿' : '未开始', pageMetrics(item, review).modificationRate, ...Object.keys(CHECKS).map(key => d.checks?.[key] ? '是' : ''),
-              d.text !== undefined ? v.errors.join('；') : '', v.warnings.join('；'), review.question || '', (d.edits || []).map(editSummary).join('；'), d.verifiedBy || state.person.trim(), d.verifiedAt || ''];
-          })];
-        download(`第${part}份-TXT校验表.csv`, rows.map(row => row.map(csvCell).join(',')).join('\r\n'));
-      }
-      const counts = progressSummary(state.data.pages, state.reviews);
-      state.notice = `已发起${button.id === 'exportTxt' ? '校勘 TXT' : '校验表'}下载：已校验 ${counts.verified} 页、草稿 ${counts.draft} 页、未开始 ${counts.unstarted} 页。请确认下载后，与另一份文件一起交回负责人。`; showMessage(); return;
     }
     if (button.id === 'markSeen' && (state.imageReady || current().seen)) { record({ seen: !current().seen }); render(); return; }
     if (button.dataset.remove !== undefined) {
       const candidates = [...(current().candidates || [])]; candidates.splice(Number(button.dataset.remove), 1);
       record({ candidates }); render(); return;
     }
-    if (button.id === 'exportPages') return exportCsv('pages');
-    if (button.id === 'exportCandidates') return exportCsv('candidates');
 
   });
 
@@ -782,6 +753,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
         state.reviews = saved.reviews; state.person = String(saved.person || '');
         state.index = restoredIndex;
         syncUrl(); persist();
+        state.error = '';
         state.notice = state.saveProblem ? '' : '进度备份已导入，可继续逐页校勘。'; render();
       } catch (error) { state.error = error.message || '进度备份读取失败'; showMessage(); }
     }

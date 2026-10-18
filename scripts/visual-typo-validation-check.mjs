@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 const { chromium } = createRequire(import.meta.url)('playwright');
 const base = process.env.BASE_URL || 'http://127.0.0.1:8798';
 const output = path.resolve(process.env.OUTPUT_DIR || '../../2026-10-13-typo-validation');
@@ -44,13 +45,18 @@ try {
   await page.locator('#validate').click();
   check('advisory issues remain visible after verification', (await page.locator('#validation').innerText()).includes('标记'));
   await page.locator('#closeReviewDrawer').click();
-  for (const [selector, file] of [['#exportTxt', 'test.txt'], ['#exportChecks', 'test.csv']]) {
-    const download = page.waitForEvent('download');
-    await page.locator(selector).click();
-    await (await download).saveAs(path.join(output, file));
-  }
-  const txt = await fs.readFile(path.join(output, 'test.txt'), 'utf8');
-  const csv = await fs.readFile(path.join(output, 'test.csv'), 'utf8');
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#exportBundle').click();
+  const packagePath = path.join(output, 'test.zip');
+  await (await downloadPromise).saveAs(packagePath);
+  const unpack = spawnSync('python3', ['-c', `
+import zipfile,sys,json
+with zipfile.ZipFile(sys.argv[1]) as z:
+ assert z.testzip() is None
+ print(json.dumps({'txt':z.read('第2份-逐页校勘.txt').decode('utf-8-sig'), 'csv':z.read('第2份-TXT校验表.csv').decode('utf-8-sig')}))
+`, packagePath], { encoding: 'utf8' });
+  assert.equal(unpack.status, 0, unpack.stderr);
+  const { txt, csv } = JSON.parse(unpack.stdout);
   check('TXT carries current scope, single check and untouched body', txt.includes('本轮错字核对') && txt.includes('[x] 已对照原页核对本页错字') && txt.includes(text));
   check('CSV carries single check and verified state', csv.includes('错字核对') && !csv.includes('跨页核对') && csv.includes('"259","1","已校验"'));
   await page.locator('#openTextEditor').click();

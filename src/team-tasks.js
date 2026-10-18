@@ -103,7 +103,7 @@ import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.
       <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 原文校勘</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>已移除封面、目录及版权编印信息共 11 页；保留原 PDF 页码，四人各校一段。</p></div><span class="task-state">材料已备齐</span></div>
         <div class="overview-list-head"><h3>分工与材料</h3><span>按原 PDF 物理页定位</span></div>
         <div class="overview-unit-list">${screeningRanges.map(([start, end], index) => `<article class="overview-unit"><div class="unit-number">0${index + 1}</div><div class="unit-copy"><strong>审核成员 ${index + 1}</strong><span>第 ${start}–${end} 页 · ${taskPageCount(start, end)} 页需校勘</span><span class="local-progress" data-local-progress="${index + 1}">读取本机进度…</span>${releaseMarkup(index + 1)}</div><div class="unit-actions"><a class="unit-primary" data-continue-part="${index + 1}" href="./screening.html?part=${index + 1}">进入对照校勘 →</a><a href="${taskOcrHref(index + 1)}" download>任务 TXT</a>${releaseLinks(index + 1)}<a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div></article>`).join('')}</div>
-        <div class="overview-handoff"><strong>交付方式</strong><span>本轮只对照原页修改错字，每页勾选一次即可完成；标点、符号和排版可保持原样。导出“校勘 TXT”和“校验表”交回负责人。</span></div></section>
+        <div class="overview-handoff"><strong>交付方式</strong><span>本轮只对照原页修改错字，每页勾选一次即可完成；标点、符号和排版可保持原样。点击“一键导出全部”，将包含正文、表格和进度备份的ZIP整包交回负责人。</span></div></section>
       <p class="overview-note">静态站不识别成员身份，也不汇总各人的实时进度；审核记录保存在当前浏览器。团队复核稿115页：102页已修改完毕，13页保留待核；2026-10-18另纠正参照稿10项。首批22页62区域重OCR历史保留，其中791、800页已纳入团队整页复核，其余20页整页未校；828页局部疑字仍待核。其余页面继续对照扫描图。</p>
       <section class="overview-secondary"><div><span class="eyebrow">独立批次入口</span><h2>旧条目文件审核</h2><p>旧 188 条字段审核与本轮全书初筛分开处理，不计入上方任务规模。</p></div><a href="./review.html">进入文件审核 →</a></section></div>`);
     updateOfflineProgress();
@@ -169,7 +169,7 @@ import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.
       .findIndex(([start, end]) => unit.stage === 'screen' && unit.startPage === start && unit.endPage === end) + 1;
     return `<aside class="detail"><div class="panel-head"><div><span class="eyebrow">${label(unit.stage)} · 第 ${unit.startPage}–${unit.endPage} 页</span><h2>${label(unit.status)}</h2></div><small>修订 ${unit.revision}</small></div>
       <p class="byline">负责人 ${esc(unit.assignee)}${unit.returnReason ? ` · 退回：${esc(unit.returnReason)}` : ''}</p>
-      ${screeningPart ? `<p class="screening-entry"><a href="./screening.html?part=${screeningPart}">进入本页段对照校勘 →</a><small>左右对照原页与 TXT，校勘后导出 TXT 和校验表。</small></p>` : ''}
+      ${screeningPart ? `<p class="screening-entry"><a href="./screening.html?part=${screeningPart}">进入本页段对照校勘 →</a><small>左右对照原页与 TXT，完成后一键导出ZIP整包交回。</small></p>` : ''}
       <section class="source"><h3>原始材料／工作说明</h3><pre>${esc(unit.materialText || '管理员尚未附原文，请按来源说明核对相应页段。')}</pre></section>
       <section class="answer"><h3>${editable ? '我的工作稿' : '提交内容'}</h3>
         ${editable ? `<textarea id="workDraft" rows="11" aria-label="工作稿">${esc(state.draft)}</textarea><div class="actions"><button type="button" data-save>保存草稿</button><button type="button" class="secondary" data-submit>提交验收</button></div>`
