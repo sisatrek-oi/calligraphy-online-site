@@ -18,5 +18,6 @@ export function publicationLabel(item) {
 export const teamRelease = { date: '2026-10-18', parts: {
   1: { pages: 30, complete: 26, pending: 4 },
   2: { pages: 70, complete: 67, pending: 3 },
+  3: { pages: 75, complete: 71, pending: 4 },
   4: { pages: 15, complete: 9, pending: 6 },
 } };
