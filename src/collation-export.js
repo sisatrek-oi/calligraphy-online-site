@@ -3,6 +3,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
 import { progressSummary } from './screening-workflow.js?v=20261013-typo-only';
 import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
 import { zipStore } from './zip-store.js?v=20261018-bundle';
+import { assignmentFor, assignmentSegment, assignmentPages, assignmentRevision } from './team-assignments.js?v=seven-20261018';
 
 const encoder = new TextEncoder();
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -32,7 +33,7 @@ export function checksCsv({ pages, progress }) {
     })]);
 }
 
-export async function buildCollationBundle({ progress, pages, exportedAt = new Date().toISOString(), exportId = crypto.randomUUID(), unsaved = false, saveConflict = false }) {
+export async function buildCollationBundle({ progress, pages, member = null, exportedAt = new Date().toISOString(), exportId = crypto.randomUUID(), unsaved = false, saveConflict = false }) {
   // Freeze independently of the caller; hashing is asynchronous.
   progress = clone(progress); pages = clone(pages).filter(p => isTaskPage(p.page));
   unsaved = Boolean(unsaved || saveConflict);
@@ -42,6 +43,9 @@ export async function buildCollationBundle({ progress, pages, exportedAt = new D
   const [start, end] = [[1,258],[259,527],[528,776],[777,1052]][progress.part-1];
   const expected = Array.from({length:end-start+1}, (_,i)=>start+i).filter(isTaskPage);
   if (pages.length !== expected.length || pages.some((p,i)=>p.page !== expected[i] || p.local !== p.page-start+1)) throw new Error('导出页码与本份完整任务范围不匹配，请重试。');
+  const assignment = assignmentFor(member), segment = assignmentSegment(member, progress.part);
+  // Validate the full source part first. Scope text/tables without filtering the backup.
+  if (assignment) pages = assignmentPages(pages, member, progress.part);
   const at = new Date(exportedAt);
   if (!Number.isFinite(at.getTime()) || typeof exportId !== 'string' || !exportId) throw new Error('导出批次无效。');
   const { part, reviews } = progress, person = progress.person.trim(), counts = progressSummary(pages, reviews);
@@ -63,6 +67,8 @@ export async function buildCollationBundle({ progress, pages, exportedAt = new D
   add('交付说明.txt', [
     `《历代书法论文选》${prefix}一键交付包`, `导出人：${person}`, `导出时间：${exportedAt}`, `导出批次：${exportId}`,
     `已校验 ${counts.verified} 页，草稿 ${counts.draft} 页，未开始 ${counts.unstarted} 页。`,
+    ...(assignment ? [`当前分工：成员${assignment.id} ${assignment.name}，原第${part}份第${segment.start}–${segment.end}页。`,
+      'TXT与CSV仅列当前成员本段；进度JSON保留此原分份全部个人记录，包括已移交页草稿、比较底稿与编辑历史。跨两个原分份的成员请分别导出两包。'] : []),
     unsaved ? `注意：本包包含当前页面尚未保存的修改${saveConflict ? '，存在其他标签页进度冲突' : ''}；以本次点击时的内存快照导出，不表示已保存到浏览器。` : '本包取自本次点击时的当前浏览器进度。',
     '请将整个ZIP文件交回负责人，不必拆开分次发送。',
     '负责人解压后，校勘TXT含正文，校验表/修改率表用于查漏，进度JSON保留底稿、编辑记录和完整状态。',
@@ -72,9 +78,10 @@ export async function buildCollationBundle({ progress, pages, exportedAt = new D
     '净修改率沿用已保存比较底稿计算，不代表OCR准确率；旧草稿缺少比较底稿时留空。',
     '已排除的封面/目录等不计任务表，但原有记录继续保存在JSON备份中。',
     '文件清单.json记录各文件SHA256及页码来源；原PDF和扫描图不打包，可回网页对应物理页查看。',
-    `回查入口：https://sisatrek-oi.github.io/calligraphy-online-site/screening.html?part=${part}`,
+    `回查入口：https://sisatrek-oi.github.io/calligraphy-online-site/screening.html?part=${part}${assignment ? `&member=${assignment.id}` : ''}`,
   ].join('\n'));
   const manifest = { format: 'shulun-collation-bundle', version: 1, exportId, exportedAt, part, person,
+    ...(assignment ? { assignment: { revision:assignmentRevision, member:assignment.id, name:assignment.name, start:segment.start, end:segment.end, backupScope:'entire-original-part' } } : {}),
     scope: '本次点击时本机个人校勘进度；不是全员实时汇总或专家金标准', pageNumbers: pages.map(p=>p.page), counts,
     savedAt: progress.savedAt || '', unsaved: Boolean(unsaved), saveConflict: Boolean(saveConflict),
     files: await Promise.all(files.map(async f => ({ name: f.name, bytes: encoder.encode(f.content).length, sha256: await digest(f.content) }))),
@@ -83,7 +90,7 @@ export async function buildCollationBundle({ progress, pages, exportedAt = new D
     note: 'SHA256不自包含文件清单本身；所有校勘数据文件与说明均已列出。' };
   add('文件清单.json', JSON.stringify(manifest, null, 2), 'json');
   const timestamp = at.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  return { name: `${prefix}-校勘交付包-${timestamp}.zip`, bytes: zipStore(files, at), manifest };
+  return { name: `${assignment ? `成员${assignment.id}-` : ''}${prefix}-校勘交付包-${timestamp}.zip`, bytes: zipStore(files, at), manifest };
 }
 
 export function createBundleExporter({ capture, loadMaterials, build, download }) {

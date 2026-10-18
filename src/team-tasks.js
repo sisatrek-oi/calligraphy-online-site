@@ -2,6 +2,7 @@ import { teamRelease } from './team-collation.js?v=20261018-part4';
 import { targetedRelease } from './targeted-ocr.js?v=20261018-part4';
 import { isVerified } from './collation-core.js?v=20261013-typo-only';
 import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
+import { assignments, assignmentCount, assignmentHref, assignmentProgress } from './team-assignments.js?v=seven-20261018';
 
 (() => {
   const app = document.querySelector('#teamTasksApp');
@@ -73,17 +74,23 @@ import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.
 
   function updateOfflineProgress() {
     if (!state.offline) return;
-    const counts = screeningRanges.map(([start, end], index) => localScreeningProgress(index + 1, start, end));
+    const counts = assignments.map(a => assignmentProgress(localStorage, a));
     const total = counts.includes(null) ? null : counts.reduce((sum, count) => sum + count.verified, 0);
     const totalSlot = app.querySelector('#localSeenTotal');
     if (totalSlot) totalSlot.textContent = total === null ? '—' : `${total} / ${taskPageCount(1, 1052)}`;
     counts.forEach((count, index) => {
-      const slot = app.querySelector(`[data-local-progress="${index + 1}"]`);
+      const assignment = assignments[index];
+      const slot = app.querySelector(`[data-local-progress="${assignment.id}"]`);
       if (!slot) return;
-      const link = app.querySelector(`[data-continue-part="${index + 1}"]`);
-      if (link) link.textContent = count?.lastPage ? `继续第 ${count.lastPage} 页 →` : '进入对照校勘 →';
+      for (const segment of count?.segments || assignment.segments) {
+        const link = app.querySelector(`[data-member="${assignment.id}"][data-part="${segment.part}"]`);
+        if (link) {
+          link.href = assignmentHref(assignment.id, segment.part, segment.lastPage);
+          link.textContent = segment.lastPage ? `继续第 ${segment.lastPage} 页 →` : `进入 ${segment.start === 1 ? 5 : segment.start}–${segment.end} 页 →`;
+        }
+      }
       slot.textContent = count === null ? '本机记录无法读取'
-        : `本机已校验 ${count.verified} / ${taskPageCount(...screeningRanges[index])} 页${count.seen ? ` · 已看 ${count.seen} 页` : ''}`;
+        : `本机已校验 ${count.verified} / ${assignmentCount(assignment)} 页 · 草稿 ${count.draft} 页`;
     });
   }
 
@@ -99,12 +106,13 @@ import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.
   }
   function offline() {
     shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>选择自己的页段，左右对照原页与 TXT，逐页校勘后导出。</p></header>
-      <div class="overview-stats" aria-label="当前任务规模"><div><strong>1</strong><span>当前批次</span></div><div><strong>4</strong><span>连续页段</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮校勘页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已校验</span></div></div>
-      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 原文校勘</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>已移除封面、目录及版权编印信息共 11 页；保留原 PDF 页码，四人各校一段。</p></div><span class="task-state">材料已备齐</span></div>
+      <div class="overview-stats" aria-label="当前任务规模"><div><strong>7</strong><span>校勘成员</span></div><div><strong>851</strong><span>后续整页校对</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮有效页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已校验</span></div></div>
+      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 七人分工</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>原四份各移交末尾100页，共400页分给新增三人。原四人保留前段和已做成果。</p></div><span class="task-state">分工已更新</span></div>
         <div class="overview-list-head"><h3>分工与材料</h3><span>按原 PDF 物理页定位</span></div>
-        <div class="overview-unit-list">${screeningRanges.map(([start, end], index) => `<article class="overview-unit"><div class="unit-number">0${index + 1}</div><div class="unit-copy"><strong>审核成员 ${index + 1}</strong><span>第 ${start}–${end} 页 · ${taskPageCount(start, end)} 页需校勘</span><span class="local-progress" data-local-progress="${index + 1}">读取本机进度…</span>${releaseMarkup(index + 1)}</div><div class="unit-actions"><a class="unit-primary" data-continue-part="${index + 1}" href="./screening.html?part=${index + 1}">进入对照校勘 →</a><a href="${taskOcrHref(index + 1)}" download>任务 TXT</a>${releaseLinks(index + 1)}<a href="./screening-data/part-${index + 1}.pdf" target="_blank" rel="noopener">原 PDF</a></div></article>`).join('')}</div>
-        <div class="overview-handoff"><strong>交付方式</strong><span>本轮只对照原页修改错字，每页勾选一次即可完成；标点、符号和排版可保持原样。点击“一键导出全部”，将包含正文、表格和进度备份的ZIP整包交回负责人。</span></div></section>
-      <p class="overview-note">静态站不识别成员身份，也不汇总各人的实时进度；审核记录保存在当前浏览器。团队复核稿115页：102页已修改完毕，13页保留待核；2026-10-18另纠正参照稿10项。首批22页62区域重OCR历史保留，其中791、800页已纳入团队整页复核，其余20页整页未校；828页局部疑字仍待核。其余页面继续对照扫描图。</p>
+        <div class="overview-unit-list">${assignments.map(a => `<article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span>已交回校验 ${a.received} 页 · 后续整页校对 ${a.remaining} 页${a.id===3 ? '（已交回稿待负责人复核）' : ''}</span><span class="local-progress" data-local-progress="${a.id}">读取本机进度…</span>${a.id<=4 ? releaseMarkup(a.id) : ''}</div><div class="unit-actions">${a.segments.map(s=>`<a class="unit-primary" data-member="${a.id}" data-part="${s.part}" href="${assignmentHref(a.id,s.part)}">进入 ${s.start===1 ? 5 : s.start}–${s.end} 页 →</a>`).join('')}${a.id<=4 ? releaseLinks(a.id) : ''}</div></article>`).join('')}</div>
+        <div class="overview-handoff"><strong>交付方式</strong><span>每页对照原图核对错字。跨两段的成员分别进入、分别导出ZIP；正文和表格仅列当前分工段，JSON备份保留该原分份的全部个人记录。</span></div></section>
+      <p class="overview-note">已交回校验190页：115页已有团队复核稿（102页已修改完毕、13页待核），第3份75页待负责人复核。已做正文、草稿、修改率底稿与历史记录均保留；静态站不汇总个人实时进度。同一浏览器沿用原四份记录，不会按成员编号创建新账号。原OCR、扫描及局部修订保持。</p>
+      <details class="overview-secondary"><summary>原四份完整材料与历史进度</summary><p>如需查看已移交页的旧个人稿或下载原材料，可打开原分份完整视图。原记录不会因分工调整而删除。</p><div class="unit-actions">${screeningRanges.map((_,i)=>`<a href="./screening.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div></details>
       <section class="overview-secondary"><div><span class="eyebrow">独立批次入口</span><h2>旧条目文件审核</h2><p>旧 188 条字段审核与本轮全书初筛分开处理，不计入上方任务规模。</p></div><a href="./review.html">进入文件审核 →</a></section></div>`);
     updateOfflineProgress();
   }

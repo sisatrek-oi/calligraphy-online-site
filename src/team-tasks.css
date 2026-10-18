@@ -21,6 +21,11 @@ main{max-width:1600px;margin:auto;padding:30px clamp(14px,3vw,44px) 50px}.page-h
 /* The platform navigation is a persistent sidebar; the book list remains task content. */
 .team-shell{display:grid;grid-template-columns:224px minmax(0,1fr);min-height:100dvh}
 .team-content{min-width:0}
+/* Seven task cards scroll within the workspace, never the outer document. */
+html,body{height:100%;overflow:hidden}
+.team-shell{height:100dvh;min-height:0;overflow:hidden}
+.team-content{min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.team-content>main{flex:1;min-height:0;overflow:auto;width:100%}
 .team-app-sidebar{position:sticky;top:0;height:100dvh;display:flex;flex-direction:column;min-width:0;overflow-y:auto;border-right:1px solid #dedfdc;background:#fff}
 .team-sidebar-brand{min-height:68px;display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #e6e5e1}
 .team-sidebar-brand img{width:38px;height:38px;object-fit:contain}
@@ -39,6 +44,8 @@ main{max-width:1600px;margin:auto;padding:30px clamp(14px,3vw,44px) 50px}.page-h
 .team-mobile-header,.team-sidebar-scrim{display:none}
 @media(max-width:600px){
   .team-shell{display:block}
+  .team-content{height:100dvh}
+  .team-mobile-header{flex:none}
   .team-mobile-header{height:58px;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--line);background:#fff;font-family:"Songti SC","Noto Serif CJK SC",serif;font-size:19px}
   .team-mobile-header button{width:38px;height:38px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--ink);font-size:19px}
   .team-app-sidebar{position:fixed;z-index:52;left:0;top:0;width:min(292px,calc(100vw - 44px));height:100dvh;visibility:hidden;transform:translateX(-100%);transition:transform 150ms ease-out,visibility 150ms}

@@ -105,3 +105,38 @@ test('one click freezes progress before loading; concurrent clicks skip, failure
   await assert.rejects(retry(),/超时/);assert.equal(downloads,1);
   await retry();assert.equal(downloads,2);
 });
+
+test('all ten member segments export only assigned text/tables while retaining the full original-part JSON',async()=>{
+  const cases=[[1,1,148,5,158],[2,2,169,259,427],[3,3,149,528,676],[4,4,175,777,951],
+    [5,1,100,159,258],[5,2,33,428,460],[6,2,67,461,527],[6,3,66,677,742],[7,3,34,743,776],[7,4,100,952,1051]];
+  for(const [member,part,count,start,end]of cases){
+    const input=fixture(part),before=JSON.stringify(input);
+    const bundle=await buildCollationBundle({...input,member});
+    const out=unzip(bundle);
+    assert.equal(bundle.manifest.pageNumbers.length,count);
+    assert.equal(bundle.manifest.pageNumbers[0],start);
+    assert.equal(bundle.manifest.pageNumbers.at(-1),end);
+    assert.equal(out.checks.length,count);
+    assert.deepEqual(JSON.parse(out[`第${part}份-初筛进度备份.json`]),input.progress);
+    assert.equal(bundle.manifest.assignment.member,member);
+    assert.equal(bundle.manifest.assignment.backupScope,'entire-original-part');
+    assert.match(out['交付说明.txt'],/全部个人记录/);
+    assert.equal(JSON.stringify(input),before);
+  }
+});
+
+test('moved-page drafts and original metric baselines survive in a retained-segment backup',async()=>{
+  const input=fixture(1);
+  input.progress.reviews[200]={collation:{text:'移交段个人原稿□',metricBaseline:{version:1,text:'原比较底稿',label:'历史'},edits:[{before:'甲',after:'乙'}]}};
+  const bundle=await buildCollationBundle({...input,member:1}),out=unzip(bundle);
+  assert.ok(!out.checks.some(r=>r['原PDF物理页']==='200'));
+  assert.doesNotMatch(out['第1份-逐页校勘.txt'],/移交段个人原稿/);
+  assert.deepEqual(JSON.parse(out['第1份-初筛进度备份.json']).reviews[200],input.progress.reviews[200]);
+});
+
+test('scoped export still rejects incomplete original sources and invalid cross-part assignments',async()=>{
+  const input=fixture(1);
+  await assert.rejects(buildCollationBundle({...input,member:1,pages:input.pages.filter(p=>p.page!==200)}));
+  await assert.rejects(buildCollationBundle({...input,member:6}));
+  await assert.rejects(buildCollationBundle({...input,member:''}));
+});
