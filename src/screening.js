@@ -1,8 +1,8 @@
-import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=20261018-targeted';
-import { publicationLabel } from './team-collation.js?v=20261018-targeted';
-import { targetedLabel } from './targeted-ocr.js?v=20261018-targeted';
+import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=20261018-part4';
+import { publicationLabel } from './team-collation.js?v=20261018-part4';
+import { targetedLabel } from './targeted-ocr.js?v=20261018-part4';
 import { copyText } from './clipboard.js?v=20261012-copy';
-import { readJson, createMaterialLoader } from './screening-loader.js?v=20261018-targeted';
+import { readJson, createMaterialLoader } from './screening-loader.js?v=20261018-part4';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified, exportText } from './collation-core.js?v=20261013-typo-only';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { createProgressStore, initialPageIndex, nextPendingIndex, progressSummary } from './screening-workflow.js?v=20261013-typo-only';
@@ -367,7 +367,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
   }
 
   function publishedMarkup(p) {
-    if (p.targeted) {
+    if (p.targeted && !p.collated) {
       const t = p.targeted;
       return `<details class="ocr published-revision" id="publishedRevision"><summary>局部修订版 ${esc(t.reviewedAt)} · ${esc(targetedLabel(p))}</summary>
         <p>仅下列指定区域已重新OCR并对图；整页其他文字仍未校勘。本机人工稿继续保留。</p>
@@ -380,6 +380,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     return `<details class="ocr published-revision" id="publishedRevision"><summary>团队校订版 ${esc(r.reviewedAt)} · ${esc(publicationLabel(p))}</summary>
       <p>已逐页对照扫描图复核。本机人工稿另行保留；此处为发布正文。</p>
       <div class="tools"><a href="./screening-data/part-${part}-collated.txt" download>下载本份已修订 TXT</a><a href="./screening-data/part-${part}-collated-status.csv" download>下载处理状态表</a></div>
+      ${p.targeted ? '<p>此前局部OCR记录已保留，当前正文及待核状态以本次整页复核为准。<a href="./screening-data/targeted-20261018/regions.json" target="_blank" rel="noopener">查看局部OCR历史</a></p>' : ''}
       ${r.pending.length ? `<ul class="pending-notes">${r.pending.map(q => `<li>待核：${esc(q.before)} — ${esc(q.note)}</li>`).join('')}</ul>` : ''}
       <pre>${esc(r.text)}</pre>
       ${(r.facsimiles || []).map(f => `<figure><img src="${esc(f.src)}" alt="${esc(f.caption)}"><figcaption>${esc(f.caption)}</figcaption></figure>`).join('')}
@@ -800,7 +801,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only'
     if (![1, 2, 3, 4].includes(part)) { app.innerHTML = '<p class="loading">请选择团队任务中的第 1–4 份初筛工作项。</p>'; return; }
     try {
       app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
-      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261018-targeted`);
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261018-part4`);
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
       materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;

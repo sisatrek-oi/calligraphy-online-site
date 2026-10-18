@@ -24,7 +24,8 @@ for (let part = 1; part <= 4; part++) {
   if (targetedPayload && (targetedPayload.version !== 1 || targetedPayload.part !== part || !Array.isArray(targetedPayload.pages))) throw new Error('Invalid targeted source');
   const targeted = new Map();
   for (const item of targetedPayload?.pages || []) {
-    if (!validTargeted(item, item.page) || targeted.has(item.page) || collated.has(item.page) || !index.pages.some(p => p.page === item.page)) throw new Error('Invalid targeted page');
+    // Full-page reviews can supersede a partial draft; retain both audit layers.
+    if (!validTargeted(item, item.page) || targeted.has(item.page) || !index.pages.some(p => p.page === item.page)) throw new Error('Invalid targeted page');
     targeted.set(item.page, item);
   }
   if (headings.length !== index.pages.length) throw new Error('OCR page count mismatch');

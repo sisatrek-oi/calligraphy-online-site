@@ -43,8 +43,9 @@ export function targetedSummary(value) {
 
 export function targetedLabel(item) {
   const s = item.targetedSummary;
+  if (s && item.publication) return `局部OCR历史${s.regions}区域·已纳入团队复核`;
   return s ? `局部已处理${s.confirmed}/${s.regions}${s.pending ? `·待核${s.pending}处` : ''}·整页未校` : '';
 }
 
 export const targetedRelease = { date: '2026-10-18', pages: 22, regions: 62, confirmed: 61, pending: 1,
-  parts: { 1: { pages: 4, regions: 8, pending: 0 }, 4: { pages: 18, regions: 54, pending: 1 } } };
+  parts: { 1: { pages: 4, regions: 8, pending: 0 }, 4: { pages: 18, regions: 54, pending: 1, collatedPages: 2 } } };
