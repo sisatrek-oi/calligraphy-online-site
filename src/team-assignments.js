@@ -58,8 +58,15 @@ export function assignmentProgress(storage, assignment) {
         if(isVerified(collation))verified++;
         else if(typeof collation?.text==='string')draft++;
       }
-      return {...segment,lastPage:segmentHasPage(segment,saved?.lastPage) ? saved.lastPage : null};
+      return {...segment,lastPage:segmentHasPage(segment,saved?.lastPage) ? saved.lastPage : null, savedAt:Date.parse(saved?.savedAt) || 0};
     });
     return {verified,draft,segments};
   } catch { return null; }
+}
+
+// One overview entrance per member; resume the most recently saved assigned segment.
+export function assignmentEntry(assignment, progress) {
+  const candidates = (progress?.segments || []).filter(s=>s.lastPage);
+  const segment = candidates.reduce((latest,s)=>!latest || s.savedAt>latest.savedAt ? s : latest,null) || assignment.segments[0];
+  return {part:segment.part,page:segment.lastPage || null,href:assignmentHref(assignment.id,segment.part,segment.lastPage)};
 }

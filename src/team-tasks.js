@@ -2,7 +2,7 @@ import { teamRelease } from './team-collation.js?v=20261018-part3';
 import { targetedRelease } from './targeted-ocr.js?v=20261018-part4';
 import { isVerified } from './collation-core.js?v=20261013-typo-only';
 import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
-import { assignments, assignmentCount, assignmentHref, assignmentProgress } from './team-assignments.js?v=seven-20261018';
+import { assignments, assignmentCount, assignmentHref, assignmentProgress, assignmentEntry } from './team-assignments.js?v=entry-20261019';
 
 (() => {
   const app = document.querySelector('#teamTasksApp');
@@ -82,12 +82,12 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress } from
       const assignment = assignments[index];
       const slot = app.querySelector(`[data-local-progress="${assignment.id}"]`);
       if (!slot) return;
-      for (const segment of count?.segments || assignment.segments) {
-        const link = app.querySelector(`[data-member="${assignment.id}"][data-part="${segment.part}"]`);
-        if (link) {
-          link.href = assignmentHref(assignment.id, segment.part, segment.lastPage);
-          link.textContent = segment.lastPage ? `继续第 ${segment.lastPage} 页 →` : `进入 ${segment.start === 1 ? 5 : segment.start}–${segment.end} 页 →`;
-        }
+      const entry = assignmentEntry(assignment, count);
+      const link = app.querySelector(`[data-member="${assignment.id}"]`);
+      if (link) {
+        link.href = entry.href;
+        link.dataset.part = entry.part;
+        link.textContent = entry.page ? `继续第 ${entry.page} 页 →` : '进入任务 →';
       }
       slot.textContent = count === null ? '本机记录无法读取'
         : `本机已校验 ${count.verified} / ${assignmentCount(assignment)} 页 · 草稿 ${count.draft} 页`;
@@ -100,17 +100,13 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress } from
     return (release ? `<span class="local-progress">团队回收：${release.complete}页已修改完毕 · ${release.pending}页已修订待核</span>` : '') +
       (local ? `<span class="local-progress">局部重OCR：${local.pages}页${local.regions}区域已处理 · ${local.pending}区域待核 · ${local.collatedPages ? `其中${local.collatedPages}页已纳入团队复核，其余${local.pages-local.collatedPages}页整页未校` : '整页未校'}</span>` : '');
   }
-  function releaseLinks(part) {
-    return (teamRelease.parts[part] ? `<a href="./screening-data/part-${part}-collated.txt" download>已修订 TXT</a><a href="./screening-data/part-${part}-collated-status.csv" download>修改状态表</a>` : '') +
-      (targetedRelease.parts[part] ? `<a href="./screening-data/part-${part}-targeted.txt" download>局部修订TXT</a><a href="./screening-data/part-${part}-targeted-status.csv" download>局部状态表</a>` : '');
-  }
   function offline() {
     shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>选择自己的页段，左右对照原页与 TXT，逐页校勘后导出。</p></header>
       <div class="overview-stats" aria-label="当前任务规模"><div><strong>7</strong><span>校勘成员</span></div><div><strong>851</strong><span>后续整页校对</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮有效页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已校验</span></div></div>
       <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 七人分工</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>原四份各移交末尾100页，共400页分给新增三人。原四人保留前段和已做成果。</p></div><span class="task-state">分工已更新</span></div>
         <div class="overview-list-head"><h3>分工与材料</h3><span>按原 PDF 物理页定位</span></div>
-        <div class="overview-unit-list">${assignments.map(a => `<article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span>已交回校验 ${a.received} 页 · 后续整页校对 ${a.remaining} 页</span><span class="local-progress" data-local-progress="${a.id}">读取本机进度…</span>${a.id<=4 ? releaseMarkup(a.id) : ''}</div><div class="unit-actions">${a.segments.map(s=>`<a class="unit-primary" data-member="${a.id}" data-part="${s.part}" href="${assignmentHref(a.id,s.part)}">进入 ${s.start===1 ? 5 : s.start}–${s.end} 页 →</a>`).join('')}${a.id<=4 ? releaseLinks(a.id) : ''}</div></article>`).join('')}</div>
-        <div class="overview-handoff"><strong>交付方式</strong><span>每页对照原图核对错字。跨两段的成员分别进入、分别导出ZIP；正文和表格仅列当前分工段，JSON备份保留该原分份的全部个人记录。</span></div></section>
+        <div class="overview-unit-list">${assignments.map(a => `<article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span>已交回校验 ${a.received} 页 · 后续整页校对 ${a.remaining} 页</span><span class="local-progress" data-local-progress="${a.id}">读取本机进度…</span>${a.id<=4 ? releaseMarkup(a.id) : ''}</div><div class="unit-actions"><a class="unit-primary" data-member="${a.id}" data-part="${a.segments[0].part}" href="${assignmentHref(a.id,a.segments[0].part)}">进入任务 →</a></div></article>`).join('')}</div>
+        <div class="overview-handoff"><strong>交付方式</strong><span>每页对照原图核对错字。跨两段的成员在任务内切换、分别导出ZIP；正文和表格仅列当前分工段，JSON备份保留该原分份的全部个人记录。修订TXT、状态表等下载统一放在任务内的“材料与恢复”。</span></div></section>
       <p class="overview-note">已交回校验190页，均已有团队复核稿（173页已修改完毕、17页待核）。已做正文、草稿、修改率底稿与历史记录均保留；静态站不汇总个人实时进度。同一浏览器沿用原四份记录，不会按成员编号创建新账号。原OCR、扫描及局部修订保持。</p>
       <details class="overview-secondary"><summary>原四份完整材料与历史进度</summary><p>如需查看已移交页的旧个人稿或下载原材料，可打开原分份完整视图。原记录不会因分工调整而删除。</p><div class="unit-actions">${screeningRanges.map((_,i)=>`<a href="./screening.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div></details>
       <section class="overview-secondary"><div><span class="eyebrow">独立批次入口</span><h2>旧条目文件审核</h2><p>旧 188 条字段审核与本轮全书初筛分开处理，不计入上方任务规模。</p></div><a href="./review.html">进入文件审核 →</a></section></div>`);

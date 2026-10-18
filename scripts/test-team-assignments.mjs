@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assignments, assignmentCount, assignmentPages, assignmentFor, assignmentSegment, assignmentHref, assignmentProgress } from '../src/team-assignments.js';
+import { assignments, assignmentCount, assignmentPages, assignmentFor, assignmentSegment, assignmentHref, assignmentProgress, assignmentEntry } from '../src/team-assignments.js';
 import { createProgressStore } from '../src/screening-workflow.js';
 
 test('seven assignments cover every effective page exactly once with four equal 100-page handoffs',()=>{
@@ -46,4 +46,16 @@ test('reading seven-person progress does not migrate, overwrite or delete old ke
 test('unreadable prior progress is surfaced without replacement',()=>{
   const storage={getItem:()=>'{bad',setItem:()=>assert.fail('must not write')};
   assert.equal(assignmentProgress(storage,assignments[4]),null);
+});
+
+test('single member entrance resumes the newest eligible segment without writing records',()=>{
+  const records = {1:{version:1,part:1,lastPage:200,savedAt:'2026-10-18',reviews:{}},2:{version:1,part:2,lastPage:440,savedAt:'2026-10-19',reviews:{}}};
+  const storage={getItem:k=>JSON.stringify(records[Number(k.split('-').at(-1))]),setItem:()=>assert.fail('read only')};
+  const a=assignments[4];
+  assert.deepEqual(assignmentEntry(a,assignmentProgress(storage,a)),{part:2,page:440,href:'./screening.html?part=2&member=5&page=440'});
+  records[2].lastPage=329;
+  assert.equal(assignmentEntry(a,assignmentProgress(storage,a)).page,200);
+  records[1].lastPage=6;
+  assert.deepEqual(assignmentEntry(a,assignmentProgress(storage,a)),{part:1,page:null,href:'./screening.html?part=1&member=5&page=159'});
+  assert.equal(assignmentEntry(a,null).href,'./screening.html?part=1&member=5&page=159');
 });
