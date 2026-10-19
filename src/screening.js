@@ -3,7 +3,8 @@ import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=fulltex
 import { publicationLabel, teamRelease } from './team-collation.js?v=20261018-part3';
 import { targetedLabel, targetedRelease } from './targeted-ocr.js?v=20261018-part3';
 import { copyText } from './clipboard.js?v=20261012-copy';
-import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=human-mark-20261019';
+import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=member-task-20261019';
+import { captureMemberTask, buildMemberTaskBundle, mergeMemberBackup } from './member-task-export.js?v=member-task-20261019';
 import { assignmentFor, assignmentSegment, assignmentPages, assignmentHref } from './team-assignments.js?v=seven-20261018';
 import { readJson, createMaterialLoader } from './screening-loader.js?v=fulltext-20261019';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft } from './collation-core.js?v=human-mark-20261019';
@@ -399,7 +400,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     app.innerHTML = `<main class="page">
       <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / ${assignment ? `成员 ${assignment.id} · ${esc(assignment.name)} / 原第${part}份` : `原第${part}份完整视图`} / 原 PDF ${state.data.pages[0].page}–${state.data.pages.at(-1).page} 页</span><h1>原文对照校勘</h1><p>机器识别 → 大模型复核 → 人工全文检查</p></div><span class="progress" id="progress">已标过 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
-        <div class="tools">${assignment ? assignment.segments.filter(s=>s.part!==part).map(s=>`<a class="assignment-switch download" href="${assignmentHref(assignment.id,s.part)}">另一段 ${s.start}–${s.end} →</a>`).join('') : ''}<button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : assignment ? '导出本段ZIP' : '一键导出全部'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">${assignment ? '本段正文与表格打包导出；JSON保留原分份全部个人记录。另一段需分别导出。' : '一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。'}</p><a class="download" href="./screening-data/part-${part}-work.txt" download>下载本份工作TXT</a>${teamRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-collated.txt" download>原第${part}份已修订 TXT</a><a class="download" href="./screening-data/part-${part}-collated-status.csv" download>原第${part}份修改状态表</a>` : ''}${targetedRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-targeted.txt" download>原第${part}份局部修订TXT</a><a class="download" href="./screening-data/part-${part}-targeted-status.csv" download>原第${part}份局部状态表</a>` : ''}<a class="download" href="${taskOcrHref(part)}" download>${assignment ? `下载原第${part}份完整OCR` : '下载原始 OCR（历史）'}</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
+        <div class="tools">${assignment ? assignment.segments.filter(s=>s.part!==part).map(s=>`<a class="assignment-switch download" href="${assignmentHref(assignment.id,s.part)}">另一段 ${s.start}–${s.end} →</a>`).join('') : ''}<button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : assignment ? '导出我的任务' : '导出本份材料'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">${assignment ? '一次导出本人负责的全部页段；正文、表格和JSON仅含本人任务，跨段也只需一个ZIP。' : '一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。'}</p><a class="download" href="./screening-data/part-${part}-work.txt" download>下载本份工作TXT</a>${teamRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-collated.txt" download>原第${part}份已修订 TXT</a><a class="download" href="./screening-data/part-${part}-collated-status.csv" download>原第${part}份修改状态表</a>` : ''}${targetedRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-targeted.txt" download>原第${part}份局部修订TXT</a><a class="download" href="./screening-data/part-${part}-targeted-status.csv" download>原第${part}份局部状态表</a>` : ''}<a class="download" href="${taskOcrHref(part)}" download>${assignment ? `下载原第${part}份完整OCR` : '下载原始 OCR（历史）'}</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
           <label class="file-button">导入进度 JSON<input id="backupFile" type="file" accept="application/json,.json" /></label><p class="hint">恢复时先解压交付包，再选择其中的进度备份JSON；旧版备份也可使用。</p>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
@@ -414,7 +415,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
         <div class="theory-toolbar"><small id="theoryStatus">原图与完整正文逐页核对；不标出修改处。</small></div>
         <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
         <div class="change-log" id="changeLog" aria-live="polite"></div>
-        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后整包交回</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" data-export-all class="drawer-save" ${exporting ? 'disabled' : ''}>一键导出全部</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div>${publishedMarkup(p)}<details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
+        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后整包交回</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" data-export-all class="drawer-save" ${exporting ? 'disabled' : ''}>${assignment ? '导出我的任务' : '导出本份材料'}</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div>${publishedMarkup(p)}<details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
         <div class="validation" id="validation" aria-live="polite"></div>
         <label>备注（选填）<textarea id="question" rows="2" placeholder="可记下看不清的字，留待后续复核；无需为格式或符号填写说明">${esc(review.question || '')}</textarea></label>
         <p class="hint">逐栏检查本页全文，发现错误直接修改TXT；确认后进入下一页。修改正文后需重新确认。</p>
@@ -426,7 +427,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
         <form id="candidateForm"><div class="row"><label>书家<input name="author" maxlength="100" placeholder="可写待核" /></label><label>书体<input name="style" maxlength="100" placeholder="可写待核" /></label></div>
           <label>连续原文摘录<textarea name="quote" rows="2" required></textarea></label><label>风格描述依据<textarea name="basis" rows="2" required></textarea></label>
           <label>不确定或待核事项<textarea name="uncertainty" rows="2"></textarea></label><button type="submit">添加本页候选</button></form>
-        <h3>交回负责人</h3><p class="hint">初筛表与候选表一起放入ZIP，未审核页保留空行便于查漏。</p><div class="form-actions"><button type="button" data-export-all class="primary" ${exporting ? 'disabled' : ''}>一键导出全部</button></div>
+        <h3>交回负责人</h3><p class="hint">初筛表与候选表一起放入ZIP，未审核页保留空行便于查漏。</p><div class="form-actions"><button type="button" data-export-all class="primary" ${exporting ? 'disabled' : ''}>${assignment ? '导出我的任务' : '导出本份材料'}</button></div>
       </details></div><div class="drawer-footer"><div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${humanMarked(p,review) || draft().checks?.wording ? 'checked' : ''} />${key === 'wording' ? '已对照原图逐栏检查本页全文' : label}</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">查看文本提醒</button><button id="verifyNext" class="primary">标记本页并继续</button></div></div></aside></div></section></div>
       <div id="selectionMenu" class="selection-menu" role="dialog" aria-label="替换选中文字" hidden>
         <div class="selection-menu-title"><strong>替换选中文字</strong><span data-selection-count></span></div>
@@ -518,11 +519,27 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
+  let exportMaterials = {};
   const runBundleExport = createBundleExporter({
-    capture: () => ({ progress: payload(), unsaved: Boolean(state.saveProblem), saveConflict: state.saveConflict,
-      exportedAt: new Date().toISOString(), ...(assignment ? { member: assignment.id } : {}) }),
-    loadMaterials: () => materialLoader.ensureAll(),
-    build: snapshot => buildCollationBundle({ ...snapshot, pages: state.data.allPages }),
+    capture: () => assignment ? captureMemberTask({ storage:localStorage, member:assignment.id,
+      currentProgress:payload(), unsaved:Boolean(state.saveProblem), saveConflict:state.saveConflict })
+      : { progress:payload(), unsaved:Boolean(state.saveProblem), saveConflict:state.saveConflict, exportedAt:new Date().toISOString() },
+    loadMaterials: async snapshot => {
+      exportMaterials = {};
+      await materialLoader.ensureAll();
+      exportMaterials[part] = state.data.allPages;
+      if (assignment) for (const entry of snapshot.snapshots) {
+        const otherPart = entry.progress.part;
+        if (otherPart === part) continue;
+        const data = await readJson(`./screening-data/part-${otherPart}-index.json?v=remaining-final-20261019`);
+        if (data.part!==otherPart || !Array.isArray(data.pages) || data.pages.length!==data.end-data.start+1 || !data.materials)
+          throw new Error(`原第${otherPart}份索引不完整`);
+        await createMaterialLoader(data).ensureAll();
+        exportMaterials[otherPart] = data.pages;
+      }
+    },
+    build: snapshot => assignment ? buildMemberTaskBundle({ ...snapshot, pagesByPart:exportMaterials })
+      : buildCollationBundle({ ...snapshot, pages:state.data.allPages }),
     download: bundle => downloadBlob(bundle.name, new Blob([bundle.bytes], { type: 'application/zip' })),
   });
   async function exportAll() {
@@ -533,7 +550,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     state.notice = '正在打包完整交付材料，请稍候…'; state.error = ''; showMessage();
     try {
       const bundle = await runBundleExport();
-      state.notice = `已发起ZIP下载，正文、人工标记和进度备份已打包，请整包交回。包内为点击时的进度，后续改动请再次导出。${bundle.manifest.unsaved ? '本包包含尚未保存的修改，请保留备份。' : ''}`;
+      state.notice = `已发起ZIP下载，${assignment ? '仅本人负责页段的' : ''}正文、人工标记和进度备份已打包，请整包交回。包内为点击时的进度，后续改动请再次导出。${bundle.manifest.unsaved ? '本包包含尚未保存的修改，请保留备份。' : ''}`;
     } catch (error) {
       state.error = `${error.message || '打包失败'}。未生成不完整交付包，请再次点击重试；如材料持续无法载入，可先抢救进度。`;
       state.notice = '';
@@ -649,7 +666,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       const completed = page().page;
       const next = nextUnmarkedIndex(state.data.pages, state.reviews, state.index);
       if (next >= 0) select(next, `第 ${completed} 页已标过并保存；已转到第 ${state.data.pages[next].page} 页继续。`);
-      else { state.notice = assignment ? '当前分工段已全部标过，请导出本段ZIP；如另有页段，可通过导出按钮旁的链接切换。' : '本份已全部标过，请一键导出全部并将ZIP交回负责人。'; render(); }
+      else { state.notice = assignment ? '当前分工段已全部标过，可导出我的任务；跨段文件会一并打包。' : '本份已全部标过，请一键导出全部并将ZIP交回负责人。'; render(); }
       return;
     }
     if (button.id === 'markSeen' && (state.imageReady || current().seen)) { record({ seen: !current().seen }); render(); return; }
@@ -751,12 +768,20 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     if (event.target.id === 'backupFile') {
       if (!event.target.files?.length) return;
       try {
-        const saved = JSON.parse(await event.target.files[0].text());
+        let saved = JSON.parse(await event.target.files[0].text());
         if (saved.version !== 1 || saved.part !== part || !saved.reviews || typeof saved.reviews !== 'object' || Array.isArray(saved.reviews))
           throw new Error('进度备份与本份页段不匹配');
-        if ((Object.keys(state.reviews).length || state.saveProblem) && !confirm('导入会替换本份在当前浏览器的进度，包括其他标签页的更新。请确认已备份，再继续。')) return;
+        const scoped = saved.exportScope !== undefined;
+        if (scoped) {
+          if (progressStore.hasChanged()) throw new Error('其他标签页已更新进度，请先保留当前备份并载入本机最新进度，再恢复本人任务。');
+          saved = mergeMemberBackup(saved,payload(),assignment?.id ?? null);
+        }
+        if ((Object.keys(state.reviews).length || state.saveProblem) && !confirm(scoped
+          ? '导入仅更新本人备份中的页记录，其他页段保留；同页以备份为准。请确认已备份当前修改，再继续。'
+          : '导入会替换本份在当前浏览器的进度，包括其他标签页的更新。请确认已备份，再继续。')) return;
         const restoredIndex = initialPageIndex(state.data.pages, null, saved.lastPage ?? page().page);
         await materialLoader.ensurePage(state.data.pages[restoredIndex].page);
+        if (scoped && progressStore.hasChanged()) throw new Error('恢复期间其他标签页更新了进度，原记录未改变，请重新核对备份。');
         ++selectionRequest;
         progressStore.allowBackupReplacement();
         state.reviews = saved.reviews; state.person = String(saved.person || '');
