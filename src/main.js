@@ -146,8 +146,9 @@ const state = {
   schemaVersion: SCHEMA_VERSION,
   promptVersion: PROMPT_VERSION,
   lastSavedAt: "",
-  view: location.hash === "#ingest" ? "ingest" : ["#detail", "#review"].includes(location.hash) ? "detail" : "home",
+  view: location.hash === "#ingest" ? "ingest" : ["#detail", "#table", "#review"].includes(location.hash) ? "detail" : "home",
   detailMode: location.hash === "#review" ? "review" : "table",
+  entryTaskOverview: location.hash === "#detail",
   filter: "all",
   activeProblemTagFilter: "all",
   qualityFocus: null,
@@ -251,7 +252,8 @@ const state = {
 };
 
 function applyRouteFromHash() {
-  state.view = location.hash === "#ingest" ? "ingest" : ["#detail", "#review"].includes(location.hash) ? "detail" : "home";
+  state.entryTaskOverview = location.hash === "#detail";
+  state.view = location.hash === "#ingest" ? "ingest" : ["#detail", "#table", "#review"].includes(location.hash) ? "detail" : "home";
   state.detailMode = location.hash === "#review" ? "review" : "table";
 }
 
@@ -278,8 +280,8 @@ function navigateToView(nextView, nextDetailMode = state.detailMode) {
   setViewMotion(nextView, nextDetailMode);
   state.view = nextView;
   state.detailMode = nextDetailMode;
-  if (nextView === "detail") applyDetailModeDefaults(nextDetailMode);
-  const nextHash = state.view === "ingest" ? "#ingest" : state.view === "detail" ? (state.detailMode === "review" ? "#review" : "#detail") : "#home";
+  if (nextView === "detail") { state.entryTaskOverview = false; applyDetailModeDefaults(nextDetailMode); }
+  const nextHash = state.view === "ingest" ? "#ingest" : state.view === "detail" ? (state.detailMode === "review" ? "#review" : "#table") : "#home";
   state.suppressHashMotion = location.hash !== nextHash;
   location.hash = nextHash;
 }
@@ -6279,8 +6281,8 @@ async function prepareReviewPilot() {
   }
 }
 
-function switchLocalWorkspace(id) {
-  if (cloudReady() || !id || !saveWorkspace()) return;
+function switchLocalWorkspace(id, {renderAfter = true} = {}) {
+  if (cloudReady() || !id || !saveWorkspace()) return false;
   const previous = state.workspaceId;
   const before = { ...state };
   try {
@@ -6290,7 +6292,7 @@ function switchLocalWorkspace(id) {
     Object.assign(state, before);
     workspaceStorage.setItem(WORKSPACE_POINTER_KEY, previous);
     window.alert("工作区读取失败，已保留当前工作区。");
-    return;
+    return false;
   }
   state.workspaceListOpen = false;
   state.filter = "all";
@@ -6299,8 +6301,8 @@ function switchLocalWorkspace(id) {
   state.sourceText = "";
   state.sourceStatus = "idle";
   state.sourceCache = new Map();
-  render();
-  loadSelectedSource();
+  if (renderAfter) { render(); loadSelectedSource(); }
+  return true;
 }
 
 function activateBookTask(value) {
@@ -6471,7 +6473,7 @@ function renderShell(content) {
           ${topUserControl()}
         </div>
       </header>
-      ${state.view === "detail" ? window.WorkspaceUI.tabs(state.detailMode) : ""}
+      ${state.view === "detail" ? window.WorkspaceUI.tabs(state.entryTaskOverview ? "tasks" : state.detailMode) : ""}
       ${content}
     </main>
     <div class="primary-nav-layer ${state.primaryNavOpen ? "open" : ""}" data-primary-nav-layer aria-hidden="${String(!state.primaryNavOpen)}">
@@ -6528,6 +6530,19 @@ function renderHome() {
     return;
   }
   renderShell(window.WorkspaceUI.homeMarkup());
+}
+
+function renderEntryTaskBoard() {
+  const current = {id: state.workspaceId, name: state.datasetName, count: state.rows.length, current: true};
+  let others = [];
+  if (!cloudReady()) {
+    try { others = localWorkspaceList().filter(task => task.id !== current.id && (task.count || task.bookTask)); } catch { /* Current task remains available if storage is blocked. */ }
+  }
+  renderShell(window.EntryTaskBoard.markup([current, ...others]));
+  window.EntryTaskBoard.attach({storage: workspaceStorage, openTask: id => window.WorkspaceUI.transition(() => {
+    if (id !== state.workspaceId && !switchLocalWorkspace(id, {renderAfter: false})) return;
+    navigateToView("detail", "table"); render(); loadSelectedSource();
+  })});
 }
 
 function renderDetail() {
@@ -6843,6 +6858,7 @@ function render() {
   const scroll = sameRow ? { x: table?.scrollLeft || 0, y: table?.scrollTop || 0, detail: detail?.scrollTop || 0 } : null;
   if (state.view === "home") renderHome();
   else if (state.view === "ingest") renderAncientIngest();
+  else if (state.entryTaskOverview) renderEntryTaskBoard();
   else renderDetail();
   if (preserveSearch) {
     document.querySelector("#searchInput")?.replaceWith(search);
@@ -6882,7 +6898,7 @@ function activateWorkspaceTool(tool) {
 function currentSectionLabel() {
   if (state.view === "home") return location.hash === "#settings" ? "设置与账户" : "任务首页";
   if (state.view === "ingest") return "材料导入与处理";
-  return state.detailMode === "review" ? "条目整理 · 需回检" : "条目整理 · 全部条目";
+  return state.entryTaskOverview ? "条目整理 · 任务列表" : state.detailMode === "review" ? "条目整理 · 需回检" : "条目整理 · 全部条目";
 }
 
 function setPrimaryNav(open, restoreFocus = true) {
@@ -7752,7 +7768,7 @@ async function loadBundledSampleData() {
     state.view = requestedIngest ? "ingest" : "detail";
     state.detailMode = requestedReviewMode ? "review" : "table";
     applyDetailModeDefaults(state.detailMode);
-    location.hash = requestedIngest ? "#ingest" : state.detailMode === "review" ? "#review" : "#detail";
+    location.hash = requestedIngest ? "#ingest" : state.detailMode === "review" ? "#review" : state.entryTaskOverview ? "#detail" : "#table";
     return true;
   } catch (error) {
     state.uploadLog = [logEntry("warn", "真实样本", error.message, { step: "样本导入" })];

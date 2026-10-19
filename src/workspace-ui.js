@@ -22,7 +22,7 @@
   try{sidebarCollapsed=localStorage.getItem(sidebarKey)==='1';}catch{}
   const esc = v => String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const icon = key => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icons[key]||icons.home}"/></svg>`;
-  const tabs = mode => `<nav class="entry-view-tabs" aria-label="条目视图"><a href="./index.html#detail" ${mode==='table'?'aria-current="page"':''}>全部条目</a><a href="./index.html#review" ${mode==='review'?'aria-current="page"':''}>需回检</a><a href="./review.html" ${mode==='independent'?'aria-current="page"':''}>独立审核</a></nav>`;
+  const tabs = mode => `<nav class="entry-view-tabs" aria-label="条目视图"><a href="./index.html#detail" ${mode==='tasks'?'aria-current="page"':''}>任务列表</a><a href="./index.html#table" ${mode==='table'?'aria-current="page"':''}>全部条目</a><a href="./index.html#review" ${mode==='review'?'aria-current="page"':''}>需回检</a><a href="./review.html" ${mode==='independent'?'aria-current="page"':''}>独立审核</a></nav>`;
   function syncSidebar() {
     document.body?.classList[sidebarCollapsed?'add':'remove']('workspace-nav-collapsed');
     const toggle=document.querySelector('#workspaceSidebarToggle'),expanded=mobileMedia?.matches?document.body.classList.contains('workspace-nav-open'):!sidebarCollapsed,label=expanded?'收起侧边栏':'展开侧边栏';
@@ -72,7 +72,7 @@
   window.WorkspaceUI={mount,transition,icon,esc,tabs,homeMarkup:()=>`<section class="navigation-home" aria-label="工作导航"><p class="workspace-kicker">书论工作区 / 任务首页</p><h1>从这里开始</h1><div class="navigation-tiles">${items.slice(1).map(([key,label,href,description])=>`<a class="navigation-tile" href="${href}"><span class="navigation-tile-icon">${icon(key)}</span><span><strong>${label}</strong><small>${description}</small></span><span class="navigation-arrow" aria-hidden="true">→</span></a>`).join('')}</div></section>`};
   function bootstrap() {
     const file=location.pathname.split('/').pop()||'index.html';
-    const views={'index.html':location.hash==='#detail'||location.hash==='#review'?'entries':location.hash==='#ingest'?'materials':'home','team-tasks.html':'proof','screening.html':'proof','annotation-tasks.html':'annotation','annotation.html':'annotation','materials.html':'materials','delivery.html':'delivery','review.html':'entries'};
+    const views={'index.html':location.hash==='#detail'||location.hash==='#table'||location.hash==='#review'?'entries':location.hash==='#ingest'?'materials':'home','team-tasks.html':'proof','screening.html':'proof','annotation-tasks.html':'annotation','annotation.html':'annotation','materials.html':'materials','delivery.html':'delivery','review.html':'entries'};
     if(views[file])mount(views[file]);
   }
   if(typeof MutationObserver!=='undefined' && document.documentElement) {
