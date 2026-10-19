@@ -87,6 +87,13 @@
     const file=location.pathname.split('/').pop()||'index.html';
     const views={'index.html':location.hash==='#detail'||location.hash==='#table'||location.hash==='#review'?'entries':location.hash==='#ingest'?'materials':'home','team-tasks.html':'proof','screening.html':'proof','annotation-tasks.html':'annotation','annotation.html':'annotation','materials.html':'materials','delivery.html':'delivery','review.html':'entries'};
     if(views[file])mount(views[file]);
+    if(file === 'index.html') window.setTimeout(() => {
+      const slot = document.querySelector('#app > .workspace-startup');
+      if(!slot)return;
+      slot.setAttribute('role','alert');
+      slot.innerHTML='<strong>工作区未能完成加载</strong><p>请重新加载后继续。原有正文、草稿和进度仍保留在此浏览器。</p><button type="button">重新加载</button> <a href="./team-tasks.html">前往原文校对 →</a>';
+      slot.querySelector('button').addEventListener('click',()=>location.reload());
+    }, 8000);
   }
   if(typeof MutationObserver!=='undefined' && document.documentElement) {
     if(document.body)bootstrap();

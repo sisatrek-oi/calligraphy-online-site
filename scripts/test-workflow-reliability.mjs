@@ -38,7 +38,7 @@ function app({ width, disk = new Map(), hostname = "127.0.0.1", search = "" } = 
   };
   const root = { innerHTML: "" };
   const context = vm.createContext({
-    console, URL, URLSearchParams, crypto: { randomUUID }, location: { hash: "#detail", hostname, search },
+    console, URL, URLSearchParams, AbortController, crypto: { randomUUID }, location: { hash: "#detail", hostname, search },
     localStorage: storage,
     document: { querySelector: (selector) => selector === "#app" ? root : null, querySelectorAll: () => [], addEventListener() {}, body:{classList:{add(){},remove(){},contains(){return false;}},dataset:{},prepend(){},setAttribute(){},removeAttribute(){}}, createElement:()=>({querySelector:()=>({}),innerHTML:""}) },
     FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] ?? null; } },
@@ -199,6 +199,31 @@ test("local API disabled config is authoritative and does not probe a missing st
   });
   assert.deepEqual(JSON.parse(JSON.stringify(await a.run("loadCloudConfig()"))), { enabled: false, aiEnabled: false });
   assert.deepEqual(requests, ["/api/config"]);
+});
+
+test('GitHub Pages never waits for an unavailable root API', async () => {
+  const a=app({hostname:'sisatrek-oi.github.io'}),requests=[];
+  a.set('fetch',async endpoint=>{requests.push(endpoint);return {ok:false};});
+  assert.equal(await a.run('loadCloudConfig()'),null);
+  assert.deepEqual(requests,['./cloud-config.json']);
+});
+
+test('startup config deadline covers a stalled fetch and stalled response body', async () => {
+  for(const body of [false,true]){
+    const a=app({hostname:'sisatrek-oi.github.io'});let signal;
+    a.set('fetch',async (_,options)=>{signal=options.signal;return body?{ok:true,json:()=>new Promise(()=>{})}:await new Promise(()=>{});});
+    assert.equal(await a.run('loadCloudConfig({timeoutMs:15})'),null);
+    assert.equal(signal.aborted,true);
+  }
+});
+
+test('configured cloud SDK failure cannot restore a local demo identity',async()=>{
+ const a=app({hostname:'cloud.example'});
+ a.set('fetch',async()=>({ok:true,json:async()=>({enabled:true,supabaseUrl:'https://example.invalid',supabaseAnonKey:'public-test'})}));
+ a.run("state.entryStage='signin';window.DeviceSession.remember(localStorage,'tongji');window.CalligraphyCloud={loadSupabaseSdk:async()=>{throw new Error('SDK unavailable');},createSupabaseClient:()=>{throw new Error('must not create');}};");
+ const before=[...a.disk];assert.equal(await a.run('initCloudRuntime()'),false);
+ assert.equal(a.run('restoreLocalDemoSession()'),false);assert.equal(a.get('state.entryStage'),'signin');
+ assert.equal(a.get('state.cloud.config.enabled'),true);assert.equal(a.get('state.cloud.status'),'error');assert.deepEqual([...a.disk],before);
 });
 
 test("project settings separates schema and local model connection without storing the key", async () => {

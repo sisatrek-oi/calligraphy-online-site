@@ -673,13 +673,28 @@ function cloudStatusPanel() {
   `;
 }
 
-async function loadCloudConfig() {
-  const endpoints = ["/api/config", "./cloud-config.json"];
+async function fetchStartupJson(endpoint, timeoutMs) {
+  const controller = new AbortController();
+  let timer;
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await fetch(endpoint, { cache: 'no-store', signal: controller.signal });
+        return response.ok ? await response.json() : null;
+      })(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(new Error('工作区配置读取超时')); }, timeoutMs);
+      })
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
+async function loadCloudConfig({ timeoutMs = 2500 } = {}) {
+  // GitHub Pages is static: its root /api belongs to no application server.
+  const endpoints = location.hostname.endsWith('.github.io') ? ["./cloud-config.json"] : ["/api/config", "./cloud-config.json"];
   for (const endpoint of endpoints) {
     try {
-      const response = await fetch(endpoint, { cache: "no-store" });
-      if (!response.ok) continue;
-      const config = await response.json();
+      const config = await fetchStartupJson(endpoint, timeoutMs);
       if (endpoint === "/api/config" && config && typeof config === "object" && ("enabled" in config || "aiEnabled" in config)) return config;
       if (config?.enabled || config?.aiEnabled) return config;
     } catch {
@@ -743,6 +758,7 @@ async function initCloudRuntime() {
     return false;
   }
   try {
+    await window.CalligraphyCloud.loadSupabaseSdk();
     const client = window.CalligraphyCloud.createSupabaseClient(config);
     const store = window.CalligraphyCloud.createCloudStore(client);
     state.cloud = { ...state.cloud, mode: "cloud", status: "connecting", config, store, message: "正在连接云端" };

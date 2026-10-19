@@ -269,6 +269,29 @@
     };
   }
 
+  let sdkPromise, sdkAttempt = 0;
+  function loadSupabaseSdk({ timeoutMs = 5000 } = {}) {
+    if (window.supabase?.createClient) return Promise.resolve();
+    if (!sdkPromise) sdkPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      const attempt = ++sdkAttempt;
+      // A removed timed-out script can leave its resource request in flight.
+      // Use a fresh request on retry instead of joining that stalled download.
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2' + (attempt > 1 ? `?workspace-retry=${attempt}` : '');
+      script.async = true;
+      const finish = error => {
+        clearTimeout(timer);
+        script.onload = script.onerror = null;
+        if (error) { script.remove(); reject(error); } else resolve();
+      };
+      const timer = setTimeout(() => finish(new Error('云端连接组件加载超时，请重试。')), timeoutMs);
+      script.onload = () => finish(window.supabase?.createClient ? null : new Error('云端连接组件未能载入，请重试。'));
+      script.onerror = () => finish(new Error('云端连接组件未能载入，请检查网络后重试。'));
+      document.head.append(script);
+    });
+    return sdkPromise.catch(error => { sdkPromise = null; throw error; });
+  }
+
   function createSupabaseClient(config) {
     if (!config?.enabled) return null;
     if (!config.supabaseUrl || !config.supabaseAnonKey) {
@@ -280,5 +303,5 @@
     return window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
   }
 
-  window.CalligraphyCloud = { createCloudStore, createSupabaseClient, canRole };
+  window.CalligraphyCloud = { createCloudStore, createSupabaseClient, loadSupabaseSdk, canRole };
 })();
