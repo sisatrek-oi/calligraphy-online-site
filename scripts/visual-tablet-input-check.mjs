@@ -1,3 +1,4 @@
+// Direct full-page IME regression; protected tablet input is covered by visual-handwriting-buffer-check.mjs.
 import {createRequire} from 'node:module';
 import path from 'node:path';
 const {chromium,webkit} = createRequire(import.meta.url)('playwright');
@@ -6,7 +7,7 @@ const out=path.resolve(process.env.OUTPUT_DIR||'test-artifacts/tablet-input');aw
 const results=[],base=process.env.BASE_URL||'http://127.0.0.1:8810',tag=process.env.CHECK_TAG||'after';
 const original='[001] 甲乙丙丁\n[002] 第二行文字\n[003] 最后一行文字';
 for(const engine of [chromium,webkit]) {
- const b=await engine.launch(),c=await b.newContext({viewport:{width:1024,height:768},hasTouch:true}),p=await c.newPage(),checks=[],errors=[];
+ const b=await engine.launch(),c=await b.newContext({viewport:{width:1024,height:768},hasTouch:false}),p=await c.newPage(),checks=[],errors=[];
  const check=(label,ok)=>{assert.ok(ok,label);checks.push(label);console.log(engine.name()+' PASS '+label);};p.on('pageerror',e=>errors.push(e.message));
  try {
   await p.goto(base+'/screening.html?part=3&member=3&page=603',{waitUntil:'networkidle'});await p.locator('#editText').waitFor();await p.locator('#editText').fill(original);

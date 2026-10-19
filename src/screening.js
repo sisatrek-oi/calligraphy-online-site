@@ -16,6 +16,7 @@ import { highlightHtml } from './theory-highlight.js?v=20261003-theory';
 import { annotationView, addAnnotation, removeAnnotation, restoreAnnotation, relocateAnnotation, completeAnnotations, rebaseAnnotations } from './theory-annotations.js?v=annotations-20261019';
 import { validateProgress } from './delivery-core.js?v=release-20261019';
 import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
+import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buffer-20261019';
 
 (() => {
   const app = document.querySelector('#screeningApp');
@@ -28,6 +29,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, annotationLastPage: null, annotationSavedAt: '', zoom: 100, validation: false, resetPending: false, annotationOpen: false, reviewOpen: false };
   state.selectionMenu = { open: false, start: 0, end: 0, text: '', x: 0, y: 0, targetId: '' };
   let editorObserver, materialLoader;
+  let tabletProofInput;
   let selectionRequest = 0;
   let exporting = false;
   let composingInput = null;
@@ -115,7 +117,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       editor.value = next;
       if (id === `#${targetId}`) {
         editor.focus({ preventScroll: true });
-        const caret = start + replacement.length;
+        const caret = next.slice(0,start + replacement.length).replace(/\r\n?/g,'\n').length;
         editor.setSelectionRange(caret, caret);
       }
     }
@@ -518,6 +520,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   }
 
   function render() {
+    tabletProofInput?.destroy();
     const p = page();
     const review = current();
     window.WorkspaceUI.mount(annotationMode?'annotation':'proof');
@@ -540,6 +543,9 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       </div><div class="validation" id="validation" aria-live="polite"></div><div class="drawer-footer proof-confirmation"><div class="checklist">${Object.entries(CHECKS).map(([key])=>`<label class="check"><input type="checkbox" data-check="${key}" ${humanMarked(p,review)||draft().checks?.wording?'checked':''}/>已对照原图逐栏检查本页全文</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">文本提醒</button><button id="verifyNext" class="primary">标记本页并继续 →</button></div></div></section></div>
       <div id="selectionMenu" class="selection-menu" role="dialog" aria-label="选中文字操作" hidden><div class="selection-menu-title"><strong>选中文字</strong><span data-selection-count></span></div><div class="selection-preview">“<span data-selection-text></span>”</div><label for="selectionReplacement">改为<input id="selectionReplacement" type="text" autocomplete="off" spellcheck="false"/></label><div class="selection-menu-actions"><button type="button" id="selectionMarkTheory">标为书论</button><button type="button" id="applySelectionReplace" class="primary">替换</button><button type="button" id="selectionDelete">删除选中</button><button type="button" id="closeSelectionMenu">取消</button></div></div></main>`;
     configureTask();
+    if (!annotationMode) tabletProofInput=mountTabletProofInput({app,editor:app.querySelector('#editText'),getText:()=>String(draft().text||''),
+      replace:(start,end,value)=>{const edit=commitTextReplacement(start,end,value);state.notice=`已记录${editSummary(edit)}，可在“备注与历史”中恢复原字。`;showMessage();},
+      notice:message=>{state.notice=message;showMessage();}});
     showMessage();
     syncReviewDrawer();
     syncAnnotationDrawer();
