@@ -1,0 +1,41 @@
+{
+  "status": "completed",
+  "newReviewedPages": 848,
+  "reusedModelPages": [
+    129,
+    147,
+    244
+  ],
+  "modelWorkingPagesTotal": 851,
+  "protectedHumanPages": 190,
+  "validPagesTotal": 1041,
+  "humanMarksCreated": 0,
+  "apiCalls": 4594,
+  "knownUsageCalls": 4562,
+  "interruptedBillingUnknownCalls": 32,
+  "knownEstimatedUSDPeak": 4.108184316000006,
+  "unknownReservedUSDPeakMax": 0.2226816,
+  "estimatedUSDPeakUpperIncludingUnknown": 4.330865916000006,
+  "estimatedUSDOffPeakKnown": 2.054092158000003,
+  "totalReservedUSDPeak": 32.126434200000055,
+  "apiWallSecondsKnown": 19220.794603149523,
+  "historicalFailedParserCalls": 3,
+  "recoveryPage": 888,
+  "allSourcePagesCovered": true,
+  "priceSource": "https://api-docs.deepseek.com/quick_start/pricing/",
+  "billingNote": "公开峰价估算；32次中断请求用量未知，按预留上限计入边界。非实际账单。页内请求仅列采用响应，失败/中断/重试以本整批记录为准。",
+  "evidenceVerification": {
+    "newPages": 848,
+    "protectedHumanPages": 190,
+    "reusedMachinePages": [
+      129,
+      147,
+      244
+    ],
+    "verifiedSuccessfulRequests": 4560,
+    "verifiedImageFiles": 13370,
+    "imageCurations": 26,
+    "blankPageCurations": 22,
+    "humanMarksWritten": 0
+  }
+}

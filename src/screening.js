@@ -784,7 +784,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       assignment = assignmentFor(member);
       segment = assignmentSegment(member, part);
       app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
-      state.data = await readJson(`./screening-data/part-${part}-index.json?v=remaining-part1-20261019`);
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=remaining-final-20261019`);
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
       materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;
