@@ -11,11 +11,16 @@
 @media(min-width:761px){
   .workspace-ui.workspace-nav-collapsed{--ws-sidebar:64px}
   .workspace-nav-collapsed .workspace-navigation{padding-right:7px;padding-left:7px}
-  .workspace-nav-collapsed .workspace-brand{justify-content:center;padding:0;margin-right:-7px;margin-left:-7px}
-  .workspace-nav-collapsed .workspace-brand>span,.workspace-nav-collapsed .workspace-navigation nav>a>span,.workspace-nav-collapsed .workspace-nav-bottom>a>span,.workspace-nav-collapsed #workspaceSidebarToggle>span,.workspace-nav-collapsed .workspace-nav-bottom>span{display:none}
-  .workspace-nav-collapsed .workspace-navigation nav>a{justify-content:center;padding:0;gap:0}
-  .workspace-nav-collapsed .workspace-nav-bottom{padding:15px 0 0;gap:10px}
-  .workspace-nav-collapsed #workspaceSidebarToggle,.workspace-nav-collapsed .workspace-settings-link{justify-content:center;padding:6px 0}
+  .workspace-nav-collapsed .workspace-brand{justify-content:flex-start;padding:0 18px;margin-right:-7px;margin-left:-7px;gap:0}
+  .workspace-navigation{overflow:hidden}
+  .workspace-brand>span,.workspace-navigation nav>a>span,.workspace-nav-bottom>a>span,#workspaceSidebarToggle>span{display:block;max-width:170px;opacity:1;visibility:visible;overflow:hidden;white-space:nowrap}
+  .workspace-nav-collapsed .workspace-brand>span,.workspace-nav-collapsed .workspace-navigation nav>a>span,.workspace-nav-collapsed .workspace-nav-bottom>a>span,.workspace-nav-collapsed #workspaceSidebarToggle>span{max-width:0;opacity:0;visibility:hidden}
+  .workspace-nav-bottom{min-height:140px;padding:20px 8px 0}
+  .workspace-nav-bottom>span{white-space:nowrap;height:14px;overflow:hidden}
+  .workspace-nav-collapsed .workspace-nav-bottom>span{opacity:0}
+  .workspace-nav-collapsed .workspace-navigation nav>a{justify-content:flex-start;padding:0 13.5px;gap:0}
+  .workspace-nav-collapsed .workspace-nav-bottom{padding:20px 0 0;gap:15px}
+  .workspace-nav-collapsed #workspaceSidebarToggle,.workspace-nav-collapsed .workspace-settings-link{justify-content:flex-start;padding:6px 13.5px;gap:0}
   .workspace-nav-collapsed #workspaceSidebarToggle svg{transform:rotate(180deg)}
 }
 
@@ -80,7 +85,7 @@ html,body{background:var(--ws-paper,#f5f4ed)}
 ::view-transition-old(workspace-navigation),::view-transition-old(workspace-mobile-navigation){display:none}
 ::view-transition-new(workspace-navigation),::view-transition-new(workspace-mobile-navigation){animation:none;opacity:1}
 ::view-transition-old(root){display:none}
-::view-transition-new(root){animation:none;opacity:1}
+::view-transition-new(root){animation:workspacePageEnter 180ms cubic-bezier(.22,1,.36,1) both;opacity:1}
 /* Remove the former delayed entry animations that replayed on each route. */
 .workspace-ui .app-shell.workspace-entering>:is(.topbar,.dashboard-grid,.review-screen),
 .workspace-ui .app-shell[class*="motion-"] :is(.review-screen,.dashboard-grid,.main-panel,.panel-head,.controls,.detail-panel,.dataset-rail,.dashboard-left){animation:none!important}
@@ -90,3 +95,26 @@ html,body{background:var(--ws-paper,#f5f4ed)}
 }
 
 .workspace-startup{margin:0;padding:36px;color:var(--ws-muted);font:13px/1.8 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+
+/* Small, opaque page movement: no blank fade or overlapping old/new text. */
+@keyframes workspacePageEnter{from{transform:translateY(8px)}to{transform:translateY(0)}}
+@media(min-width:761px) and (prefers-reduced-motion:no-preference){
+  .workspace-sidebar-moving{transition:padding-left 220ms cubic-bezier(.22,1,.36,1)}
+  .workspace-sidebar-moving .workspace-navigation{transition:width 220ms cubic-bezier(.22,1,.36,1),padding 220ms cubic-bezier(.22,1,.36,1)}
+  .workspace-sidebar-moving .workspace-brand,.workspace-sidebar-moving .workspace-navigation nav>a,.workspace-sidebar-moving .workspace-nav-bottom,.workspace-sidebar-moving #workspaceSidebarToggle,.workspace-sidebar-moving .workspace-settings-link{transition:padding 220ms cubic-bezier(.22,1,.36,1),gap 220ms cubic-bezier(.22,1,.36,1),margin 220ms cubic-bezier(.22,1,.36,1)}
+  .workspace-sidebar-moving :is(.workspace-brand,.workspace-navigation nav>a,.workspace-settings-link,#workspaceSidebarToggle)>span{transition:max-width 220ms cubic-bezier(.22,1,.36,1),opacity 140ms ease,visibility 0s}
+  .workspace-sidebar-moving.workspace-nav-collapsed :is(.workspace-brand,.workspace-navigation nav>a,.workspace-settings-link,#workspaceSidebarToggle)>span{transition:max-width 220ms cubic-bezier(.22,1,.36,1),opacity 100ms ease,visibility 0s 220ms}
+  .workspace-sidebar-moving .workspace-nav-bottom>span{transition:opacity 140ms ease}
+  .workspace-sidebar-moving #workspaceSidebarToggle svg{transition:transform 220ms cubic-bezier(.22,1,.36,1)}
+}
+.workspace-navigation nav>a{transition:background-color 140ms ease,color 140ms ease}
+@media(max-width:760px){
+  .workspace-ui .workspace-navigation{visibility:hidden;transition:transform 220ms cubic-bezier(.22,1,.36,1),visibility 0s 220ms}
+  .workspace-ui.workspace-nav-open .workspace-navigation{visibility:visible;transition:transform 220ms cubic-bezier(.22,1,.36,1),visibility 0s}
+  .workspace-ui .workspace-nav-scrim{display:block;position:fixed;z-index:39;inset:42px 0 0;width:100%;height:calc(100% - 42px);padding:0;border:0;border-radius:0;background:#24484326;opacity:0;pointer-events:none;transition:opacity 180ms ease}
+  .workspace-ui.workspace-nav-open .workspace-nav-scrim{opacity:1;pointer-events:auto}
+}
+@media(prefers-reduced-motion:reduce){
+  ::view-transition-new(root){animation:none;transform:none}
+  .workspace-ui,.workspace-ui .workspace-navigation,.workspace-ui .workspace-nav-scrim{transition:none!important}
+}
