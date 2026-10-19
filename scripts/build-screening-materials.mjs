@@ -3,6 +3,9 @@ import crypto from 'node:crypto';
 import { validCollation, publicationSummary } from '../src/team-collation.js';
 import { validTargeted, targetedSummary } from '../src/targeted-ocr.js';
 import { validModelReview, modelReviewSummary } from '../src/model-reviewed.js';
+import { defaultDraftText } from '../src/ocr-source-policy.js';
+import { humanMarkLabel } from '../src/human-mark.js';
+import { isTaskPage } from '../src/screening-page-policy.js';
 const root = new URL('../screening-data/', import.meta.url);
 fs.mkdirSync(new URL('materials/', root), { recursive: true });
 for (let part = 1; part <= 4; part++) {
@@ -61,4 +64,10 @@ for (let part = 1; part <= 4; part++) {
     ...(targeted.has(item.page)?{targetedSummary:targetedSummary(targeted.get(item.page))}:{}),
     ...(modelReviewed.has(item.page)?{modelReviewSummary:modelReviewSummary(modelReviewed.get(item.page))}:{})}));
   fs.writeFileSync(new URL(`part-${part}-index.json`, root), JSON.stringify({...index,pages:indexPages,materials})+'\n');
+  const work = [`《历代书法论文选》｜原第${part}份工作TXT`,
+    '公开工作稿；已有人工标记继续有效。本机个人稿与个人标记请用网页的一键ZIP导出。', ''];
+  for (const item of pages.filter(p=>isTaskPage(p.page))) work.push(
+    `===== 原 PDF 物理页 ${item.page}｜分册第 ${item.page-index.start+1} 页 =====`,
+    `状态：${humanMarkLabel(item)}`,defaultDraftText(item),'');
+  fs.writeFileSync(new URL(`part-${part}-work.txt`,root),'\ufeff'+work.join('\n'));
 }

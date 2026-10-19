@@ -56,7 +56,9 @@ test('published partial layers are default only for untouched pages and never ch
     for (const p of targeted) {
       assert.deepEqual(p.targetedSummary,targetedSummary(p.targeted));
       assert.match(targetedLabel(p),p.collated ? /已纳入团队复核/ : /整页未校/);
-      assert.equal(draftForPage(p).text,p.collated ? p.collated.text : makeDraft(p.targeted.text));
+      // A new image-reviewed whole-page working text supersedes the older AI
+      // partial layer; the partial evidence and every personal draft stay intact.
+      assert.equal(draftForPage(p).text,p.collated ? p.collated.text : p.modelReviewed ? p.modelReviewed.text : makeDraft(p.targeted.text));
       for (const verified of [true,false]) {
         const review={collation:{text:'[001] 个人𢬍稿',verified,checks:{wording:true},verifiedBy:'原成员',verifiedAt:'旧时间',metricBaseline:{version:1,text:'旧比较稿',label:'旧标签'},edits:[{before:'甲',after:'乙'}]}};
         const before=JSON.stringify(review),metric=pageMetrics({...p,targeted:undefined},review);
