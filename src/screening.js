@@ -30,6 +30,8 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   let editorObserver, materialLoader;
   let selectionRequest = 0;
   let exporting = false;
+  let composingInput = null;
+  let editorPointerType = '';
   const esc = (value = '') => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
   const key = () => `shulun-screening-v1-part-${part}`;
@@ -130,7 +132,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     if (slot) slot.innerHTML = editHistoryMarkup(draft().edits||[]);
   }
 
-  function updateDraft(patch, { reset = false } = {}) {
+  function updateDraft(patch, { reset = false, fromEditor = false } = {}) {
     if(annotationMode)return;
     state.resetPending = false;
     state.notice = ''; state.error = '';
@@ -141,8 +143,15 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     const metricBaseline = reset ? { version: 1, text: String(patch.text || ''), label: sourceLabel() }
       : existingBaseline || (changed && typeof current().collation?.text !== 'string' ? { version: 1, text: String(draft().text || ''), label: sourceLabel() } : undefined);
     record({ ...(changed && current().theoryAnnotations ? { theoryAnnotations: (current().theoryAnnotations.text===String(draft().text||'')?rebaseAnnotations(current().theoryAnnotations, String(draft().text || ''), String(patch.text || ''), state.person):current().theoryAnnotations) } : {}), collation: { ...draft(), ...patch, ...(metricBaseline ? { metricBaseline } : {}), ...(changed ? { checks: {}, fullTextChecked: false } : {}), ...(clearHistory || reset ? { edits: [] } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
+    // Save provisional handwriting, but leave the native IME's DOM and selection alone.
+    if (composingInput?.id === 'editText') return;
     const preview = app.querySelector('#editText');
-    if (preview && preview.value !== draft().text) preview.value = draft().text;
+    if (!fromEditor && preview && preview.value !== draft().text) preview.value = draft().text;
+    refreshDraftUI();
+  }
+
+  function refreshDraftUI() {
+    updateSaveStatus();
     showMessage();
     updateValidation();
     updateHighlight();
@@ -176,6 +185,8 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   function openSelectionMenu(event) {
     const target = event.target.closest('#editText');
     if (!target) return;
+    // Touch/pen long press belongs to the system selection and handwriting keyboard.
+    if (composingInput || ['touch', 'pen'].includes(event.pointerType) || ['touch', 'pen'].includes(editorPointerType) || event.sourceCapabilities?.firesTouchEvents) return;
     const remembered = state.lastTextSelection?.targetId === target.id ? state.lastTextSelection : null;
     const start = target.selectionStart === target.selectionEnd && remembered ? remembered.start : target.selectionStart;
     const end = target.selectionStart === target.selectionEnd && remembered ? remembered.end : target.selectionEnd;
@@ -385,7 +396,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       ? '其他标签页已更新进度，或旧记录无法读取。当前修改仍在本页，尚未保存。请先导出备份，再载入本机最新进度。'
       : '本机保存失败，当前修改仍在本页。请重试保存或导出进度备份，暂勿关闭页面。';
     if (result.ok) { state.savedAt = savedAt; if(annotationMode){state.annotationLastPage=page().page;state.annotationSavedAt=savedAt;}else state.lastPage = page().page; }
-    updateSaveStatus();
+    if (composingInput?.id !== 'editText') updateSaveStatus();
     return result.ok;
   }
 
@@ -794,6 +805,22 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
   app.addEventListener('contextmenu', openSelectionMenu);
 
+  app.addEventListener('pointerdown', (event) => {
+    if (event.target.id === 'editText') editorPointerType = event.pointerType;
+  });
+
+  app.addEventListener('compositionstart', (event) => {
+    composingInput = event.target;
+    if (event.target.id === 'editText' && state.selectionMenu.open) closeSelectionMenu();
+  });
+
+  app.addEventListener('compositionend', (event) => {
+    composingInput = null;
+    if (!state.data || event.target.id !== 'editText') return;
+    if (event.target.value !== draft().text) updateDraft({ text: event.target.value }, { fromEditor: true });
+    else refreshDraftUI();
+  });
+
   app.addEventListener('mousedown', (event) => {
     const target = event.target.closest('#editText');
     if (!target || event.button !== 2) {
@@ -811,7 +838,10 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     if (!state.data) return;
     if (event.target.closest('#candidateForm') && event.target.name) { record({ candidateDraft: { ...current().candidateDraft, [event.target.name]: event.target.value } }); return; }
     if (event.target.id === 'person') { state.person = event.target.value; persist(); }
-    if (event.target.id === 'editText') updateDraft({ text: event.target.value });
+    if (event.target.id === 'editText') {
+      if (event.isComposing) composingInput = event.target;
+      updateDraft({ text: event.target.value }, { fromEditor: true });
+    }
     if (event.target.dataset.check) updateDraft({
       checks: { ...draft().checks, [event.target.dataset.check]: event.target.checked, fulltext: event.target.checked },
       ...(typeof current().collation?.text !== 'string' ? { metricBaseline: { version:1, text:String(draft().text || ''), label:sourceLabel() } } : {}),
@@ -836,6 +866,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
   app.addEventListener('keydown', (event) => {
     if (!state.data || !app.querySelector('#pageList')) return;
+    if (event.isComposing || event.keyCode === 229 || composingInput === event.target) return;
     if (annotationMode && (event.metaKey||event.ctrlKey) && event.shiftKey && event.code==='KeyM' && !event.isComposing && event.target.id==='editText') { event.preventDefault(); markSelection(); return; }
     if (event.key === 'Escape' && state.selectionMenu.open) {
       closeSelectionMenu();
