@@ -1,17 +1,14 @@
-import { annotationTaskContext } from './annotation-task-context.js?v=task-split-20261019';
 import {assignmentContext} from './assignment-context.js?v=redesign-local-20261019';
 import {readJson} from './screening-loader.js?v=fulltext-20261019';
-import { teamRelease } from './team-collation.js?v=20261018-part3';
-import { targetedRelease } from './targeted-ocr.js?v=20261018-part4';
 import { isVerified } from './collation-core.js?v=20261013-typo-only';
 import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
-import { assignments, assignmentCount, assignmentHref, assignmentProgress, assignmentEntry } from './team-assignments.js?v=entry-20261019';
+import { assignments, assignmentCount, assignmentHref } from './team-assignments.js?v=entry-20261019';
 
 (() => {
   const app = document.querySelector('#teamTasksApp');
   const annotationTask=location.pathname.endsWith('/annotation-tasks.html');
   let publicIndexes=null, indexProblem='';
-  Promise.all([1,2,3,4].map(async part=>[part,await readJson(`./screening-data/part-${part}-index.json?v=remaining-final-20261019`)] )).then(entries=>{publicIndexes=Object.fromEntries(entries);updateOfflineProgress();}).catch(error=>{indexProblem=error.message;updateOfflineProgress();});
+  if (!annotationTask) Promise.all([1,2,3,4].map(async part=>[part,await readJson(`./screening-data/part-${part}-index.json?v=remaining-final-20261019`)] )).then(entries=>{publicIndexes=Object.fromEntries(entries);updateOfflineProgress();}).catch(error=>{indexProblem=error.message;updateOfflineProgress();});
   const state = { user: null, role: null, books: [], units: [], bookId: '', unitId: '', unit: null,
     unitsByBook: {}, view: 'overview', draft: '', dirty: false, error: '', notice: '', loading: false, offline: false };
   const labels = { proofread: '原文校对', screen: '全书初筛', review: '条目审核',
@@ -80,38 +77,42 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
   }
 
   function updateOfflineProgress() {
-    if (!state.offline) return;
+    if (!state.offline || annotationTask) return;
     for(const a of assignments){
       const slot=app.querySelector(`[data-local-progress="${a.id}"]`),link=app.querySelector(`[data-member="${a.id}"]`);
       if(!slot||!link)continue;
       if(!publicIndexes){slot.textContent=indexProblem?'标记暂无法读取；原记录保留':'读取人工标记…';continue;}
-      if(annotationTask) {
-        try {const progress=annotationTaskContext(localStorage,a,publicIndexes);slot.textContent=`可标注 ${progress.total} 页 · 标注已确认 ${progress.completed} 页`;
-          if(progress.href) {link.href=progress.href;link.removeAttribute('aria-disabled');link.dataset.part=progress.part;link.textContent='进入书论标注 →';}
-          else {link.removeAttribute('href');link.setAttribute('aria-disabled','true');link.textContent='暂无已校验资料';}
-        }catch {slot.textContent='本机记录无法读取；请先恢复完整备份';link.removeAttribute('href');link.setAttribute('aria-disabled','true');}
-        continue;
-      }
       const progress=assignmentContext(localStorage,a,publicIndexes);
       slot.textContent=progress?`已标过 ${progress.marked} / ${progress.total} 页 · 未标过 ${progress.total-progress.marked} 页`:'本机记录无法读取；原记录保留';
       if(progress){link.href=progress.href;link.dataset.part=progress.part;link.textContent=progress.resume?`继续第 ${progress.page} 页 →`:'进入校勘 →';}
     }
   }
 
-  function releaseMarkup(part) {
-    const release = teamRelease.parts[part];
-    return release ? `<span class="local-progress">已回收人工标记 ${release.pages} 页</span>` : '';
-  }
   function offline() {
-    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>${annotationTask?'书论标注':'原文校对'}</h1><p>${annotationTask?'任务二：只在人工已校验且无待核的正文中圈选书论，不在此任务改字。':'任务一：对照原图校对全文，确认人工校验完成。'}</p></header>
-      <div hidden class="overview-stats" aria-label="当前任务规模"><div><strong>7</strong><span>校勘成员</span></div><div><strong>851</strong><span>后续整页校对</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮有效页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已标过</span></div></div>
-      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">校勘分工</span><h2 id="screeningTitle">《历代书法论文选》${annotationTask?'书论标注':'原文校对'}</h2><p>${annotationTask?'沿用七人的原页段范围，只开放已有合格人工校验稿的页面。待核稿、机器稿和未校验个人草稿不作为标注正文。':'沿用现有七人分工与全部已做记录；完成人工校验后，正文可供书论标注任务使用。'}</p></div><a class="task-state" href="${annotationTask?'./team-tasks.html':'./annotation-tasks.html'}">${annotationTask?'任务一 · 原文校对 →':'任务二 · 书论标注 →'}</a></div>
-        <div class="overview-list-head"><h3>选择成员</h3><span>按原 PDF 物理页定位</span></div>
-        <div class="overview-unit-list">${assignments.map(a => `<article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span class="local-progress" data-local-progress="${a.id}">读取人工标记…</span></div><div class="unit-actions"><a class="unit-primary" data-member="${a.id}" data-part="${a.segments[0].part}" href="${assignmentHref(a.id,a.segments[0].part)}">进入任务 →</a></div></article>`).join('')}</div>
-        <div class="overview-handoff"><strong>交付方式</strong><span>${annotationTask?'在已校验正文中拖选书论、逐页确认，再导出标注ZIP。合格页面为零时请先完成原文校对。':'每页对照原图核对错字。'}跨两段的成员在任务内切换、分别导出ZIP；正文和表格仅列当前分工段，JSON备份保留该原分份的全部个人记录。修订TXT、状态表等下载统一放在任务内的“材料与恢复”。</span></div></section>
-      <p class="overview-note">${annotationTask?'团队回收稿中173页已修改完毕、17页仍有待核；本机合格人工稿按页去重补充。实际标注时再次核对完整正文来源。':'已交回校验190页，人工标记沿用原记录。'}已做正文、草稿、修改率底稿与历史记录均保留；静态站不汇总个人实时进度。同一浏览器沿用原四份记录，不会按成员编号创建新账号。原OCR、扫描及局部修订保持。</p>
-      <details class="overview-secondary"><summary>原四份完整材料与历史进度</summary><p>如需查看已移交页的旧个人稿或下载原材料，可打开原分份完整视图。原记录不会因分工调整而删除。</p><div class="unit-actions">${screeningRanges.map((_,i)=>`<a href="./screening.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div></details>
-      <section class="overview-secondary"><div><span class="eyebrow">独立批次入口</span><h2>旧条目文件审核</h2><p>旧 188 条字段审核与本轮全书初筛分开处理，不计入上方任务规模。</p></div><a href="./review.html">进入文件审核 →</a></section></div>`);
+    const taskId = annotationTask ? 'source-annotation:lidaishufalunwenxuan' : 'source-proofread:lidaishufalunwenxuan';
+    const title = annotationTask ? '书论标注' : '原文校对';
+    shell(`<section class="entry-task-board source-task-board" aria-labelledby="sourceTaskHeading">
+      <header class="entry-task-heading"><p class="workspace-kicker">团队任务 / ${title}</p><h1 id="sourceTaskHeading">${title}</h1><p>${annotationTask ? '任务尚未开始，暂不分工。' : '选择自己的成员入口，继续原有页段的校对。'}</p></header>
+      <div class="entry-task-list"><article class="entry-task-card" data-entry-task="${taskId}" aria-labelledby="sourceBookTitle">
+        <div class="entry-task-card-head"><span class="entry-task-icon" aria-hidden="true">${window.WorkspaceUI.icon(annotationTask ? 'annotation' : 'proof')}</span><div class="entry-task-title"><h2 id="sourceBookTitle">《历代书法论文选》${title}</h2><p>${annotationTask ? '尚未开始 · 暂未分工' : `${taskPageCount(1,1052)} 个有效页 · 沿用现有校对分工`}</p></div><span class="source-task-state ${annotationTask ? 'pending' : ''}">${annotationTask ? '尚未开始' : '进行中'}</span></div>
+        <p class="source-task-description">${annotationTask ? '启动后只使用人工已校验且无待核的正文。可以先登记成员，页段留待后续安排。' : '原七人的页段、已做正文和草稿保持。新添加成员仅登记，页段待后续安排。'}</p>
+        <div class="entry-task-roster" data-roster-host></div>
+      </article></div>
+      <p class="entry-task-footnote">${annotationTask ? '标注任务暂不开放分工入口；已有标注记录、正文和草稿均保留。' : '按原PDF物理页定位。跨段成员仍在任务内切换和导出；本机标记不代表已交回负责人。'} 成员名单保存在本机，添加姓名不会创建账号或改派页段。</p>
+      <details class="source-task-history workspace-panel"><summary>材料与历史记录</summary><p>原稿、草稿、修改率底稿与全部历史记录保留。原四份完整视图可查看已移交页的旧稿，材料下载仍在任务内“材料与恢复”。</p><div class="source-history-links">${screeningRanges.map((_,i)=>`<a href="./screening.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div><p><a href="./review.html">旧条目独立文件审核 →</a></p></details>
+    </section>`);
+    window.EntryTaskBoard.attach({storage: localStorage, taskOptions: () => ({
+      defaultMembers: annotationTask ? [] : assignments.map(a => ({id: `team-${a.id}`, name: a.name})),
+      richMembers: !annotationTask,
+      caption: annotationTask ? '仅登记成员，尚未分配页段。' : '原七人按既有分工继续；新增成员暂未分工。',
+      emptyText: '暂无成员，可先登记，任务启动后再安排分工。',
+      onMembersRendered: updateOfflineProgress,
+      renderMember: member => {
+        const a = !annotationTask && assignments.find(a => member.id === `team-${a.id}`);
+        if (!a) return `<li class="entry-pending-member"><span class="entry-member-avatar" aria-hidden="true">${esc([...member.name][0])}</span><span>${esc(member.name)}</span><span class="source-member-pending">待分工</span></li>`;
+        return `<li class="entry-assigned-member"><article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span class="local-progress" data-local-progress="${a.id}">读取人工标记…</span></div><div class="unit-actions"><a class="unit-primary" data-member="${a.id}" data-part="${a.segments[0].part}" href="${assignmentHref(a.id,a.segments[0].part)}">进入校勘 →</a></div></article></li>`;
+      }
+    })});
     updateOfflineProgress();
   }
 

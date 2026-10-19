@@ -55,3 +55,20 @@ test('collapse preference is independent for each task and separate from roster'
   assert.equal(api.folded(storage, 'b'), true);
   assert.equal(storage.getItem(api.key('a')), before);
 });
+test('an unstarted task has zero inherited members and can register names without assignment', () => {
+  const storage = memory();
+  assert.equal(api.read(storage, 'annotation', []).members.length, 0);
+  api.add(storage, 'annotation', '肖源', []);
+  assert.equal(api.read(storage, 'annotation', []).members.length, 1);
+  assert.equal(api.read(storage, 'annotation', []).members[0].name, '肖源');
+  assert.equal(api.read(storage, 'proof').members.length, 7);
+  assert.throws(() => api.add(storage, 'annotation', '肖源', []), /同名/);
+  assert.equal(JSON.parse(storage.getItem(api.key('annotation'))).customMembers[0].segments, undefined);
+});
+test('custom default rosters retain compatibility and reject duplicates within that task', () => {
+  const storage = memory(), base = [{id: 'existing-person', name: '已有成员'}];
+  assert.throws(() => api.add(storage, 'proof', '已有成员', base), /同名/);
+  api.add(storage, 'proof', '新登记', base);
+  assert.equal(api.read(storage, 'proof', base).members.length, 2);
+  assert.equal(api.read(storage, 'entries').members.length, 7);
+});

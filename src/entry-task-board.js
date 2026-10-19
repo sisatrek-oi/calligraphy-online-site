@@ -11,20 +11,20 @@
       <p class="entry-task-footnote">成员名单保存在本机；成员共享本任务主表，条目未按成员重新分配。</p>
     </section>`;
   }
-  function attach({storage, openTask}) {
+  function attach({storage, openTask, taskOptions = () => ({})}) {
     document.querySelectorAll('[data-entry-task-open]').forEach(button => button.addEventListener('click', () => openTask(button.dataset.entryTaskOpen)));
     for (const card of document.querySelectorAll('[data-entry-task]')) {
-      const id = card.dataset.entryTask, host = card.querySelector('[data-roster-host]');
+      const id = card.dataset.entryTask, host = card.querySelector('[data-roster-host]'), options = taskOptions(id), baseMembers = options.defaultMembers ?? window.EntryTaskMembers.defaults;
       let members, closed = true, error = '';
-      try {members = window.EntryTaskMembers.read(storage, id).members; closed = window.EntryTaskMembers.folded(storage, id);} catch (e) {error = e.message || '成员名单暂不可用。';}
+      try {members = window.EntryTaskMembers.read(storage, id, baseMembers).members; closed = window.EntryTaskMembers.folded(storage, id);} catch (e) {error = e.message || '成员名单暂不可用。';}
       const panelId = `entryMembers-${encodeURIComponent(id)}`;
       host.innerHTML = `<div class="entry-members-head"><button type="button" class="entry-members-toggle" aria-expanded="${!closed}" aria-controls="${esc(panelId)}" ${members ? '' : 'disabled'}><span>成员 <span data-member-count>（${members?.length ?? '—'}）</span></span><span data-member-fold-text>${closed ? '展开' : '收起'}</span><span class="entry-member-chevron" aria-hidden="true">⌄</span></button><button type="button" class="quiet-button" data-member-add ${members ? '' : 'disabled'}>＋ 添加成员</button></div>
-        <div id="${esc(panelId)}" class="entry-members-content" ${closed ? 'hidden' : ''}><ul class="entry-members-list"></ul><p class="entry-member-caption">沿用团队七人名单，可在此补充协作成员。</p></div>
+        <div id="${esc(panelId)}" class="entry-members-content" ${closed ? 'hidden' : ''}><ul class="entry-members-list ${options.richMembers ? 'entry-members-rich' : ''}"></ul><p class="entry-members-empty" hidden></p><p class="entry-member-caption">${esc(options.caption ?? '沿用团队七人名单，可在此补充协作成员。')}</p></div>
         <form class="entry-member-form" hidden><label>成员姓名<input name="name" autocomplete="off" maxlength="80" required placeholder="输入成员姓名" aria-label="成员姓名" /></label><div><button type="button" class="quiet-button" data-member-cancel>取消</button><button type="submit" class="action-button">添加</button></div></form>
         <p class="entry-member-notice" role="status" aria-live="polite"></p>`;
       const toggle = host.querySelector('.entry-members-toggle'), content = host.querySelector('.entry-members-content'), list = host.querySelector('ul'), form = host.querySelector('form'), input = form.elements.name, add = host.querySelector('[data-member-add]'), notice = host.querySelector('[role="status"]');
       function message(text, failed = false) {notice.textContent = text; notice.classList.toggle('error', failed);}
-      function drawMembers() {list.innerHTML = (members || []).map(member => `<li><span class="entry-member-avatar" aria-hidden="true">${esc([...member.name][0])}</span><span>${esc(member.name)}</span></li>`).join(''); host.querySelector('[data-member-count]').textContent = `（${members?.length ?? '—'}）`;}
+      function drawMembers() {list.innerHTML = (members || []).map(member => options.renderMember ? options.renderMember(member) : `<li><span class="entry-member-avatar" aria-hidden="true">${esc([...member.name][0])}</span><span>${esc(member.name)}</span></li>`).join(''); host.querySelector('[data-member-count]').textContent = `（${members?.length ?? '—'}）`;const empty = host.querySelector('.entry-members-empty'); empty.hidden = Boolean(members?.length); empty.textContent = options.emptyText || '暂无成员。'; options.onMembersRendered?.();}
       function fold(value) {closed = value; content.hidden = value; toggle.setAttribute('aria-expanded', String(!value)); host.querySelector('[data-member-fold-text]').textContent = value ? '展开' : '收起';}
       function cancel() {form.hidden = true; form.reset(); message(''); add.focus();}
       drawMembers(); if (error) message(error, true);
@@ -38,15 +38,15 @@
       form.addEventListener('submit', event => {
         event.preventDefault();
         try {
-          const result = window.EntryTaskMembers.add(storage, id, input.value);
-          members = window.EntryTaskMembers.read(storage, id).members;
+          const result = window.EntryTaskMembers.add(storage, id, input.value, baseMembers);
+          members = window.EntryTaskMembers.read(storage, id, baseMembers).members;
           drawMembers(); fold(false); form.hidden = true; form.reset();
           try {window.EntryTaskMembers.setFolded(storage, id, false);} catch { /* Name saved; preference is optional. */ }
           message(`已添加 ${result.member.name}，名单已保存在本机。`); add.focus();
         } catch (e) {message(e.message?.includes('成员') || e.message?.includes('名单') || e.message?.includes('任务') ? e.message : '添加未保存，请检查浏览器存储空间后重试。', true); input.focus();}
       });
       card.refreshEntryRoster = () => {
-        try {members = window.EntryTaskMembers.read(storage, id).members; drawMembers(); toggle.disabled = false; add.disabled = false;} catch (e) {toggle.disabled = true; add.disabled = true; message(e.message, true);}
+        try {members = window.EntryTaskMembers.read(storage, id, baseMembers).members; drawMembers(); toggle.disabled = false; add.disabled = false;} catch (e) {toggle.disabled = true; add.disabled = true; message(e.message, true);}
       };
     }
   }

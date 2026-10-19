@@ -13,13 +13,13 @@
     return name;
   }
   const identity = name => name.normalize('NFKC').toLocaleLowerCase();
-  function decode(raw) {
+  function decode(raw, baseMembers = defaults) {
     if (raw === null) return {version: 1, customMembers: []};
     let payload;
     try { payload = JSON.parse(raw); } catch { throw new Error('成员名单无法读取，已保留原记录，请先备份浏览器数据。'); }
     if (payload?.version !== 1 || !Array.isArray(payload.customMembers) || payload.customMembers.length > 200)
       throw new Error('成员名单格式暂不支持，已保留原记录。');
-    const ids = new Set(defaults.map(m => m.id)), names = new Set(defaults.map(m => identity(m.name)));
+    const ids = new Set(baseMembers.map(m => m.id)), names = new Set(baseMembers.map(m => identity(m.name)));
     for (const member of payload.customMembers) {
       if (!member || typeof member.id !== 'string' || !member.id || member.id.length > 100 ||
           typeof member.name !== 'string' || nameOf(member.name) !== member.name || ids.has(member.id) || names.has(identity(member.name)))
@@ -28,13 +28,13 @@
     }
     return payload;
   }
-  function read(storage, id) {
-    const payload = decode(storage.getItem(key(id)));
-    return {payload, members: [...defaults, ...payload.customMembers]};
+  function read(storage, id, baseMembers = defaults) {
+    const payload = decode(storage.getItem(key(id)), baseMembers);
+    return {payload, members: [...baseMembers, ...payload.customMembers]};
   }
-  function add(storage, id, value) {
-    const name = nameOf(value), storageKey = key(id), before = storage.getItem(storageKey), payload = decode(before);
-    if ([...defaults, ...payload.customMembers].some(m => identity(m.name) === identity(name))) throw new Error('这个任务中已有同名成员。');
+  function add(storage, id, value, baseMembers = defaults) {
+    const name = nameOf(value), storageKey = key(id), before = storage.getItem(storageKey), payload = decode(before, baseMembers);
+    if ([...baseMembers, ...payload.customMembers].some(m => identity(m.name) === identity(name))) throw new Error('这个任务中已有同名成员。');
     if (payload.customMembers.length >= 200) throw new Error('成员数量已达上限。');
     const member = {id: `member-${crypto.randomUUID()}`, name, addedAt: new Date().toISOString()};
     const next = {...payload, customMembers: [...payload.customMembers, member]};
