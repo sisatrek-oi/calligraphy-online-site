@@ -38,8 +38,14 @@
     let nav=document.querySelector('#workspaceNavigation');
     if(!nav){nav=document.createElement('aside');nav.id='workspaceNavigation';nav.className='workspace-navigation';document.body.prepend(nav);}
     nav.inert=Boolean(mobileMedia?.matches && !document.body.classList.contains?.('workspace-nav-open'));
+    if(!nav.querySelector('#workspaceSidebarToggle')) {
     nav.innerHTML=`<a class="workspace-brand" href="./index.html#home" aria-label="书论工作区" title="书论工作区"><img src="./src/assets/shulun-mark.png" alt=""/><span>书论工作区</span></a><nav aria-label="工作区导航">${items.map(([key,label,href])=>`<a href="${href}" aria-label="${label}" title="${label}" ${key===active?'aria-current="page"':''}>${icon(key)}<span>${label}</span></a>`).join('')}</nav><div class="workspace-nav-bottom"><button type="button" id="workspaceSidebarToggle" aria-controls="workspaceNavigation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg><span>收起侧边栏</span></button><a class="workspace-settings-link" href="./index.html#settings" aria-label="设置与账户" title="设置与账户"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-8 0v6"/></svg><span>设置与账户</span></a><span>同设备保留工作位置</span></div>`;
     nav.querySelector('#workspaceSidebarToggle').onclick=()=>{if(mobileMedia?.matches){document.body.classList.remove('workspace-nav-open');nav.inert=true;document.querySelector('#workspaceMobileNav button')?.setAttribute('aria-expanded','false');syncSidebar();document.querySelector('#workspaceMobileNav button')?.focus();return;}sidebarCollapsed=!sidebarCollapsed;try{localStorage.setItem(sidebarKey,sidebarCollapsed?'1':'0');}catch{}syncSidebar();};
+    }
+    for(const link of nav.querySelectorAll?.('nav>a')||[]) {
+      if(link.getAttribute('href')===items.find(item=>item[0]===active)?.[2])link.setAttribute('aria-current','page');
+      else link.removeAttribute('aria-current');
+    }
     syncSidebar();
     let scrim=document.querySelector('#workspaceNavScrim');if(!scrim){scrim=document.createElement('button');scrim.id='workspaceNavScrim';scrim.className='workspace-nav-scrim';scrim.type='button';scrim.setAttribute?.('aria-label','关闭导航');scrim.tabIndex=-1;scrim.onclick=()=>{document.body.classList.remove('workspace-nav-open');nav.inert=Boolean(mobileMedia?.matches);document.querySelector('#workspaceMobileNav button')?.setAttribute('aria-expanded','false');syncSidebar();document.querySelector('#workspaceMobileNav button')?.focus();};document.body.prepend(scrim);}
     let mobile=document.querySelector('#workspaceMobileNav');
@@ -48,7 +54,29 @@
   }
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){const wasOpen=document.body.classList.contains('workspace-nav-open');document.body.classList.remove('workspace-nav-open');document.querySelector('#workspaceMobileNav button')?.setAttribute('aria-expanded','false');const nav=document.querySelector('#workspaceNavigation');if(nav)nav.inert=Boolean(mobileMedia?.matches);syncSidebar();if(wasOpen&&mobileMedia?.matches)document.querySelector('#workspaceMobileNav button')?.focus();}});
   mobileMedia?.addEventListener('change',()=>{document.body?.classList.remove('workspace-nav-open');const nav=document.querySelector('#workspaceNavigation');if(nav)nav.inert=mobileMedia.matches;document.querySelector('#workspaceMobileNav button')?.setAttribute('aria-expanded','false');syncSidebar();});
+  function restoreSidebarPreference(){try{sidebarCollapsed=localStorage.getItem(sidebarKey)==='1';}catch{}syncSidebar();}
+  window.addEventListener('pageshow',restoreSidebarPreference);
+  window.addEventListener('pagereveal',restoreSidebarPreference);
   window.addEventListener('storage',event=>{if(event.key===sidebarKey||event.key===null){sidebarCollapsed=event.key===null?false:event.newValue==='1';syncSidebar();}});
   document.addEventListener('click',event=>{if(!event.target.closest?.('#workspaceNavigation a'))return;document.body.classList.remove('workspace-nav-open');const nav=document.querySelector('#workspaceNavigation');if(nav)nav.inert=Boolean(mobileMedia?.matches);document.querySelector('#workspaceMobileNav button')?.setAttribute('aria-expanded','false');syncSidebar();});
-  window.WorkspaceUI={mount,icon,esc,tabs,homeMarkup:()=>`<section class="navigation-home" aria-label="工作导航"><p class="workspace-kicker">书论工作区 / 任务首页</p><h1>从这里开始</h1><div class="navigation-tiles">${items.slice(1).map(([key,label,href,description])=>`<a class="navigation-tile" href="${href}"><span class="navigation-tile-icon">${icon(key)}</span><span><strong>${label}</strong><small>${description}</small></span><span class="navigation-arrow" aria-hidden="true">→</span></a>`).join('')}</div></section>`};
+  let activeTransition;
+  function transition(update) {
+    if(!document.startViewTransition || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches)return update();
+    activeTransition?.skipTransition();
+    try {
+      activeTransition=document.startViewTransition(update);
+      activeTransition.ready.catch(()=>{});activeTransition.finished.catch(()=>{});
+      return activeTransition;
+    } catch {return update();}
+  }
+  window.WorkspaceUI={mount,transition,icon,esc,tabs,homeMarkup:()=>`<section class="navigation-home" aria-label="工作导航"><p class="workspace-kicker">书论工作区 / 任务首页</p><h1>从这里开始</h1><div class="navigation-tiles">${items.slice(1).map(([key,label,href,description])=>`<a class="navigation-tile" href="${href}"><span class="navigation-tile-icon">${icon(key)}</span><span><strong>${label}</strong><small>${description}</small></span><span class="navigation-arrow" aria-hidden="true">→</span></a>`).join('')}</div></section>`};
+  function bootstrap() {
+    const file=location.pathname.split('/').pop()||'index.html';
+    const views={'index.html':location.hash==='#detail'||location.hash==='#review'?'entries':location.hash==='#ingest'?'materials':'home','team-tasks.html':'proof','screening.html':'proof','annotation-tasks.html':'annotation','annotation.html':'annotation','materials.html':'materials','delivery.html':'delivery','review.html':'entries'};
+    if(views[file])mount(views[file]);
+  }
+  if(typeof MutationObserver!=='undefined' && document.documentElement) {
+    if(document.body)bootstrap();
+    else {const observer=new MutationObserver(()=>{if(document.body){observer.disconnect();bootstrap();}});observer.observe(document.documentElement,{childList:true});}
+  }
 })();

@@ -7817,8 +7817,10 @@ window.addEventListener("hashchange", () => {
   const from = viewKey(previousView, previousDetailMode);
   const to = viewKey();
   state.motionName = from === to ? "refresh" : `${from}-${to}`;
-  render();
-  if (state.entryStage === "workspace" && state.view === "detail") loadSelectedSource();
+  window.WorkspaceUI.transition(() => {
+    render();
+    if (state.entryStage === "workspace" && state.view === "detail") loadSelectedSource();
+  });
 });
 
 window.addEventListener("keydown", handleWorkbenchShortcut);
