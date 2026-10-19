@@ -1,9 +1,11 @@
+import { annotationSource, annotationHref, sourceStamp } from './annotation-source.js?v=task-split-20261019';
+import { buildAnnotationBundle } from './theory-annotation-export.js?v=task-split-20261019';
 import { humanMarked, humanMarkLabel, nextUnmarkedIndex } from './human-mark.js?v=human-mark-20261019';
 import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=fulltext-20261019';
 import { publicationLabel, teamRelease } from './team-collation.js?v=20261018-part3';
 import { targetedLabel, targetedRelease } from './targeted-ocr.js?v=20261018-part3';
 import { copyText } from './clipboard.js?v=20261012-copy';
-import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=annotations-20261019';
+import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=task-split-20261019';
 import { assignmentFor, assignmentSegment, assignmentPages, assignmentHref } from './team-assignments.js?v=seven-20261018';
 import { readJson, createMaterialLoader } from './screening-loader.js?v=fulltext-20261019';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft } from './collation-core.js?v=human-mark-20261019';
@@ -16,11 +18,13 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
 (() => {
   const app = document.querySelector('#screeningApp');
+  const annotationMode = location.pathname.endsWith('/annotation.html');
+  const taskName = annotationMode ? '书论标注' : '原文校对';
   const part = Number(new URLSearchParams(location.search).get('part'));
   const member = new URLSearchParams(location.search).get('member');
   let assignment = null, segment = null;
   const state = { data: null, index: 0, reviews: {}, files: new Map(), imageUrl: '', imageReady: false,
-    person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, zoom: 100, validation: false, resetPending: false, annotationOpen: false, reviewOpen: false };
+    person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, annotationLastPage: null, annotationSavedAt: '', zoom: 100, validation: false, resetPending: false, annotationOpen: false, reviewOpen: false };
   state.selectionMenu = { open: false, start: 0, end: 0, text: '', x: 0, y: 0, targetId: '' };
   let editorObserver, materialLoader;
   let selectionRequest = 0;
@@ -37,11 +41,11 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   const pdfHref = (local) => `./screening-data/part-${part}.pdf#page=${local}`;
   const sourceText = item => item.ocr;
   const sourceLabel = () => page().collated ? '团队校订TXT' : '工作TXT';
-  const rowLabel = (item, review) => humanMarkLabel(item,review);
-  const draft = () => draftForPage(page(), current());
+  const rowLabel = (item, review) => annotationMode ? annotationView(review?.theoryAnnotations,annotationSource(item,review)?.text||'').label : humanMarkLabel(item,review);
+  const draft = () => annotationMode ? {text:annotationSource(page(),current())?.text || ''} : draftForPage(page(), current());
   const layoutNote = () => page().layout?.method === 'aligned-lines' ? '已按逐栏 OCR 对齐分栏；栏界为机器建议，请看图核对。'
     : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；请逐栏对照原图检查全文。' : '本页保留原段落；本轮无需整理分栏格式。';
-  const verifiedCount = () => state.data.pages.filter(item => humanMarked(item,state.reviews[item.page])).length;
+  const verifiedCount = () => state.data.pages.filter(item => annotationMode ? annotationView(state.reviews[item.page]?.theoryAnnotations,annotationSource(item,state.reviews[item.page])?.text||'').completed : humanMarked(item,state.reviews[item.page])).length;
 
   function editLocation(text, index) {
     const before = String(text || '').slice(0, index);
@@ -126,6 +130,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   }
 
   function updateDraft(patch, { reset = false } = {}) {
+    if(annotationMode)return;
     state.resetPending = false;
     state.notice = ''; state.error = '';
     const changed = Object.hasOwn(patch, 'text') && (reset || patch.text !== draft().text);
@@ -134,7 +139,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     const existingBaseline = current().collation?.metricBaseline;
     const metricBaseline = reset ? { version: 1, text: String(patch.text || ''), label: sourceLabel() }
       : existingBaseline || (changed && typeof current().collation?.text !== 'string' ? { version: 1, text: String(draft().text || ''), label: sourceLabel() } : undefined);
-    record({ ...(changed && current().theoryAnnotations ? { theoryAnnotations: rebaseAnnotations(current().theoryAnnotations, String(draft().text || ''), String(patch.text || ''), state.person) } : {}), collation: { ...draft(), ...patch, ...(metricBaseline ? { metricBaseline } : {}), ...(changed ? { checks: {}, fullTextChecked: false } : {}), ...(clearHistory || reset ? { edits: [] } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
+    record({ ...(changed && current().theoryAnnotations ? { theoryAnnotations: (current().theoryAnnotations.text===String(draft().text||'')?rebaseAnnotations(current().theoryAnnotations, String(draft().text || ''), String(patch.text || ''), state.person):current().theoryAnnotations) } : {}), collation: { ...draft(), ...patch, ...(metricBaseline ? { metricBaseline } : {}), ...(changed ? { checks: {}, fullTextChecked: false } : {}), ...(clearHistory || reset ? { edits: [] } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
     const preview = app.querySelector('#editText');
     if (preview && preview.value !== draft().text) preview.value = draft().text;
     showMessage();
@@ -184,6 +189,9 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       y: event.clientY,
       targetId: target.id,
     };
+    if(annotationMode) {
+      const menu=app.querySelector('#selectionMenu');menu.querySelector('label')?.remove();menu.querySelector('#selectionReplacement')?.remove();menu.querySelector('#applySelectionReplace')?.remove();menu.querySelector('#selectionDelete')?.remove();
+    }
     syncSelectionMenu();
     requestAnimationFrame(() => {
       const input = app.querySelector('#selectionReplacement');
@@ -193,6 +201,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   }
 
   function applySelectionReplacement(replacement) {
+    if(annotationMode)return;
     const selection = state.selectionMenu;
     if (!selection.open) return;
     replacement = String(replacement ?? '');
@@ -260,11 +269,11 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     const layer = app.querySelector('#theoryLayer'), status = app.querySelector('#theoryStatus');
     if (!layer) return;
     const text = String(draft().text || '');
-    const view = annotationView(current().theoryAnnotations, text);
+    const view = annotationMode ? annotationView(current().theoryAnnotations, text) : {ranges:[]};
     const ranges = view.ranges;
     layer.innerHTML = highlightHtml(text, ranges);
-    status.textContent = `书论 ${ranges.length} 处 · ${view.label}`;
-    updateAnnotationList(view);
+    if(status)status.textContent = annotationMode ? `书论 ${ranges.length} 处 · ${view.label}` : '任务一 · 对照原图校验全文，书论在独立任务中标注。';
+    if(annotationMode)updateAnnotationList(view);
     syncHighlight();
   }
 
@@ -276,7 +285,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
   function updateAnnotationList(view) {
     const list=app.querySelector('#annotationList');if(!list)return;
-    list.innerHTML=`<p class="annotation-summary">${view.label} · ${view.ranges.length} 处书论</p>`+(view.passages.length?view.passages.map((a,i)=>`<article class="annotation-item ${a.status==='needs-review'?'pending':''}"><strong>${i+1}. ${a.status==='needs-review'?'正文已变化 · 待重新定位':'书论'}</strong><blockquote>${esc(a.quote)}</blockquote><small>${esc(a.createdBy)}</small><div class="tools">${a.status==='active'?`<button type="button" data-locate-annotation="${esc(a.id)}">定位原文</button>`:''}<button type="button" data-relocate-annotation="${esc(a.id)}">用当前选区重新定位</button><button type="button" data-remove-annotation="${esc(a.id)}">撤销标注</button></div></article>`).join(''):'<p class="hint">还没有标注。若已通读确认没有书论，可直接点击“确认本页无书论”。</p>');
+    list.innerHTML=`<p class="annotation-summary">${view.label} · ${view.ranges.length} 处书论</p>`+(view.passages.length?view.passages.map((a,i)=>`<article class="annotation-item ${a.status==='needs-review'?'pending':''}"><strong>${i+1}. ${a.status==='needs-review'?'正文来源已变化 · 待重新定位':'书论'}</strong><blockquote>${esc(a.quote)}</blockquote><small>${esc(a.createdBy)}</small><div class="tools">${a.status==='active'?`<button type="button" data-locate-annotation="${esc(a.id)}">定位原文</button>`:''}<button type="button" data-relocate-annotation="${esc(a.id)}">用当前选区重新定位</button><button type="button" data-remove-annotation="${esc(a.id)}">撤销标注</button></div></article>`).join(''):'<p class="hint">还没有标注。若已通读确认没有书论，可直接点击“确认本页无书论”。</p>');
     const complete=app.querySelector('#completeAnnotations');complete.disabled=Boolean(view.pending.length)||view.completed;
     complete.textContent=view.completed?view.label:view.ranges.length?'确认本页标注完成':'确认本页无书论';
     app.querySelector('#annotationHistory').innerHTML=view.removed.map(a=>`<article class="annotation-item"><blockquote>${esc(a.quote)}</blockquote><button type="button" data-restore-annotation="${esc(a.id)}">恢复标注</button></article>`).join('')||'<p class="hint">没有撤销记录。</p>';
@@ -286,8 +295,14 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
   function changeAnnotations(transform,notice) {
     try {
-      const data=transform(current().theoryAnnotations);
-      const saved=record({theoryAnnotations:data}); state.error='';state.notice=saved?notice:'标注改动仍在当前页，尚未保存。请重试保存或导出备份。';updateHighlight();showMessage();
+      if(!annotationMode)throw new Error('请进入独立的书论标注任务。');
+      if(state.saveConflict || progressStore.hasChanged())throw new Error('人工校验资料已在其他标签页更新，请先载入本机最新进度再标注。');
+      const source=annotationSource(page(),current());
+      if(!source || source.text!==app.querySelector('#editText')?.value)throw new Error('本页没有可用的人工已校验正文，请先完成原文校对。');
+      const previousSource=current().theoryAnnotations?.source;
+      const data={...transform(current().theoryAnnotations),source:sourceStamp(source,part)};
+      if(previousSource && JSON.stringify(previousSource)!==JSON.stringify(data.source))data.events.push({action:'source-change',id:'',by:state.person,at:new Date().toISOString(),previous:previousSource,next:data.source});
+      const saved=record({theoryAnnotations:data}); updateValidation(); state.error='';state.notice=saved?notice:'标注改动仍在当前页，尚未保存。请重试保存或导出备份。';updateHighlight();showMessage();
     } catch(error) {state.error=error.message;state.notice='';showMessage();}
   }
 
@@ -311,7 +326,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   function applyPageFilter() {
     for(const button of app.querySelectorAll('[data-index]')){
       const item=state.data.pages[Number(button.dataset.index)];
-      const marked=humanMarked(item,state.reviews[item.page]);
+      const marked=annotationMode ? annotationView(state.reviews[item.page]?.theoryAnnotations,annotationSource(item,state.reviews[item.page])?.text||'').completed : humanMarked(item,state.reviews[item.page]);
       button.hidden=state.pageFilter==='marked'?!marked:state.pageFilter==='unmarked'?marked:false;
     }
     const empty=app.querySelector('#pageFilterEmpty');if(empty)empty.hidden=Boolean(app.querySelector('#pageList [data-index]:not([hidden])'));
@@ -319,6 +334,13 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   }
 
   function updateValidation() {
+    if(annotationMode) {
+      const progress=app.querySelector('#progress');if(progress)progress.textContent=`标注已确认 ${verifiedCount()} / ${state.data.pages.length} 页`;
+      const view=annotationView(current().theoryAnnotations,String(draft().text||''));
+      const complete=app.querySelector('#verifyNext');if(complete)complete.textContent=view.completed?'已确认 · 下一页 →':view.ranges.length?'确认标注并继续 →':'确认无书论并继续 →';
+      for(const row of app.querySelectorAll('[data-index]')) {const item=state.data.pages[Number(row.dataset.index)],done=annotationView(state.reviews[item.page]?.theoryAnnotations,annotationSource(item,state.reviews[item.page])?.text||'').completed;row.querySelector('small').textContent=rowLabel(item,state.reviews[item.page]);row.classList.toggle('done',done);}
+      applyPageFilter();return;
+    }
     const result = validateDraft(draft(), sourceText(page()));
     const humanStatus = app.querySelector('.source-version-bar .publication-status');
     if (humanStatus) humanStatus.textContent = humanMarkLabel(page(),current());
@@ -340,7 +362,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
   function payload() {
     return { version: 1, part, person: state.person, reviews: state.reviews,
-      lastPage: page().page, savedAt: state.savedAt };
+      lastPage: annotationMode ? state.lastPage : page().page, ...(state.annotationLastPage || annotationMode ? {annotationLastPage:annotationMode?page().page:state.annotationLastPage} : {}), ...(state.annotationSavedAt?{annotationSavedAt:state.annotationSavedAt}:{}), savedAt: state.savedAt };
   }
 
   function updateSaveStatus() {
@@ -356,12 +378,12 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
   function persist() {
     const savedAt = new Date().toISOString();
-    const result = progressStore.save({ ...payload(), savedAt });
+    const result = progressStore.save({ ...payload(), savedAt, ...(annotationMode?{annotationSavedAt:savedAt}:{}) });
     state.saveConflict = Boolean(result.conflict);
     state.saveProblem = result.ok ? '' : result.conflict
       ? '其他标签页已更新进度，或旧记录无法读取。当前修改仍在本页，尚未保存。请先导出备份，再载入本机最新进度。'
       : '本机保存失败，当前修改仍在本页。请重试保存或导出进度备份，暂勿关闭页面。';
-    if (result.ok) { state.savedAt = savedAt; state.lastPage = page().page; }
+    if (result.ok) { state.savedAt = savedAt; if(annotationMode){state.annotationLastPage=page().page;state.annotationSavedAt=savedAt;}else state.lastPage = page().page; }
     updateSaveStatus();
     return result.ok;
   }
@@ -372,6 +394,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       state.reviews = saved?.reviews || {};
       state.person = String(saved?.person || '');
       state.lastPage = saved?.lastPage;
+      state.annotationLastPage = saved?.annotationLastPage;state.annotationSavedAt=String(saved?.annotationSavedAt||'');
       state.savedAt = String(saved?.savedAt || '');
       state.saveProblem = ''; state.saveConflict = false;
       return true;
@@ -448,10 +471,44 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     </details>`;
   }
 
+  function renderNoAnnotationSource() {
+    window.WorkspaceUI.mount('annotation');
+    app.innerHTML=`<main class="page proof-workspace"><div class="heading"><h1>书论标注</h1></div><section class="panel annotation-empty"><h2>当前页段暂无可标注资料</h2><p>书论标注只使用已完成人工校验、且没有待核项的正文。请先完成原文校对；旧草稿和已有标注继续保留。</p><p><a class="download" href="./screening.html?part=${part}${assignment?`&member=${assignment.id}`:''}">进入原文校对 →</a> <a href="./annotation-tasks.html">返回标注任务</a></p></section></main>`;
+  }
+
+  function configureTask() {
+    document.title=`${taskName} · 书论工作区`;
+    app.querySelector('.heading .eyebrow').prepend(`${taskName} / `);
+    if(!annotationMode) {
+      app.querySelector('#annotationDrawer')?.remove();
+      app.querySelector('#selectionMarkTheory')?.remove();
+      app.querySelector('.theory-toolbar').innerHTML='<small id="theoryStatus"></small><a class="annotation-task-link" href="./annotation-tasks.html">任务二 · 书论标注 →</a>';
+      app.querySelectorAll('[data-annotation-page]').forEach(e=>e.remove());
+      app.querySelector('#verifyNext').textContent=humanMarked(page(),current())?'已标过 · 继续下一页':'校验本页并继续 →';
+      return;
+    }
+    const source=annotationSource(page(),current()),editor=app.querySelector('#editText');
+    editor.readOnly=true;editor.setAttribute('aria-label',`第 ${page().page} 页人工已校验正文（只读标注）`);
+    app.querySelector('.source-version-bar').innerHTML=`<span>${esc(source.label)} · ${esc(source.verifiedBy)}${source.verifiedAt?` · ${esc(source.verifiedAt)}`:''}</span><strong>人工校验完毕 · 只读</strong>`;
+    app.querySelector('.person-field').childNodes[0].textContent='标注人';
+    app.querySelector('#openTextEditor')?.remove();app.querySelector('#reviewDrawer')?.remove();app.querySelector('#validation')?.remove();
+    app.querySelector('.proof-confirmation .checklist').innerHTML='<span class="hint">任务二 · 仅在已人工校验的正文中圈选书论。</span>';
+    app.querySelector('#validate')?.remove();
+    const proofLink=document.createElement('a');proofLink.className='annotation-task-link';proofLink.href=`./screening.html?part=${part}${assignment?`&member=${assignment.id}`:''}&page=${page().page}`;proofLink.textContent='返回原文校对';app.querySelector('.drawer-actions').prepend(proofLink);
+    app.querySelector('.page-filters').setAttribute('aria-label','书论标注状态筛选');
+    for(const b of app.querySelectorAll('[data-page-filter]'))b.textContent={all:'全部',unmarked:'未确认',marked:'已确认'}[b.dataset.pageFilter];
+    for(const row of app.querySelectorAll('[data-index]')){const item=state.data.pages[Number(row.dataset.index)];row.querySelector('small').textContent=rowLabel(item,state.reviews[item.page]);row.querySelector('[data-annotation-page]')?.remove();}
+    const exportButton=app.querySelector('#exportBundle');exportButton.textContent='导出标注ZIP';
+    const extra=app.querySelector('.extra-tools>.tools');extra.innerHTML='<p class="hint">本任务只读人工已校验正文。完整原分份备份保留两项任务及旧草稿；恢复入口统一放在成果交付。</p><a class="download" href="./delivery.html?task=annotation&mode=restore">恢复进度JSON</a>';
+    for(const a of app.querySelectorAll('.assignment-switch')){const url=new URL(a.href);a.href=annotationHref(assignment.id,Number(url.searchParams.get('part')),url.searchParams.get('page'));}
+    app.querySelector('#selectionMenu label')?.remove();app.querySelector('#selectionReplacement')?.remove();app.querySelector('#applySelectionReplace')?.remove();app.querySelector('#selectionDelete')?.remove();
+    const top=document.querySelector('.topbar');if(top)top.innerHTML='<a href="./annotation-tasks.html">← 书论标注任务</a><span>任务二 · 仅使用人工已校验资料</span>';
+  }
+
   function render() {
     const p = page();
     const review = current();
-    window.WorkspaceUI.mount('proof');
+    window.WorkspaceUI.mount(annotationMode?'annotation':'proof');
     app.innerHTML = `<main class="page proof-workspace">
       <div class="heading"><div><h1>《历代书法论文选》</h1><span class="eyebrow">${assignment ? `成员 ${assignment.id} · ${esc(assignment.name)}` : `原第${part}份完整视图`} / ${state.data.pages[0].page}–${state.data.pages.at(-1).page} 页</span></div><span class="progress" id="progress">已标过 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
@@ -467,9 +524,10 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">第 ${p.page} 页全文</h2></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制</button><button type="button" id="openTextEditor" aria-controls="reviewDrawer" aria-expanded="${state.reviewOpen}">备注与历史</button></div></div><div class="form-body">
         <div class="source-version-bar"><span>${review.collation?.text!==undefined?'本页人工稿':'当前工作正文'}</span><strong class="publication-status">${humanMarkLabel(p,review)}</strong>${p.collated||p.targeted?'<button type="button" id="openPublished">查看原记录</button>':''}</div>
         <div class="editor-main"><div class="theory-toolbar"><button type="button" id="markTheory" class="primary" title="选中文字后标注（⌘/Ctrl+Shift+M）">标为书论</button><button type="button" id="openAnnotations" aria-controls="annotationDrawer" aria-expanded="${state.annotationOpen}">标注列表</button><small id="theoryStatus" role="status"></small></div><div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="editText" aria-label="第 ${p.page} 页校勘全文" aria-describedby="annotationHelp" spellcheck="false">${esc(draft().text||'')}</textarea></div></div>
-        <aside class="review-controls review-drawer annotation-drawer" id="annotationDrawer" ${state.annotationOpen?'':'hidden'} aria-hidden="${!state.annotationOpen}" aria-label="书论标注"><div class="drawer-head"><strong>第 ${p.page} 页 · 书论标注</strong><button type="button" id="closeAnnotations">关闭</button></div><div class="drawer-body"><p id="annotationHelp" class="hint">在全文中拖选文字，点“标为书论”；跨页的书论请分页面标注。黄色底纹表示人工选定的书论范围，全文仍可直接改字。</p><p class="hint">调整范围时，请先关闭列表，在全文重新选择文字，再打开列表点击“用当前选区重新定位”。书论标注与全文校对分别记账。</p><div id="annotationList"></div><button type="button" id="completeAnnotations" class="primary">确认本页标注完成</button><details id="removedAnnotations"><summary>已撤销标注</summary><div id="annotationHistory"></div></details></div></aside><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen?'':'hidden'} aria-hidden="${!state.reviewOpen}" aria-label="备注与历史"><div class="drawer-head"><strong>第 ${p.page} 页 · 备注与历史</strong><button type="button" id="closeReviewDrawer" class="drawer-close">关闭</button></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><label>备注（选填）<textarea id="question" rows="3" placeholder="记录看不清的字或后续需要查证的内容">${esc(review.question||'')}</textarea></label>${publishedMarkup(p)}<details class="ocr"><summary>原始 OCR（保留原样）</summary><pre>${esc(p.ocr||'本页没有可用OCR')}</pre></details><details><summary>个人替换历史</summary><div id="changeLog">${editHistoryMarkup(draft().edits||[])}</div></details><details><summary>旧初筛记录与候选</summary><pre>${esc(JSON.stringify({seen:review.seen,candidates:review.candidates||[],redoOcr:review.redoOcr},null,2))}</pre></details><details><summary>正文辅助工具</summary><p class="hint">${esc(layoutNote())}</p><div class="editor-tools"><button id="makeDraft">重新生成草稿</button><button id="renumber">重新编号</button><button id="lineUp">本栏上移</button><button id="lineDown">本栏下移</button></div></details></div></aside>
+        <aside class="review-controls review-drawer annotation-drawer" id="annotationDrawer" ${state.annotationOpen?'':'hidden'} aria-hidden="${!state.annotationOpen}" aria-label="书论标注"><div class="drawer-head"><strong>第 ${p.page} 页 · 书论标注</strong><button type="button" id="closeAnnotations">关闭</button></div><div class="drawer-body"><p id="annotationHelp" class="hint">在全文中拖选文字，点“标为书论”；跨页的书论请分页面标注。黄色底纹表示人工选定的书论范围，本任务正文只读；发现错字请返回原文校对，重新人工确认后再标注。</p><p class="hint">调整范围时，请先关闭列表，在全文重新选择文字，再打开列表点击“用当前选区重新定位”。书论标注与全文校对分别记账。</p><div id="annotationList"></div><button type="button" id="completeAnnotations" class="primary">确认本页标注完成</button><details id="removedAnnotations"><summary>已撤销标注</summary><div id="annotationHistory"></div></details></div></aside><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen?'':'hidden'} aria-hidden="${!state.reviewOpen}" aria-label="备注与历史"><div class="drawer-head"><strong>第 ${p.page} 页 · 备注与历史</strong><button type="button" id="closeReviewDrawer" class="drawer-close">关闭</button></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><label>备注（选填）<textarea id="question" rows="3" placeholder="记录看不清的字或后续需要查证的内容">${esc(review.question||'')}</textarea></label>${publishedMarkup(p)}<details class="ocr"><summary>原始 OCR（保留原样）</summary><pre>${esc(p.ocr||'本页没有可用OCR')}</pre></details><details><summary>个人替换历史</summary><div id="changeLog">${editHistoryMarkup(draft().edits||[])}</div></details><details><summary>旧初筛记录与候选</summary><pre>${esc(JSON.stringify({seen:review.seen,candidates:review.candidates||[],redoOcr:review.redoOcr},null,2))}</pre></details><details><summary>正文辅助工具</summary><p class="hint">${esc(layoutNote())}</p><div class="editor-tools"><button id="makeDraft">重新生成草稿</button><button id="renumber">重新编号</button><button id="lineUp">本栏上移</button><button id="lineDown">本栏下移</button></div></details></div></aside>
       </div><div class="validation" id="validation" aria-live="polite"></div><div class="drawer-footer proof-confirmation"><div class="checklist">${Object.entries(CHECKS).map(([key])=>`<label class="check"><input type="checkbox" data-check="${key}" ${humanMarked(p,review)||draft().checks?.wording?'checked':''}/>已对照原图逐栏检查本页全文</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">文本提醒</button><button id="verifyNext" class="primary">标记本页并继续 →</button></div></div></section></div>
       <div id="selectionMenu" class="selection-menu" role="dialog" aria-label="选中文字操作" hidden><div class="selection-menu-title"><strong>选中文字</strong><span data-selection-count></span></div><div class="selection-preview">“<span data-selection-text></span>”</div><label for="selectionReplacement">改为<input id="selectionReplacement" type="text" autocomplete="off" spellcheck="false"/></label><div class="selection-menu-actions"><button type="button" id="selectionMarkTheory">标为书论</button><button type="button" id="applySelectionReplace" class="primary">替换</button><button type="button" id="selectionDelete">删除选中</button><button type="button" id="closeSelectionMenu">取消</button></div></div></main>`;
+    configureTask();
     showMessage();
     syncReviewDrawer();
     syncAnnotationDrawer();
@@ -559,7 +617,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     capture: () => ({ progress: payload(), unsaved: Boolean(state.saveProblem), saveConflict: state.saveConflict,
       exportedAt: new Date().toISOString(), ...(assignment ? { member: assignment.id } : {}) }),
     loadMaterials: () => materialLoader.ensureAll(),
-    build: snapshot => buildCollationBundle({ ...snapshot, pages: state.data.allPages }),
+    build: snapshot => (annotationMode?buildAnnotationBundle:buildCollationBundle)({ ...snapshot, pages: state.data.allPages }),
     download: bundle => downloadBlob(bundle.name, new Blob([bundle.bytes], { type: 'application/zip' })),
   });
   async function exportAll() {
@@ -570,7 +628,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     state.notice = '正在打包完整交付材料，请稍候…'; state.error = ''; showMessage();
     try {
       const bundle = await runBundleExport();
-      state.notice = `已发起ZIP下载，正文、人工标记和进度备份已打包，请整包交回。包内为点击时的进度，后续改动请再次导出。${bundle.manifest.unsaved ? '本包包含尚未保存的修改，请保留备份。' : ''}`;
+      state.notice = `已发起${taskName}ZIP下载，当前任务成果和完整进度备份已打包，请整包交回。包内为点击时的进度，后续改动请再次导出。${bundle.manifest.unsaved ? '本包包含尚未保存的修改，请保留备份。' : ''}`;
     } catch (error) {
       state.error = `${error.message || '打包失败'}。未生成不完整交付包，请再次点击重试；如材料持续无法载入，可先抢救进度。`;
       state.notice = '';
@@ -652,7 +710,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     }
     if (button.id === 'reloadProgress') {
       if (!confirm('载入本机最新进度会替换本页未保存的修改。请确认已下载备份，再继续。')) return;
-      if (restore()) { await select(state.index, '已载入本机最新进度。'); }
+      if (restore()) { if(annotationMode)await init();else await select(state.index, '已载入本机最新进度。'); }
       else updateSaveStatus();
       return;
     }
@@ -675,6 +733,17 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       app.querySelector('#makeDraft').textContent = '重新生成草稿'; return;
     }
     if (button.id === 'validate') { state.validation = true; updateValidation(); return; }
+    if (button.id === 'verifyNext' && annotationMode) {
+      if(!annotationView(current().theoryAnnotations,String(draft().text||'')).completed) {
+        changeAnnotations(data=>completeAnnotations(data,String(draft().text||''),state.person),'本页书论标注已确认。');
+        if(state.error||state.saveProblem)return;
+      }
+      const next=state.data.pages.findIndex((item,i)=>i>state.index&&!annotationView(state.reviews[item.page]?.theoryAnnotations,annotationSource(item,state.reviews[item.page])?.text||'').completed);
+      const earlier=state.data.pages.findIndex(item=>!annotationView(state.reviews[item.page]?.theoryAnnotations,annotationSource(item,state.reviews[item.page])?.text||'').completed);
+      if(next>=0||earlier>=0)await select(next>=0?next:earlier,'已确认上一页书论标注。');
+      else {state.notice='当前人工已校验资料的标注均已确认，可导出标注成果。';showMessage();updateValidation();}
+      return;
+    }
     if (button.id === 'verifyNext') {
       if (humanMarked(page(),current())) {
         const next = nextUnmarkedIndex(state.data.pages,state.reviews,state.index);
@@ -730,8 +799,8 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       checks: { ...draft().checks, [event.target.dataset.check]: event.target.checked, fulltext: event.target.checked },
       ...(typeof current().collation?.text !== 'string' ? { metricBaseline: { version:1, text:String(draft().text || ''), label:sourceLabel() } } : {}),
     });
-    if (event.target.id === 'question') record({ question: event.target.value });
-    if (event.target.id === 'redoOcr') record({ redoOcr: event.target.checked });
+    if (!annotationMode && event.target.id === 'question') record({ question: event.target.value });
+    if (!annotationMode && event.target.id === 'redoOcr') record({ redoOcr: event.target.checked });
   });
 
   app.addEventListener('scroll', (event) => {
@@ -743,14 +812,14 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     if (Number.isInteger(target) && target >= state.data.start && target <= state.data.end) {
       const index = state.data.pages.findIndex(item => item.page === target);
       if (index >= 0) select(index);
-      else { state.error = excludedPages[target] ? `第 ${target} 页为${excludedPages[target]}，已移出本轮任务。` : `第 ${target} 页不在当前成员的本段分工中，请从团队任务进入对应页段。`; showMessage(); }
+      else { state.error = excludedPages[target] ? `第 ${target} 页为${excludedPages[target]}，已移出本轮任务。` : annotationMode ? `第 ${target} 页无可用的人工已校验正文，或不在当前分工范围。请先在原文校对任务完成校验。` : `第 ${target} 页不在当前成员的本段分工中，请从团队任务进入对应页段。`; showMessage(); }
     }
     else { state.error = `请输入 ${state.data.start}–${state.data.end} 之间的原 PDF 页码。`; showMessage(); }
   }
 
   app.addEventListener('keydown', (event) => {
     if (!state.data || !app.querySelector('#pageList')) return;
-    if ((event.metaKey||event.ctrlKey) && event.shiftKey && event.code==='KeyM' && !event.isComposing && event.target.id==='editText') { event.preventDefault(); markSelection(); return; }
+    if (annotationMode && (event.metaKey||event.ctrlKey) && event.shiftKey && event.code==='KeyM' && !event.isComposing && event.target.id==='editText') { event.preventDefault(); markSelection(); return; }
     if (event.key === 'Escape' && state.selectionMenu.open) {
       closeSelectionMenu();
       return;
@@ -781,7 +850,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       jumpTo(event.target.value);
     }
     if (event.target.id === 'scanFolder' || event.target.id === 'scanFiles') loadFiles(event.target.files || []);
-    if (event.target.id === 'locatorFile') {
+    if (!annotationMode && event.target.id === 'locatorFile') {
       try {
         const source = await event.target.files[0].text();
         const start = source.indexOf('const PAGES=');
@@ -809,6 +878,8 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
         ++selectionRequest;
         progressStore.allowBackupReplacement();
         state.reviews = saved.reviews; state.person = String(saved.person || '');
+        state.lastPage=saved.lastPage;state.annotationLastPage=saved.annotationLastPage;state.annotationSavedAt=String(saved.annotationSavedAt||'');
+        if(annotationMode){await init();return;}
         state.index = restoredIndex;
         syncUrl(); persist();
         state.error = '';
@@ -818,7 +889,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   });
 
   app.addEventListener('submit', (event) => {
-    if (event.target.id !== 'candidateForm') return;
+    if (annotationMode || event.target.id !== 'candidateForm') return;
     event.preventDefault();
     if (!current().seen) { state.error = '请先查看并标记本页扫描图，再添加候选。'; showMessage(); return; }
     const fields = new FormData(event.target);
@@ -828,7 +899,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   });
 
   async function init() {
-    window.WorkspaceUI.mount('proof');
+    window.WorkspaceUI.mount(annotationMode?'annotation':'proof');
     if (![1, 2, 3, 4].includes(part)) { app.innerHTML = '<p class="loading">请从团队任务选择成员1–7的分工入口；原文材料仍按原四份定位。</p>'; return; }
     try {
       assignment = assignmentFor(member);
@@ -841,10 +912,17 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       state.data.pages = assignmentPages(state.data.allPages, member, part);
       if (!state.data.pages.length) throw new Error('当前分工段没有可校勘页面');
       restore();
+      if(annotationMode) {
+        app.innerHTML='<p class="loading" role="status">正在核对人工校验资料来源…</p>';
+        await materialLoader.ensureAll();
+        state.data.pages=state.data.pages.filter(item=>annotationSource(item,state.reviews[item.page]));
+        if(!state.data.pages.length) {renderNoAnnotationSource();return;}
+      }
       const requested = new URLSearchParams(location.search).get('page');
-      const targetPage = Number(requested ?? state.lastPage);
-      state.index = initialPageIndex(state.data.pages, requested, state.lastPage);
-      if (requested === null && state.lastPage) state.notice = `已回到上次工作位置：第 ${page().page} 页。`;
+      const rememberedPage=annotationMode?state.annotationLastPage:state.lastPage;
+      const targetPage = Number(requested ?? rememberedPage);
+      state.index = initialPageIndex(state.data.pages, requested, rememberedPage);
+      if (requested === null && rememberedPage) state.notice = `已回到上次工作位置：第 ${page().page} 页。`;
       if (Number.isInteger(targetPage) && targetPage >= state.data.start && targetPage <= state.data.end) {
         const index = state.data.pages.findIndex(item => item.page >= targetPage);
         state.index = index < 0 ? state.data.pages.length - 1 : index;
@@ -852,6 +930,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       }
       app.innerHTML = `<p class="loading" role="status">页码索引已就绪，正在读取第 ${page().page} 页材料…</p>`;
       await materialLoader.ensurePage(page().page);
+      if(annotationMode && requested!==null && Number(requested)!==page().page)state.notice=`第 ${requested} 页尚无可用于标注的人工已校验正文，已转到合格的第 ${page().page} 页。`;
       syncUrl();
       render();
     } catch (error) { app.innerHTML = `<div class="loading" role="alert">${esc(error.message)}。本机校勘进度保留。<p><button id="retryLoad" type="button">重试加载</button></p></div>`; }

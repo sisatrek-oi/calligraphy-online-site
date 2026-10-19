@@ -1,4 +1,3 @@
-import { annotationFiles } from './theory-annotation-export.js?v=annotations-20261019';
 import { CHECKS, exportText, isVerified, validateDraft } from './collation-core.js?v=human-mark-20261019';
 import { metricsCsv, pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 import { progressSummary } from './screening-workflow.js?v=20261013-typo-only';
@@ -66,7 +65,6 @@ export async function buildCollationBundle({ progress, pages, member = null, exp
   const candidates = [['原PDF物理页', '书家', '书体', '连续原文摘录', '风格描述依据', '不确定或待核事项', '审核人']];
   for (const p of pages) for (const c of reviews[p.page]?.candidates || []) candidates.push([p.page, c.author, c.style, c.quote, c.basis, c.uncertainty, person]);
   add(`${prefix}-新证据候选回收表.csv`, csv(candidates));
-  for(const file of annotationFiles(pages,reviews,part,person)) add(file.name,file.content);
   add('交付说明.txt', [
     `《历代书法论文选》${prefix}一键交付包`, `导出人：${person}`, `导出时间：${exportedAt}`, `导出批次：${exportId}`,
     `本机个人标记 ${counts.verified} 页；其余个人页未标。团队已回收页和本机记录按页去重，详见校验表。`,
@@ -76,7 +74,7 @@ export async function buildCollationBundle({ progress, pages, member = null, exp
     '请将整个ZIP文件交回负责人，不必拆开分次发送。',
     '负责人解压后，校勘TXT含正文，校验表/修改率表用于查漏，进度JSON保留底稿、编辑记录和完整状态。',
     '换浏览器或恢复进度：先解压，在网页“材料与恢复”中导入本包的“初筛进度备份.json”。旧版JSON仍可导入。',
-    '书论标注独立保存；本段有标注记录时附原文高亮HTML、书论摘录CSV与逐页标注状态CSV。未确认不等于没有书论；已撤销和待重新定位内容保留记录，不计有效高亮。进度JSON含全部标注、原摘录与操作历史。',
+    '本包为原文校对任务；书论标注请从独立任务导出。JSON仍完整保留已有标注与历史，不删除旧记录。',
     '人工标过为已标过，未标为未标过；大模型是否处理不改变人工状态。有人工稿时优先保留人工稿，其余使用工作TXT。',
     '旧人工标记继续有效；修改正文后需要重新标记。原疑难字及备注保留在记录中。',
     '净修改率沿用已保存比较底稿计算，不代表OCR准确率；旧草稿缺少比较底稿时留空。',

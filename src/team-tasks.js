@@ -1,3 +1,4 @@
+import { annotationTaskContext } from './annotation-task-context.js?v=task-split-20261019';
 import {assignmentContext} from './assignment-context.js?v=redesign-local-20261019';
 import {readJson} from './screening-loader.js?v=fulltext-20261019';
 import { teamRelease } from './team-collation.js?v=20261018-part3';
@@ -8,6 +9,7 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
 
 (() => {
   const app = document.querySelector('#teamTasksApp');
+  const annotationTask=location.pathname.endsWith('/annotation-tasks.html');
   let publicIndexes=null, indexProblem='';
   Promise.all([1,2,3,4].map(async part=>[part,await readJson(`./screening-data/part-${part}-index.json?v=remaining-final-20261019`)] )).then(entries=>{publicIndexes=Object.fromEntries(entries);updateOfflineProgress();}).catch(error=>{indexProblem=error.message;updateOfflineProgress();});
   const state = { user: null, role: null, books: [], units: [], bookId: '', unitId: '', unit: null,
@@ -38,7 +40,7 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
   }
 
   function shell(content) {
-    window.WorkspaceUI.mount("proof");
+    window.WorkspaceUI.mount(annotationTask?"annotation":"proof");
     app.innerHTML = `<div class="team-shell">
       <aside class="team-app-sidebar" id="teamAppSidebar" aria-label="工作区导航">
         <a class="team-sidebar-brand" href="./index.html#home"><img src="./src/assets/shulun-mark.png" alt="" /><span><strong>书论工作区</strong><small>团队任务</small></span></a>
@@ -83,6 +85,13 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
       const slot=app.querySelector(`[data-local-progress="${a.id}"]`),link=app.querySelector(`[data-member="${a.id}"]`);
       if(!slot||!link)continue;
       if(!publicIndexes){slot.textContent=indexProblem?'标记暂无法读取；原记录保留':'读取人工标记…';continue;}
+      if(annotationTask) {
+        try {const progress=annotationTaskContext(localStorage,a,publicIndexes);slot.textContent=`可标注 ${progress.total} 页 · 标注已确认 ${progress.completed} 页`;
+          if(progress.href) {link.href=progress.href;link.removeAttribute('aria-disabled');link.dataset.part=progress.part;link.textContent='进入书论标注 →';}
+          else {link.removeAttribute('href');link.setAttribute('aria-disabled','true');link.textContent='暂无已校验资料';}
+        }catch {slot.textContent='本机记录无法读取；请先恢复完整备份';link.removeAttribute('href');link.setAttribute('aria-disabled','true');}
+        continue;
+      }
       const progress=assignmentContext(localStorage,a,publicIndexes);
       slot.textContent=progress?`已标过 ${progress.marked} / ${progress.total} 页 · 未标过 ${progress.total-progress.marked} 页`:'本机记录无法读取；原记录保留';
       if(progress){link.href=progress.href;link.dataset.part=progress.part;link.textContent=progress.resume?`继续第 ${progress.page} 页 →`:'进入校勘 →';}
@@ -94,13 +103,13 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
     return release ? `<span class="local-progress">已回收人工标记 ${release.pages} 页</span>` : '';
   }
   function offline() {
-    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>逐页校勘</h1><p>选择自己的分工，对照原图校勘全文，并在原文中圈选书论。</p></header>
+    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>${annotationTask?'书论标注':'原文校对'}</h1><p>${annotationTask?'任务二：只在人工已校验且无待核的正文中圈选书论，不在此任务改字。':'任务一：对照原图校对全文，确认人工校验完成。'}</p></header>
       <div hidden class="overview-stats" aria-label="当前任务规模"><div><strong>7</strong><span>校勘成员</span></div><div><strong>851</strong><span>后续整页校对</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮有效页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已标过</span></div></div>
-      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">校勘分工</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>沿用现有七人分工与全部已做记录。人工标记在总览和校勘页使用同一口径。</p></div><span class="task-state">分工已更新</span></div>
+      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">校勘分工</span><h2 id="screeningTitle">《历代书法论文选》${annotationTask?'书论标注':'原文校对'}</h2><p>${annotationTask?'沿用七人的原页段范围，只开放已有合格人工校验稿的页面。待核稿、机器稿和未校验个人草稿不作为标注正文。':'沿用现有七人分工与全部已做记录；完成人工校验后，正文可供书论标注任务使用。'}</p></div><a class="task-state" href="${annotationTask?'./team-tasks.html':'./annotation-tasks.html'}">${annotationTask?'任务一 · 原文校对 →':'任务二 · 书论标注 →'}</a></div>
         <div class="overview-list-head"><h3>选择成员</h3><span>按原 PDF 物理页定位</span></div>
         <div class="overview-unit-list">${assignments.map(a => `<article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span class="local-progress" data-local-progress="${a.id}">读取人工标记…</span></div><div class="unit-actions"><a class="unit-primary" data-member="${a.id}" data-part="${a.segments[0].part}" href="${assignmentHref(a.id,a.segments[0].part)}">进入任务 →</a></div></article>`).join('')}</div>
-        <div class="overview-handoff"><strong>交付方式</strong><span>每页对照原图核对错字。跨两段的成员在任务内切换、分别导出ZIP；正文和表格仅列当前分工段，JSON备份保留该原分份的全部个人记录。修订TXT、状态表等下载统一放在任务内的“材料与恢复”。</span></div></section>
-      <p class="overview-note">已交回校验190页，人工标记沿用原记录。已做正文、草稿、修改率底稿与历史记录均保留；静态站不汇总个人实时进度。同一浏览器沿用原四份记录，不会按成员编号创建新账号。原OCR、扫描及局部修订保持。</p>
+        <div class="overview-handoff"><strong>交付方式</strong><span>${annotationTask?'在已校验正文中拖选书论、逐页确认，再导出标注ZIP。合格页面为零时请先完成原文校对。':'每页对照原图核对错字。'}跨两段的成员在任务内切换、分别导出ZIP；正文和表格仅列当前分工段，JSON备份保留该原分份的全部个人记录。修订TXT、状态表等下载统一放在任务内的“材料与恢复”。</span></div></section>
+      <p class="overview-note">${annotationTask?'团队回收稿中173页已修改完毕、17页仍有待核；本机合格人工稿按页去重补充。实际标注时再次核对完整正文来源。':'已交回校验190页，人工标记沿用原记录。'}已做正文、草稿、修改率底稿与历史记录均保留；静态站不汇总个人实时进度。同一浏览器沿用原四份记录，不会按成员编号创建新账号。原OCR、扫描及局部修订保持。</p>
       <details class="overview-secondary"><summary>原四份完整材料与历史进度</summary><p>如需查看已移交页的旧个人稿或下载原材料，可打开原分份完整视图。原记录不会因分工调整而删除。</p><div class="unit-actions">${screeningRanges.map((_,i)=>`<a href="./screening.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div></details>
       <section class="overview-secondary"><div><span class="eyebrow">独立批次入口</span><h2>旧条目文件审核</h2><p>旧 188 条字段审核与本轮全书初筛分开处理，不计入上方任务规模。</p></div><a href="./review.html">进入文件审核 →</a></section></div>`);
     updateOfflineProgress();
@@ -332,6 +341,7 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
   window.addEventListener('pageshow', updateOfflineProgress);
 
   (async () => {
+    if(annotationTask){state.offline=true;offline();return;}
     try {
       const response = await fetch('/api/simulation/me', { cache: 'no-store' });
       if (!response.ok) { state.offline = true; offline(); return; }

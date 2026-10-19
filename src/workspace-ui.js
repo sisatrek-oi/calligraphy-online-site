@@ -3,13 +3,15 @@
   const icons = {
     home:'M3 10 12 3l9 7v11h-6v-7H9v7H3z',
     proof:'M6 3h8l4 4v14H6z M14 3v5h5 M9 12h6 M9 16h6',
+    annotation:'M4 18l9-13 5 4-9 13H4z M12 7l5 4 M4 22h16',
     entries:'M4 6h16 M4 12h16 M4 18h11',
     materials:'M3 7h7l2 2h9v12H3z',
     delivery:'M12 16V3 M7 8l5-5 5 5 M4 14v7h16v-7',
   };
   const items = [
     ['home','任务首页','./index.html#home',''],
-    ['proof','逐页校勘','./team-tasks.html','对照原图校勘全文，在原文中圈选书论。'],
+    ['proof','原文校对','./team-tasks.html','对照原图校对全文，确认人工校验完成。'],
+    ['annotation','书论标注','./annotation-tasks.html','使用人工已校验正文，在原文中圈选书论。'],
     ['entries','条目整理','./index.html#detail','整理书论条目、核对证据与独立审核。'],
     ['materials','材料管理','./materials.html','查看原始材料、工作正文与历史版本。'],
     ['delivery','成果交付','./delivery.html','导出成果、恢复进度与检查回收文件。'],

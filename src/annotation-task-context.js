@@ -1,0 +1,24 @@
+import { annotationSource, annotationHref } from './annotation-source.js?v=task-split-20261019';
+import { segmentHasPage } from './team-assignments.js?v=entry-20261019';
+import { readProgress } from './delivery-core.js?v=annotations-20261019';
+import { annotationView } from './theory-annotations.js?v=annotations-20261019';
+
+export function annotationTaskContext(storage,assignment,indexes) {
+  const parts=new Map(),eligible=[];
+  for(const segment of assignment.segments) {
+    const saved=readProgress(storage,segment.part).value;parts.set(segment.part,saved);
+    for(const page of indexes[segment.part]?.pages||[]) {
+      if(!segmentHasPage(segment,page.page))continue;
+      const review=saved.reviews[page.page]||{},source=annotationSource(page,review,{summary:true});
+      if(!source)continue;
+      const data=review.theoryAnnotations;
+      const completed=source.text!==undefined?annotationView(data,source.text).completed:
+        Boolean(data?.completion && data.source?.kind==='team' && data.source?.revision===source.revision);
+      eligible.push({part:segment.part,page:page.page,completed});
+    }
+  }
+  const recent=eligible.filter(p=>parts.get(p.part)?.annotationLastPage===p.page).sort((a,b)=>(Date.parse(parts.get(b.part)?.annotationSavedAt)||0)-(Date.parse(parts.get(a.part)?.annotationSavedAt)||0))[0];
+  const target=recent||eligible.find(p=>!p.completed)||eligible[0];
+  return {total:eligible.length,completed:eligible.filter(p=>p.completed).length,
+    ...(target?{part:target.part,page:target.page,href:annotationHref(assignment.id,target.part,target.page)}:{})};
+}

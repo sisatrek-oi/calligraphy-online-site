@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {addAnnotation,annotationView,completeAnnotations,rebaseAnnotations,removeAnnotation,restoreAnnotation,relocateAnnotation,validateAnnotations} from '../src/theory-annotations.js';
 import {validateProgress} from '../src/delivery-core.js';
 import {annotationFiles} from '../src/theory-annotation-export.js';
-import {buildCollationBundle} from '../src/collation-export.js';
+import {buildAnnotationBundle} from '../src/theory-annotation-export.js';
 import {spawnSync} from 'node:child_process';
 const at='2026-10-19T06:00:00.000Z',text='序言。书者心画也。附记。书者心画也。';
 const mark=(s=text,start=3,end=9)=>addAnnotation(undefined,s,start,end,'人工甲',at,'a');
@@ -88,14 +88,14 @@ test('exports preserve full text, escape markup and distinguish untouched from c
 });
 test('ZIP annotation exports respect assignment scope; full JSON retains transferred pages and history',async()=>{
   const pages=Array.from({length:249},(_,i)=>({page:528+i,local:i+1,ocr:text}));
-  const progress={version:1,part:3,person:'甲',reviews:{603:{collation:{text,verified:true},theoryAnnotations:completeAnnotations(mark(),text,'甲',at)},700:{collation:{text:'移交旧草稿'},theoryAnnotations:completeAnnotations(undefined,'移交旧草稿','甲',at)}}};
-  const before=JSON.stringify(progress),bundle=await buildCollationBundle({progress,pages,member:3,exportedAt:at});
+  const progress={version:1,part:3,person:'甲',reviews:{603:{collation:{text,verified:true,checks:{wording:true}},theoryAnnotations:completeAnnotations(mark(),text,'甲',at)},700:{collation:{text:'移交旧草稿'},theoryAnnotations:completeAnnotations(undefined,'移交旧草稿','甲',at)}}};
+  const before=JSON.stringify(progress),bundle=await buildAnnotationBundle({progress,pages,member:3,exportedAt:at});
   const out=spawnSync('python3',['-c',`import sys,io,zipfile,json,hashlib
 with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as z:
  assert z.testzip() is None
  m=json.loads(z.read('文件清单.json'))
  for f in m['files']: assert hashlib.sha256(z.read(f['name'])).hexdigest()==f['sha256']
- assert len(z.namelist())==11
+ assert len(z.namelist())==6
  print(json.dumps({'backup':json.loads(z.read('第3份-初筛进度备份.json')),'html':z.read('第3份-原文书论标注.html').decode('utf-8-sig')},ensure_ascii=False))`],{input:bundle.bytes,encoding:'utf8',maxBuffer:3000000});
   assert.equal(out.status,0,out.stderr);const data=JSON.parse(out.stdout);
   assert.deepEqual(data.backup,progress);assert.doesNotMatch(data.html,/原 PDF 第 700 页/);assert.match(data.html,/原 PDF 第 603 页/);
