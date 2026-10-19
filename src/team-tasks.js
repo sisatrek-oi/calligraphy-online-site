@@ -101,7 +101,7 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
       (local ? `<span class="local-progress">局部重OCR：${local.pages}页${local.regions}区域已处理 · ${local.pending}区域待核 · ${local.collatedPages ? `其中${local.collatedPages}页已纳入团队复核，其余${local.pages-local.collatedPages}页整页未校` : '整页未校'}</span>` : '');
   }
   function offline() {
-    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>选择自己的页段，左右对照原页与 TXT，逐页校勘后导出。</p></header>
+    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>机器识别 → 大模型复核 → 人工全文检查。选择自己的页段，左右对照原图与TXT，逐页确认后导出。</p></header>
       <div class="overview-stats" aria-label="当前任务规模"><div><strong>7</strong><span>校勘成员</span></div><div><strong>851</strong><span>后续整页校对</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮有效页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已校验</span></div></div>
       <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 七人分工</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>原四份各移交末尾100页，共400页分给新增三人。原四人保留前段和已做成果。</p></div><span class="task-state">分工已更新</span></div>
         <div class="overview-list-head"><h3>分工与材料</h3><span>按原 PDF 物理页定位</span></div>

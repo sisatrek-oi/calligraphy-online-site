@@ -1,14 +1,15 @@
-import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=20261018-part3';
+import { modelReviewLabel, humanReviewStage } from './model-reviewed.js?v=fulltext-20261019';
+import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=fulltext-20261019';
 import { publicationLabel, teamRelease } from './team-collation.js?v=20261018-part3';
 import { targetedLabel, targetedRelease } from './targeted-ocr.js?v=20261018-part3';
 import { copyText } from './clipboard.js?v=20261012-copy';
-import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=seven-20261018';
+import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=fulltext-20261019';
 import { assignmentFor, assignmentSegment, assignmentPages, assignmentHref } from './team-assignments.js?v=seven-20261018';
-import { readJson, createMaterialLoader } from './screening-loader.js?v=20261018-part3';
-import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified } from './collation-core.js?v=20261013-typo-only';
+import { readJson, createMaterialLoader } from './screening-loader.js?v=fulltext-20261019';
+import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified } from './collation-core.js?v=fulltext-20261019';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { createProgressStore, initialPageIndex, nextPendingIndex } from './screening-workflow.js?v=20261013-typo-only';
-import { theoryRanges, highlightHtml } from './theory-highlight.js?v=20261003-theory';
+import { highlightHtml } from './theory-highlight.js?v=20261003-theory';
 import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
 
 (() => {
@@ -17,7 +18,7 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
   const member = new URLSearchParams(location.search).get('member');
   let assignment = null, segment = null;
   const state = { data: null, index: 0, reviews: {}, files: new Map(), imageUrl: '', imageReady: false,
-    person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, zoom: 100, validation: false, resetPending: false, highlight: true, reviewOpen: false };
+    person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, zoom: 100, validation: false, resetPending: false, reviewOpen: false };
   state.selectionMenu = { open: false, start: 0, end: 0, text: '', x: 0, y: 0, targetId: '' };
   let editorObserver, materialLoader;
   let selectionRequest = 0;
@@ -33,11 +34,11 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
   const scanHref = (number) => `./screening-data/scans/${filename(number)}`;
   const pdfHref = (local) => `./screening-data/part-${part}.pdf#page=${local}`;
   const sourceText = item => item.ocr;
-  const sourceLabel = () => page().collated ? `团队校订版 ${page().collated.reviewedAt}` : page().targeted ? `局部修订版 ${page().targeted.reviewedAt}（整页未校）` : '原始 OCR';
-  const rowLabel = (item, review) => isVerified(review.collation, sourceText(item)) ? '已校验' : review.collation?.text !== undefined ? '草稿' : publicationLabel(item) || targetedLabel(item) || (review.seen ? '已看' : '待校');
+  const sourceLabel = () => page().collated ? `团队校订版 ${page().collated.reviewedAt}` : page().modelReviewed ? `大模型全文复核稿 ${page().modelReviewed.reviewedAt.slice(0,10)}（待人工全文检查）` : page().targeted ? `局部修订版 ${page().targeted.reviewedAt}（整页未校）` : '原始 OCR';
+  const rowLabel = (item, review) => isVerified(review.collation, sourceText(item)) ? '已校验' : review.collation?.text !== undefined ? '草稿' : publicationLabel(item) || modelReviewLabel(item) || targetedLabel(item) || (review.seen ? '已看' : '待校');
   const draft = () => draftForPage(page(), current());
   const layoutNote = () => page().layout?.method === 'aligned-lines' ? '已按逐栏 OCR 对齐分栏；栏界为机器建议，请看图核对。'
-    : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；本轮只需对照原页修改错字。' : '本页保留原段落；本轮无需整理分栏格式。';
+    : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；请逐栏对照原图检查全文。' : '本页保留原段落；本轮无需整理分栏格式。';
   const verifiedCount = () => state.data.pages.filter(item => isVerified(state.reviews[item.page]?.collation, sourceText(item))).length;
 
   function editLocation(text, index) {
@@ -119,7 +120,7 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
 
   function updateChangeLog() {
     const slot = app.querySelector('#changeLog');
-    if (slot) slot.innerHTML = editHistoryMarkup(draft().edits || []);
+    if (slot) slot.innerHTML = '';
   }
 
   function updateDraft(patch, { reset = false } = {}) {
@@ -131,7 +132,7 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
     const existingBaseline = current().collation?.metricBaseline;
     const metricBaseline = reset ? { version: 1, text: String(patch.text || ''), label: sourceLabel() }
       : existingBaseline || (changed && typeof current().collation?.text !== 'string' ? { version: 1, text: String(draft().text || ''), label: sourceLabel() } : undefined);
-    record({ collation: { ...draft(), ...patch, ...(metricBaseline ? { metricBaseline } : {}), ...(changed ? { checks: {} } : {}), ...(clearHistory || reset ? { edits: [] } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
+    record({ collation: { ...draft(), ...patch, ...(metricBaseline ? { metricBaseline } : {}), ...(changed ? { checks: {}, fullTextChecked: false } : {}), ...(clearHistory || reset ? { edits: [] } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
     const preview = app.querySelector('#collationText');
     if (preview && preview.value !== draft().text) preview.value = draft().text;
     showMessage();
@@ -257,20 +258,17 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
     const layer = app.querySelector('#theoryLayer'), status = app.querySelector('#theoryStatus');
     if (!layer) return;
     const text = String(draft().text || '');
-    const ranges = state.highlight ? theoryRanges(text) : [];
+    const ranges = [];
     layer.innerHTML = highlightHtml(text, ranges);
-    const count = ranges.filter(range => range.type === 'theory').length;
-    status.textContent = !state.highlight ? '高亮已隐藏，原文保持完整。' : count
-      ? `深黄：书论线索 · 浅黄：邻近上下文（自动提示，需通读确认）`
-      : '本页暂未识别出明显书论线索，仍请通读确认。';
+    status.textContent = '请逐栏通读全文，包括未修改的文字、栏首栏尾和页码。';
     syncHighlight();
   }
 
   function updateValidation() {
     const result = validateDraft(draft(), sourceText(page()));
     const slot = app.querySelector('#validation');
-    if (slot) slot.innerHTML = `<span>${result.lines} 栏 · ${result.chars} 汉字 · ${isVerified(draft(), sourceText(page())) ? '已校验' : '待人工校验'}</span>${state.validation ? `<ul>${[...result.errors, ...result.warnings].map(message => `<li>${esc(message)}</li>`).join('') || '<li>未发现文本提醒；错字仍需对照原页核对。</li>'}</ul>` : ''}`;
-    for (const checkbox of app.querySelectorAll('[data-check]')) checkbox.checked = Boolean(draft().checks?.[checkbox.dataset.check]);
+    if (slot) slot.innerHTML = `<span>${result.lines} 栏 · ${result.chars} 汉字 · ${isVerified(draft(), sourceText(page())) ? '已校验' : '待人工校验'}</span>${state.validation ? `<ul>${[...result.errors, ...result.warnings].map(message => `<li>${esc(message)}</li>`).join('') || '<li>未发现文本提醒；全文仍需对照原页核对。</li>'}</ul>` : ''}`;
+    for (const checkbox of app.querySelectorAll('[data-check]')) checkbox.checked = Boolean(draft().checks?.fulltext);
     const progress = app.querySelector('#progress');
     if (progress) progress.textContent = `已校验 ${verifiedCount()} / ${state.data.pages.length} 页`;
     for (const row of app.querySelectorAll('[data-index]')) {
@@ -397,9 +395,9 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
     const review = current();
     const candidates = Array.isArray(review.candidates) ? review.candidates : [];
     app.innerHTML = `<main class="page">
-      <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / ${assignment ? `成员 ${assignment.id} · ${esc(assignment.name)} / 原第${part}份` : `原第${part}份完整视图`} / 原 PDF ${state.data.pages[0].page}–${state.data.pages.at(-1).page} 页</span><h1>原文对照校勘</h1><p>本轮只改错字 · 标点、符号和排版可保持原样</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
+      <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / ${assignment ? `成员 ${assignment.id} · ${esc(assignment.name)} / 原第${part}份` : `原第${part}份完整视图`} / 原 PDF ${state.data.pages[0].page}–${state.data.pages.at(-1).page} 页</span><h1>原文对照校勘</h1><p>机器识别 → 大模型复核 → 人工全文检查</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
-        <div class="tools">${assignment ? assignment.segments.filter(s=>s.part!==part).map(s=>`<a class="assignment-switch download" href="${assignmentHref(assignment.id,s.part)}">另一段 ${s.start}–${s.end} →</a>`).join('') : ''}<button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : assignment ? '导出本段ZIP' : '一键导出全部'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">${assignment ? '本段正文与表格打包导出；JSON保留原分份全部个人记录。另一段需分别导出。' : '一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。'}</p>${teamRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-collated.txt" download>原第${part}份已修订 TXT</a><a class="download" href="./screening-data/part-${part}-collated-status.csv" download>原第${part}份修改状态表</a>` : ''}${targetedRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-targeted.txt" download>原第${part}份局部修订TXT</a><a class="download" href="./screening-data/part-${part}-targeted-status.csv" download>原第${part}份局部状态表</a>` : ''}<a class="download" href="${taskOcrHref(part)}" download>${assignment ? `下载原第${part}份完整OCR` : '下载任务 OCR'}</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
+        <div class="tools">${assignment ? assignment.segments.filter(s=>s.part!==part).map(s=>`<a class="assignment-switch download" href="${assignmentHref(assignment.id,s.part)}">另一段 ${s.start}–${s.end} →</a>`).join('') : ''}<button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : assignment ? '导出本段ZIP' : '一键导出全部'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">${assignment ? '本段正文与表格打包导出；JSON保留原分份全部个人记录。另一段需分别导出。' : '一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。'}</p>${state.data.allPages.some(p=>p.modelReviewSummary) ? `<a class="download" href="./screening-data/part-${part}-model-reviewed.txt" download>大模型复核全文TXT（待人工）</a><a class="download" href="./screening-data/part-${part}-model-reviewed-status.csv" download>大模型全文复核状态</a>` : ''}${teamRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-collated.txt" download>原第${part}份已修订 TXT</a><a class="download" href="./screening-data/part-${part}-collated-status.csv" download>原第${part}份修改状态表</a>` : ''}${targetedRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-targeted.txt" download>原第${part}份局部修订TXT</a><a class="download" href="./screening-data/part-${part}-targeted-status.csv" download>原第${part}份局部状态表</a>` : ''}<a class="download" href="${taskOcrHref(part)}" download>${assignment ? `下载原第${part}份完整OCR` : '下载原始 OCR（历史）'}</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
           <label class="file-button">导入进度 JSON<input id="backupFile" type="file" accept="application/json,.json" /></label><p class="hint">恢复时先解压交付包，再选择其中的进度备份JSON；旧版备份也可使用。</p>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
@@ -408,16 +406,16 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
       <div id="saveRecovery"></div><div id="messageSlot"></div>
       <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.pages[0].page}" max="${state.data.pages.at(-1).page}" placeholder="${state.data.pages[0].page}–${state.data.pages.at(-1).page}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, sourceText(item)) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${esc(rowLabel(item, r))}</small></button>`; }).join('')}</div></aside>
       <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已校验。Alt + ← / → 翻页。</p></div></section>
-      <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>框选文字后右键可直接替换；点击“编辑本页”打开完整编辑器。</small></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制本页</button><button type="button" id="openTextEditor">编辑本页</button></div></div><div class="form-body">
-        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '已保留本页人工稿及原比较底稿' : `底稿：${sourceLabel()} · 对照扫描图校勘`}</span>${p.collated ? `<strong class="publication-status">团队：${esc(publicationLabel(p))}</strong><button type="button" id="openPublished">查看校订版与记录</button>` : p.targeted ? `<strong class="publication-status">${esc(targetedLabel(p))}</strong><button type="button" id="openPublished">查看区域与记录</button>` : '<span>未核模型稿已停用，历史稿仅供下载参考。</span>'}</div>
+      <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>框选文字后右键可直接替换；通读全文后，点击“检查 / 修改本页”确认或修改。</small></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制本页</button><button type="button" id="openTextEditor">检查 / 修改本页</button></div></div><div class="form-body">
+        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '已保留本页人工稿及原比较底稿' : `底稿：${sourceLabel()} · 对照扫描图校勘`}</span>${p.collated ? `<strong class="publication-status">团队：${esc(publicationLabel(p))}</strong><button type="button" id="openPublished">查看校订版与记录</button>` : p.modelReviewed ? `<span class="publication-status">大模型已复核 · ${esc(humanReviewStage(review))}</span>` : p.targeted ? `<strong class="publication-status">${esc(targetedLabel(p))}</strong><button type="button" id="openPublished">查看区域与记录</button>` : `<span class="publication-status">待大模型全文复核 · 请对照原图检查</span>`}</div>
         <div class="editor-main">
-        <div class="theory-toolbar"><label class="check"><input id="theoryToggle" type="checkbox" ${state.highlight ? 'checked' : ''} />高亮书论相关内容</label><small id="theoryStatus"></small></div>
+        <div class="theory-toolbar"><small id="theoryStatus">原图与完整正文逐页核对；不标出修改处。</small></div>
         <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
-        <div class="change-log" id="changeLog" aria-live="polite">${editHistoryMarkup(draft().edits || [])}</div>
+        <div class="change-log" id="changeLog" aria-live="polite"></div>
         </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后整包交回</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" data-export-all class="drawer-save" ${exporting ? 'disabled' : ''}>一键导出全部</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div>${publishedMarkup(p)}<details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
         <div class="validation" id="validation" aria-live="polite"></div>
         <label>备注（选填）<textarea id="question" rows="2" placeholder="可记下看不清的字，留待后续复核；无需为格式或符号填写说明">${esc(review.question || '')}</textarea></label>
-        <p class="hint">本轮只核对错字，标点、符号和分栏提醒不影响完成。修改正文后需重新确认。</p>
+        <p class="hint">逐栏检查本页全文，发现错误直接修改TXT；确认后进入下一页。修改正文后需重新确认。</p>
         <details class="secondary-review"><summary>证据候选与旧初筛记录（${candidates.length} 条）</summary>
         <div class="form-actions"><button type="button" id="markSeen" class="primary">${review.seen ? '撤销已看标记' : '已看这页扫描图'}</button>${review.seen ? '<span class="hint">已记录看图；可继续补充候选。</span>' : ''}</div>
         <label class="check"><input id="redoOcr" type="checkbox" ${review.redoOcr ? 'checked' : ''} /> 需重做 OCR</label>
@@ -427,7 +425,7 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
           <label>连续原文摘录<textarea name="quote" rows="2" required></textarea></label><label>风格描述依据<textarea name="basis" rows="2" required></textarea></label>
           <label>不确定或待核事项<textarea name="uncertainty" rows="2"></textarea></label><button type="submit">添加本页候选</button></form>
         <h3>交回负责人</h3><p class="hint">初筛表与候选表一起放入ZIP，未审核页保留空行便于查漏。</p><div class="form-actions"><button type="button" data-export-all class="primary" ${exporting ? 'disabled' : ''}>一键导出全部</button></div>
-      </details></div><div class="drawer-footer"><div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.[key] ? 'checked' : ''} />${label}</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">查看文本提醒</button><button id="verifyNext" class="primary">完成本页并继续</button></div></div></aside></div></section></div>
+      </details></div><div class="drawer-footer"><div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.fulltext ? 'checked' : ''} />${key === 'wording' ? '已对照原图逐栏检查本页全文' : label}</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">查看文本提醒</button><button id="verifyNext" class="primary">完成本页并继续</button></div></div></aside></div></section></div>
       <div id="selectionMenu" class="selection-menu" role="dialog" aria-label="替换选中文字" hidden>
         <div class="selection-menu-title"><strong>替换选中文字</strong><span data-selection-count></span></div>
         <div class="selection-preview">“<span data-selection-text></span>”</div>
@@ -636,10 +634,10 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
       const problems = [...validation.errors];
       if (!state.person.trim()) problems.unshift('请填写校勘人真实姓名。');
       if (!state.imageReady) problems.push('原页尚未载入，请载入后核对。');
-      if (!Object.keys(CHECKS).every(key => draft().checks?.[key])) problems.push('请勾选“已对照原页核对本页错字”。');
+      if (!draft().checks?.fulltext) problems.push('请勾选“已对照原图逐栏检查本页全文”。');
       if (problems.length) { state.error = problems.join(' '); showMessage();
-        app.querySelector(!state.person.trim() ? '#person' : validation.errors.length ? '#editText' : !Object.keys(CHECKS).every(key => draft().checks?.[key]) ? '[data-check]:not(:checked)' : '#question')?.focus(); return; }
-      const saved = record({ seen: true, collation: { ...draft(), verified: true, verifiedBy: state.person.trim(), verifiedAt: new Date().toISOString() } });
+        app.querySelector(!state.person.trim() ? '#person' : validation.errors.length ? '#editText' : !draft().checks?.fulltext ? '[data-check]:not(:checked)' : '#question')?.focus(); return; }
+      const saved = record({ seen: true, collation: { ...draft(), verified: true, fullTextChecked: true, workflow: page().modelReviewed ? 'machine-model-human-fulltext-v1' : 'human-fulltext-v1', ...(page().modelReviewed ? { modelRevision: page().modelReviewed.revision } : {}), verifiedBy: state.person.trim(), verifiedAt: new Date().toISOString() } });
       updateValidation();
       if (!saved) return;
       const completed = page().page;
@@ -674,10 +672,12 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
   app.addEventListener('input', (event) => {
     if (!state.data) return;
     if (event.target.closest('#candidateForm') && event.target.name) { record({ candidateDraft: { ...current().candidateDraft, [event.target.name]: event.target.value } }); return; }
-    if (event.target.id === 'theoryToggle') { state.highlight = event.target.checked; updateHighlight(); return; }
     if (event.target.id === 'person') { state.person = event.target.value; persist(); }
     if (event.target.id === 'editText') updateDraft({ text: event.target.value });
-    if (event.target.dataset.check) updateDraft({ checks: { ...draft().checks, [event.target.dataset.check]: event.target.checked } });
+    if (event.target.dataset.check) updateDraft({
+      checks: { ...draft().checks, [event.target.dataset.check]: event.target.checked, fulltext: event.target.checked },
+      ...(typeof current().collation?.text !== 'string' ? { metricBaseline: { version:1, text:String(draft().text || ''), label:sourceLabel() } } : {}),
+    });
     if (event.target.id === 'question') record({ question: event.target.value });
     if (event.target.id === 'redoOcr') record({ redoOcr: event.target.checked });
   });
@@ -778,7 +778,7 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
       assignment = assignmentFor(member);
       segment = assignmentSegment(member, part);
       app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
-      state.data = await readJson(`./screening-data/part-${part}-index.json?v=20261018-part3`);
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=fulltext-20261019`);
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
       materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;

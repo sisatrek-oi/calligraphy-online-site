@@ -1,5 +1,6 @@
 import { validCollation, publicationSummary } from './team-collation.js?v=20261018-part3';
 import { validTargeted, targetedSummary } from './targeted-ocr.js?v=20261018-part3';
+import { validModelReview, modelReviewSummary } from './model-reviewed.js?v=fulltext-20261019';
 // Keep the deadline active through body parsing, not just response headers.
 export async function readJson(url, { fetcher = fetch, timeoutMs = 15000 } = {}) {
   const controller = new AbortController();
@@ -42,13 +43,17 @@ export function createMaterialLoader(data, options = {}) {
               JSON.stringify(publicationSummary(item.collated)) === JSON.stringify(expected[i].publication)) &&
             (item.targeted === undefined ? expected[i].targetedSummary === undefined :
               validTargeted(item.targeted, item.page, item.ocr) &&
-              JSON.stringify(targetedSummary(item.targeted)) === JSON.stringify(expected[i].targetedSummary)));
+              JSON.stringify(targetedSummary(item.targeted)) === JSON.stringify(expected[i].targetedSummary)) &&
+            (item.modelReviewed === undefined ? expected[i].modelReviewSummary === undefined :
+              validModelReview(item.modelReviewed, item.page) &&
+              JSON.stringify(modelReviewSummary(item.modelReviewed)) === JSON.stringify(expected[i].modelReviewSummary)));
         if (!valid) throw new Error('本页材料不完整或与页码索引不匹配');
         // Attach only after validating the entire chunk. Never touch local reviews.
         for (const item of payload.pages) Object.assign(pages.get(item.page), {
           ocr: item.ocr, layout: item.layout, contextual: item.contextual,
           ...(item.collated ? { collated: item.collated } : {}),
           ...(item.targeted ? { targeted: item.targeted } : {}),
+          ...(item.modelReviewed ? { modelReviewed: item.modelReviewed } : {}),
         });
       }).catch(error => { requests.delete(path); throw error; });
       requests.set(path, request);

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { validCollation, publicationSummary } from '../src/team-collation.js';
 import { validTargeted, targetedSummary } from '../src/targeted-ocr.js';
+import { validModelReview, modelReviewSummary } from '../src/model-reviewed.js';
 const root = new URL('../screening-data/', import.meta.url);
 fs.mkdirSync(new URL('materials/', root), { recursive: true });
 for (let part = 1; part <= 4; part++) {
@@ -28,13 +29,23 @@ for (let part = 1; part <= 4; part++) {
     if (!validTargeted(item, item.page) || targeted.has(item.page) || !index.pages.some(p => p.page === item.page)) throw new Error('Invalid targeted page');
     targeted.set(item.page, item);
   }
+  const reviewedPath = new URL(`part-${part}-model-reviewed.json`, root);
+  const reviewedPayload = fs.existsSync(reviewedPath) ? JSON.parse(fs.readFileSync(reviewedPath, 'utf8')) : null;
+  if (reviewedPayload && (reviewedPayload.version !== 1 || reviewedPayload.part !== part || !Array.isArray(reviewedPayload.pages))) throw new Error('Invalid model-reviewed source');
+  const modelReviewed = new Map();
+  for (const item of reviewedPayload?.pages || []) {
+    if (!validModelReview(item, item.page) || modelReviewed.has(item.page) || !index.pages.some(p=>p.page===item.page)) throw new Error('Invalid full-text model review');
+    const image = fs.readFileSync(new URL(`scans/page-${String(item.page).padStart(4,'0')}.jpg`,root));
+    if (crypto.createHash('sha256').update(image).digest('hex') !== item.sourceSha256) throw new Error('Model review image mismatch');
+    modelReviewed.set(item.page,item);
+  }
   if (headings.length !== index.pages.length) throw new Error('OCR page count mismatch');
   const pages = index.pages.map((item, i) => {
     if (+headings[i][1] !== item.page || layout.pages[i].page !== item.page || contextual.pages[i].page !== item.page) throw new Error('Source page mismatch');
     const {conservative, normalized, uncertainties} = contextual.pages[i];
     const raw = ocr.slice(headings[i].index+headings[i][0].length,headings[i+1]?.index??ocr.length).trim();
     if (targeted.has(item.page) && !validTargeted(targeted.get(item.page), item.page, raw)) throw new Error('Targeted base does not match raw OCR');
-    return {page:item.page,ocr:raw,layout:layout.pages[i],contextual:{conservative,normalized,uncertainties},...(collated.has(item.page)?{collated:collated.get(item.page)}:{}),...(targeted.has(item.page)?{targeted:targeted.get(item.page)}:{})};
+    return {page:item.page,ocr:raw,layout:layout.pages[i],contextual:{conservative,normalized,uncertainties},...(collated.has(item.page)?{collated:collated.get(item.page)}:{}),...(targeted.has(item.page)?{targeted:targeted.get(item.page)}:{}),...(modelReviewed.has(item.page)?{modelReviewed:modelReviewed.get(item.page)}:{})};
   });
   const materials = {};
   for (let offset = 0; offset < pages.length; offset += 16) {
@@ -47,6 +58,7 @@ for (let part = 1; part <= 4; part++) {
   }
   const indexPages = index.pages.map(item => ({...item,
     ...(collated.has(item.page)?{publication:publicationSummary(collated.get(item.page))}:{}),
-    ...(targeted.has(item.page)?{targetedSummary:targetedSummary(targeted.get(item.page))}:{})}));
+    ...(targeted.has(item.page)?{targetedSummary:targetedSummary(targeted.get(item.page))}:{}),
+    ...(modelReviewed.has(item.page)?{modelReviewSummary:modelReviewSummary(modelReviewed.get(item.page))}:{})}));
   fs.writeFileSync(new URL(`part-${part}-index.json`, root), JSON.stringify({...index,pages:indexPages,materials})+'\n');
 }

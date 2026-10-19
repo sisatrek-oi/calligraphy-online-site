@@ -39,7 +39,8 @@ test('old completed pages stay verified and partial old drafts never become comp
   const out = exportText({part:2, person:'测试', pages:[{page:259,local:1}], reviews:{259:{collation:legacy}}});
   assert.match(out, /状态：已校验/);
   assert.match(out, /\[x\] 已对照原页核对本页错字/);
-  assert.match(out, /标点、符号、栏序和跨页衔接不属于本轮必检项/);
+  assert.match(out, /新流程逐栏对照原图检查全文后确认/);
+  assert.match(out, /历史已校验记录沿用原错字核对口径，不追认为全文确认/);
   assert.equal(out.includes('已核对本页首尾'), false);
 });
 

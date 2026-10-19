@@ -1,9 +1,10 @@
-import { CHECKS, exportText, isVerified, validateDraft } from './collation-core.js?v=20261013-typo-only';
+import { CHECKS, exportText, isVerified, validateDraft } from './collation-core.js?v=fulltext-20261019';
 import { metricsCsv, pageMetrics } from './task-metrics.js?v=20261013-typo-only';
 import { progressSummary } from './screening-workflow.js?v=20261013-typo-only';
 import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
 import { zipStore } from './zip-store.js?v=20261018-bundle';
 import { assignmentFor, assignmentSegment, assignmentPages, assignmentRevision } from './team-assignments.js?v=seven-20261018';
+import { humanReviewStage } from './model-reviewed.js?v=fulltext-20261019';
 
 const encoder = new TextEncoder();
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -22,14 +23,15 @@ function editSummary(edit) {
 
 export function checksCsv({ pages, progress }) {
   const person = progress.person.trim();
-  return csv([['原PDF物理页', '分册页', '校勘状态', '净修改率(%)', '错字核对', '正文问题', '提醒（不影响本轮完成）', '备注（选填）', '直接替换记录', '校验人', '校验时间'],
+  return csv([['原PDF物理页', '分册页', '校勘状态', '净修改率(%)', '错字核对', '正文问题', '提醒（不影响本轮完成）', '备注（选填）', '直接替换记录', '校验人', '校验时间', '大模型全文复核', '人工全文检查', '复核版本'],
     ...pages.map(item => {
       const review = progress.reviews[item.page] || {}, d = review.collation || {};
       const started = typeof d.text === 'string';
       const v = started ? validateDraft(d, item.ocr) : { errors: [], warnings: [] };
       return [item.page, item.local, isVerified(d, item.ocr) ? '已校验' : started ? '草稿' : '未开始', pageMetrics(item, review).modificationRate,
         ...Object.keys(CHECKS).map(key => d.checks?.[key] ? '是' : ''), v.errors.join('；'), v.warnings.join('；'), review.question || '',
-        (d.edits || []).map(editSummary).join('；'), d.verifiedBy || person, d.verifiedAt || ''];
+        (d.edits || []).map(editSummary).join('；'), d.verifiedBy || person, d.verifiedAt || '',
+        item.modelReviewed ? '已复核' : '未复核', humanReviewStage(review), item.modelReviewed?.revision || ''];
     })]);
 }
 
@@ -73,8 +75,8 @@ export async function buildCollationBundle({ progress, pages, member = null, exp
     '请将整个ZIP文件交回负责人，不必拆开分次发送。',
     '负责人解压后，校勘TXT含正文，校验表/修改率表用于查漏，进度JSON保留底稿、编辑记录和完整状态。',
     '换浏览器或恢复进度：先解压，在网页“材料与恢复”中导入本包的“初筛进度备份.json”。旧版JSON仍可导入。',
-    '未开始页不会自动采用公开校订稿或模型稿作为成员正文；公开团队复核与个人校验状态分别记录。',
-    '“已校验”仅指本轮错字核对，待核符号可保留，不代表所有疑难字或书论内容已审定。',
+    '已接入全文大模型复核的页，无个人稿时导出机器工作TXT并标待人工确认；模型复核不会自动建立个人草稿或人工完成记录。其他未开始页仍保留未录入，公开团队复核与个人校验状态分别记录。',
+    '新流程逐栏全文检查后确认；旧已校验记录仅代表当时的错字核对，不追认为全文确认。待核符号可保留，不代表所有疑难字或书论内容已审定。',
     '净修改率沿用已保存比较底稿计算，不代表OCR准确率；旧草稿缺少比较底稿时留空。',
     '已排除的封面/目录等不计任务表，但原有记录继续保存在JSON备份中。',
     '文件清单.json记录各文件SHA256及页码来源；原PDF和扫描图不打包，可回网页对应物理页查看。',
@@ -86,7 +88,10 @@ export async function buildCollationBundle({ progress, pages, member = null, exp
     savedAt: progress.savedAt || '', unsaved: Boolean(unsaved), saveConflict: Boolean(saveConflict),
     files: await Promise.all(files.map(async f => ({ name: f.name, bytes: encoder.encode(f.content).length, sha256: await digest(f.content) }))),
     sources: await Promise.all(pages.map(async p => ({ page: p.page, local: p.local, rawOcrSha256: await digest(p.ocr),
-      ...(p.collated ? { teamRevision: p.collated.revision } : {}), ...(p.targeted ? { targetedRevision: p.targeted.revision } : {}) }))),
+      ...(p.collated ? { teamRevision: p.collated.revision } : {}), ...(p.targeted ? { targetedRevision: p.targeted.revision } : {}),
+      ...(p.modelReviewed ? { modelRevision:p.modelReviewed.revision, sourceImageSha256:p.modelReviewed.sourceSha256,
+        model:p.modelReviewed.model, machineHumanStage:humanReviewStage(reviews[p.page]),
+        machineWorkingTextSha256:await digest(p.modelReviewed.text), requests:p.modelReviewed.requests } : {}) }))),
     note: 'SHA256不自包含文件清单本身；所有校勘数据文件与说明均已列出。' };
   add('文件清单.json', JSON.stringify(manifest, null, 2), 'json');
   const timestamp = at.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
