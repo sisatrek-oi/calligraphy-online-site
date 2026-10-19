@@ -17,6 +17,7 @@ function app({ width, disk = new Map(), hostname = "127.0.0.1", search = "" } = 
   const alerts = [];
   const mediaQueries = new Map();
   const matchMedia = width === undefined ? undefined : (query) => {
+    if(mediaQueries.has(query)) return mediaQueries.get(query);
     const limit = Number(query.match(/max-width:\s*(\d+)px/)[1]);
     const media = { matches: width <= limit, limit, listeners: [], addEventListener(type, listener) {
       if (type === "change") this.listeners.push(listener);
@@ -37,16 +38,16 @@ function app({ width, disk = new Map(), hostname = "127.0.0.1", search = "" } = 
   };
   const root = { innerHTML: "" };
   const context = vm.createContext({
-    console, URL, crypto: { randomUUID }, location: { hash: "#detail", hostname, search },
+    console, URL, URLSearchParams, crypto: { randomUUID }, location: { hash: "#detail", hostname, search },
     localStorage: storage,
-    document: { querySelector: (selector) => selector === "#app" ? root : null, querySelectorAll: () => [] },
+    document: { querySelector: (selector) => selector === "#app" ? root : null, querySelectorAll: () => [], addEventListener() {}, body:{classList:{add(){},remove(){},contains(){return false;}},dataset:{},prepend(){},setAttribute(){},removeAttribute(){}}, createElement:()=>({querySelector:()=>({}),innerHTML:""}) },
     FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] ?? null; } },
     setTimeout, clearTimeout, sample, sourcePages, downloads: [], window: {
       addEventListener() {}, setTimeout, matchMedia,
       alert: (message) => alerts.push(message), confirm: () => true
     }
   });
-  for (const module of ["schema", "import-workflow", "review-workflow", "export-workflow", "ai-consensus"]) {
+  for (const module of ["schema", "import-workflow", "review-workflow", "export-workflow", "ai-consensus", "device-session", "workspace-ui"]) {
     vm.runInContext(fs.readFileSync(new URL("../src/" + module + ".js", import.meta.url), "utf8"), context);
   }
   const main = fs.readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
@@ -83,7 +84,7 @@ function app({ width, disk = new Map(), hostname = "127.0.0.1", search = "" } = 
 
 test("responsive docks initialize and cross breakpoints without changing records", () => {
   const desktop = app({ width: 1440 });
-  assert.equal(desktop.get("state.railCollapsed"), false);
+  assert.equal(desktop.get("state.railCollapsed"), true);
   assert.equal(desktop.get("state.detailCollapsed"), false);
   const a = app({ width: 694 });
   loadSample(a);
@@ -94,7 +95,7 @@ test("responsive docks initialize and cross breakpoints without changing records
   assert.equal(a.get("state.railCollapsed"), true);
   assert.equal(a.get("state.detailCollapsed"), false);
   a.resize(1440);
-  assert.equal(a.get("state.railCollapsed"), false);
+  assert.equal(a.get("state.railCollapsed"), true);
   a.resize(390);
   assert.equal(a.get("state.railCollapsed"), true);
   assert.equal(a.get("state.detailCollapsed"), true);
@@ -131,18 +132,18 @@ test("local test sessions open the workspace without storing credentials", () =>
   const local = app();
   assert.equal(local.get("restoreLocalDemoSession()"), true);
   assert.equal(local.get("state.entryStage"), "workspace");
-  assert.equal(local.disk.get("calligraphy-local-demo-session-v1"), "active");
+  assert.equal(local.disk.has("calligraphy-local-demo-session-v1"), false);
   assert.equal(local.disk.has("calligraphy-remembered-email-v1"), false);
   assert.equal([...local.disk.values()].some((value) => value.includes("tongji") || value.includes("123456")), false);
 
   const loginPreview = app({ search: "?login=1" });
   assert.equal(loginPreview.get("restoreLocalDemoSession()"), false);
-  assert.equal(loginPreview.get("state.entryStage"), "welcome");
+  assert.equal(loginPreview.get("state.entryStage"), "signin");
 
   const deployed = app({ hostname: "sisatrek-oi.github.io" });
   deployed.disk.set("calligraphy-local-demo-session-v1", "active");
   assert.equal(deployed.get("restoreLocalDemoSession()"), false);
-  assert.equal(deployed.get("state.entryStage"), "welcome");
+  assert.equal(deployed.get("state.entryStage"), "signin");
 });
 
 test("entry gate exposes a password-free registration route without pretending local signup succeeded", () => {
@@ -746,7 +747,7 @@ test("review focus keeps a selectable queue beside full source and decision cont
   a.run('state.reviewFocusLayout = false');
   assert.equal(a.get('isReviewFocusLayout()'), false);
   assert.doesNotMatch(a.run('detailPanel(selectedRow())'), /review-evidence-pane/);
-  assert.match(a.run('resultTable(visibleRows())'), /<table>/);
+  assert.match(a.run('resultTable(visibleRows())'), /<table(?:\s[^>]*)?>/);
 });
 
 test("symbol controls expose concise labels to the shared hover tooltip", () => {
@@ -2527,4 +2528,20 @@ test("isolated 50-row pilot exercises review, blockers, export and restore witho
   a.run("switchLocalWorkspace(sourceId)");
   assert.equal(a.get("state.workspaceId"), sourceId);
   assert.deepEqual(a.get("state.rows"), sourceRows);
+});
+
+
+test("device memory resumes a successful static login but cannot open cloud or server identities",()=>{
+  const a=app({hostname:"sisatrek-oi.github.io"});
+  a.run("state.entryAccount='tongji';persistLocalDemoSession();state.entryStage='signin'");
+  assert.equal(a.run("restoreLocalDemoSession()"),true);
+  assert.equal(a.run("state.entryStage"),"workspace");
+  assert.equal([...a.disk.values()].some(v=>v.includes('123456')),false);
+  a.run("state.entryStage='signin';state.cloud.config={enabled:true};state.cloud.status='signed-out'");
+  assert.equal(a.run("restoreLocalDemoSession()"),false);
+  assert.equal(a.run("state.entryStage"),"signin");
+  a.run("state.cloud.user={id:'real-user'};state.cloud.status='ready';restoreLocalDemoSession()");
+  assert.equal(a.run("state.entryStage"),"workspace");
+  a.run("window.DeviceSession.forget(localStorage);state.cloud.config=null;state.entryStage='signin'");
+  assert.equal(a.run("restoreLocalDemoSession()"),false);
 });

@@ -277,7 +277,7 @@
     if (!window.supabase?.createClient) {
       throw new Error("Supabase browser client is not loaded");
     }
-    return window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+    return window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
   }
 
   window.CalligraphyCloud = { createCloudStore, createSupabaseClient, canRole };

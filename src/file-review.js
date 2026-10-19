@@ -3,6 +3,8 @@
   'use strict';
   const C = window.ShulunFileReview, Store = window.ShulunReviewStore;
   const app = document.getElementById('review-app');
+  window.WorkspaceUI.mount('entries');
+  app.insertAdjacentHTML('beforebegin',window.WorkspaceUI.tabs('independent'));
   let records = [], current = null, setup = null, selected = 0, timer, noticeTimer;
   let dirty = false, saving = null, saveError = '', busy = false, draftCounter = 0, prepared = null;
   let urls = [], exports = [];

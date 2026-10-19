@@ -1,3 +1,5 @@
+import {assignmentContext} from './assignment-context.js?v=redesign-local-20261019';
+import {readJson} from './screening-loader.js?v=fulltext-20261019';
 import { teamRelease } from './team-collation.js?v=20261018-part3';
 import { targetedRelease } from './targeted-ocr.js?v=20261018-part4';
 import { isVerified } from './collation-core.js?v=20261013-typo-only';
@@ -6,6 +8,8 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
 
 (() => {
   const app = document.querySelector('#teamTasksApp');
+  let publicIndexes=null, indexProblem='';
+  Promise.all([1,2,3,4].map(async part=>[part,await readJson(`./screening-data/part-${part}-index.json?v=remaining-final-20261019`)] )).then(entries=>{publicIndexes=Object.fromEntries(entries);updateOfflineProgress();}).catch(error=>{indexProblem=error.message;updateOfflineProgress();});
   const state = { user: null, role: null, books: [], units: [], bookId: '', unitId: '', unit: null,
     unitsByBook: {}, view: 'overview', draft: '', dirty: false, error: '', notice: '', loading: false, offline: false };
   const labels = { proofread: '原文校对', screen: '全书初筛', review: '条目审核',
@@ -34,6 +38,7 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
   }
 
   function shell(content) {
+    window.WorkspaceUI.mount("proof");
     app.innerHTML = `<div class="team-shell">
       <aside class="team-app-sidebar" id="teamAppSidebar" aria-label="工作区导航">
         <a class="team-sidebar-brand" href="./index.html#home"><img src="./src/assets/shulun-mark.png" alt="" /><span><strong>书论工作区</strong><small>团队任务</small></span></a>
@@ -74,24 +79,14 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
 
   function updateOfflineProgress() {
     if (!state.offline) return;
-    const counts = assignments.map(a => assignmentProgress(localStorage, a));
-    const total = counts.includes(null) ? null : counts.reduce((sum, count) => sum + count.verified, 0);
-    const totalSlot = app.querySelector('#localSeenTotal');
-    if (totalSlot) totalSlot.textContent = total === null ? '—' : `${total} / ${taskPageCount(1, 1052)}`;
-    counts.forEach((count, index) => {
-      const assignment = assignments[index];
-      const slot = app.querySelector(`[data-local-progress="${assignment.id}"]`);
-      if (!slot) return;
-      const entry = assignmentEntry(assignment, count);
-      const link = app.querySelector(`[data-member="${assignment.id}"]`);
-      if (link) {
-        link.href = entry.href;
-        link.dataset.part = entry.part;
-        link.textContent = entry.page ? `继续第 ${entry.page} 页 →` : '进入任务 →';
-      }
-      slot.textContent = count === null ? '本机记录无法读取'
-        : `本机已标过 ${count.verified} / ${assignmentCount(assignment)} 页`;
-    });
+    for(const a of assignments){
+      const slot=app.querySelector(`[data-local-progress="${a.id}"]`),link=app.querySelector(`[data-member="${a.id}"]`);
+      if(!slot||!link)continue;
+      if(!publicIndexes){slot.textContent=indexProblem?'标记暂无法读取；原记录保留':'读取人工标记…';continue;}
+      const progress=assignmentContext(localStorage,a,publicIndexes);
+      slot.textContent=progress?`已标过 ${progress.marked} / ${progress.total} 页 · 未标过 ${progress.total-progress.marked} 页`:'本机记录无法读取；原记录保留';
+      if(progress){link.href=progress.href;link.dataset.part=progress.part;link.textContent=progress.resume?`继续第 ${progress.page} 页 →`:'进入校勘 →';}
+    }
   }
 
   function releaseMarkup(part) {
@@ -99,11 +94,11 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
     return release ? `<span class="local-progress">已回收人工标记 ${release.pages} 页</span>` : '';
   }
   function offline() {
-    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>团队任务总览</h1><p>机器识别 → 大模型复核 → 人工全文检查。选择自己的页段，左右对照原图与TXT，逐页确认后导出。</p></header>
-      <div class="overview-stats" aria-label="当前任务规模"><div><strong>7</strong><span>校勘成员</span></div><div><strong>851</strong><span>后续整页校对</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮有效页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已标过</span></div></div>
-      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">当前任务 · 七人分工</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>原四份各移交末尾100页，共400页分给新增三人。原四人保留前段和已做成果。</p></div><span class="task-state">分工已更新</span></div>
-        <div class="overview-list-head"><h3>分工与材料</h3><span>按原 PDF 物理页定位</span></div>
-        <div class="overview-unit-list">${assignments.map(a => `<article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span>已回收人工标记 ${a.received} 页 · 其余 ${a.remaining} 页</span><span class="local-progress" data-local-progress="${a.id}">读取本机进度…</span>${a.id<=4 ? releaseMarkup(a.id) : ''}</div><div class="unit-actions"><a class="unit-primary" data-member="${a.id}" data-part="${a.segments[0].part}" href="${assignmentHref(a.id,a.segments[0].part)}">进入任务 →</a></div></article>`).join('')}</div>
+    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>逐页校勘</h1><p>选择自己的分工，进入原图与全文同屏的校勘工作区。</p></header>
+      <div hidden class="overview-stats" aria-label="当前任务规模"><div><strong>7</strong><span>校勘成员</span></div><div><strong>851</strong><span>后续整页校对</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮有效页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已标过</span></div></div>
+      <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">校勘分工</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>沿用现有七人分工与全部已做记录。人工标记在总览和校勘页使用同一口径。</p></div><span class="task-state">分工已更新</span></div>
+        <div class="overview-list-head"><h3>选择成员</h3><span>按原 PDF 物理页定位</span></div>
+        <div class="overview-unit-list">${assignments.map(a => `<article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span class="local-progress" data-local-progress="${a.id}">读取人工标记…</span></div><div class="unit-actions"><a class="unit-primary" data-member="${a.id}" data-part="${a.segments[0].part}" href="${assignmentHref(a.id,a.segments[0].part)}">进入任务 →</a></div></article>`).join('')}</div>
         <div class="overview-handoff"><strong>交付方式</strong><span>每页对照原图核对错字。跨两段的成员在任务内切换、分别导出ZIP；正文和表格仅列当前分工段，JSON备份保留该原分份的全部个人记录。修订TXT、状态表等下载统一放在任务内的“材料与恢复”。</span></div></section>
       <p class="overview-note">已交回校验190页，人工标记沿用原记录。已做正文、草稿、修改率底稿与历史记录均保留；静态站不汇总个人实时进度。同一浏览器沿用原四份记录，不会按成员编号创建新账号。原OCR、扫描及局部修订保持。</p>
       <details class="overview-secondary"><summary>原四份完整材料与历史进度</summary><p>如需查看已移交页的旧个人稿或下载原材料，可打开原分份完整视图。原记录不会因分工调整而删除。</p><div class="unit-actions">${screeningRanges.map((_,i)=>`<a href="./screening.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div></details>
@@ -115,8 +110,8 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
     const units = state.books.flatMap((book) => state.unitsByBook[book.id] || []);
     const waiting = units.filter((unit) => ['assigned', 'in_progress', 'returned'].includes(unit.status)).length;
     const submitted = units.filter((unit) => unit.status === 'submitted').length;
-    return `<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 本地演练</span><h1>团队任务总览</h1><p>${state.role === 'admin' ? '查看各古籍的分工和待验收项，再进入任务处理。' : '这里只列出分配给你的任务，选择古籍后进入工作项。'}</p></header>
-      <div class="overview-stats" aria-label="当前任务概况"><div><strong>${state.books.length}</strong><span>可见古籍</span></div><div><strong>${units.length}</strong><span>工作项</span></div><div><strong>${waiting}</strong><span>待处理</span></div><div><strong>${submitted}</strong><span>待验收</span></div></div>
+    return `<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 本地演练</span><h1>逐页校勘</h1><p>${state.role === 'admin' ? '查看各古籍的分工和待验收项，再进入任务处理。' : '这里只列出分配给你的任务，选择古籍后进入工作项。'}</p></header>
+      <div hidden class="overview-stats" aria-label="当前任务概况"><div><strong>${state.books.length}</strong><span>可见古籍</span></div><div><strong>${units.length}</strong><span>工作项</span></div><div><strong>${waiting}</strong><span>待处理</span></div><div><strong>${submitted}</strong><span>待验收</span></div></div>
       <section class="overview-card" aria-labelledby="overviewBooksTitle"><div class="overview-list-head"><h2 id="overviewBooksTitle">${state.role === 'admin' ? '全部古籍任务' : '我的古籍任务'}</h2>${state.role === 'admin' ? '<button type="button" class="overview-create" data-open-create>新建或管理任务 →</button>' : ''}</div>
         <div class="overview-book-list">${state.books.map((book) => {
           const bookUnits = state.unitsByBook[book.id] || [];
@@ -333,6 +328,7 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
     } else location.reload();
   });
 
+  app.addEventListener('click',event=>{const link=event.target.closest('[data-member]');if(link)try{localStorage.setItem('shulun-active-member-v1',link.dataset.member);}catch{}});
   window.addEventListener('pageshow', updateOfflineProgress);
 
   (async () => {

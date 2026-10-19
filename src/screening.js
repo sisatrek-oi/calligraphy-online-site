@@ -100,7 +100,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     };
     const edits = [...shiftEditRanges(draft().edits || [], start, end, replacement.length), edit];
     updateDraft({ text: next, edits });
-    for (const id of ['#collationText', '#editText']) {
+    for (const id of ['#editText']) {
       const editor = app.querySelector(id);
       if (!editor) continue;
       editor.value = next;
@@ -120,7 +120,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
   function updateChangeLog() {
     const slot = app.querySelector('#changeLog');
-    if (slot) slot.innerHTML = '';
+    if (slot) slot.innerHTML = editHistoryMarkup(draft().edits||[]);
   }
 
   function updateDraft(patch, { reset = false } = {}) {
@@ -133,7 +133,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     const metricBaseline = reset ? { version: 1, text: String(patch.text || ''), label: sourceLabel() }
       : existingBaseline || (changed && typeof current().collation?.text !== 'string' ? { version: 1, text: String(draft().text || ''), label: sourceLabel() } : undefined);
     record({ collation: { ...draft(), ...patch, ...(metricBaseline ? { metricBaseline } : {}), ...(changed ? { checks: {}, fullTextChecked: false } : {}), ...(clearHistory || reset ? { edits: [] } : {}), verified: false, verifiedBy: '', verifiedAt: '' } });
-    const preview = app.querySelector('#collationText');
+    const preview = app.querySelector('#editText');
     if (preview && preview.value !== draft().text) preview.value = draft().text;
     showMessage();
     updateValidation();
@@ -166,7 +166,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   }
 
   function openSelectionMenu(event) {
-    const target = event.target.closest('#editText, #collationText');
+    const target = event.target.closest('#editText');
     if (!target) return;
     const remembered = state.lastTextSelection?.targetId === target.id ? state.lastTextSelection : null;
     const start = target.selectionStart === target.selectionEnd && remembered ? remembered.start : target.selectionStart;
@@ -245,7 +245,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   }
 
   function syncHighlight() {
-    const editor = app.querySelector('#collationText'), layer = app.querySelector('#theoryLayer');
+    const editor = app.querySelector('#editText'), layer = app.querySelector('#theoryLayer');
     if (!editor || !layer) return;
     const style = getComputedStyle(editor);
     for (const key of ['font', 'lineHeight', 'letterSpacing', 'wordSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'textIndent', 'tabSize', 'wordBreak', 'overflowWrap']) layer.style[key] = style[key];
@@ -264,6 +264,16 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     syncHighlight();
   }
 
+  function applyPageFilter() {
+    for(const button of app.querySelectorAll('[data-index]')){
+      const item=state.data.pages[Number(button.dataset.index)];
+      const marked=humanMarked(item,state.reviews[item.page]);
+      button.hidden=state.pageFilter==='marked'?!marked:state.pageFilter==='unmarked'?marked:false;
+    }
+    const empty=app.querySelector('#pageFilterEmpty');if(empty)empty.hidden=Boolean(app.querySelector('#pageList [data-index]:not([hidden])'));
+    for(const button of app.querySelectorAll('[data-page-filter]'))button.setAttribute('aria-pressed',String(button.dataset.pageFilter===state.pageFilter));
+  }
+
   function updateValidation() {
     const result = validateDraft(draft(), sourceText(page()));
     const humanStatus = app.querySelector('.source-version-bar .publication-status');
@@ -280,7 +290,8 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       row.classList.toggle('done', verified);
     }
     const complete = app.querySelector('#verifyNext');
-    if (complete) complete.textContent = humanMarked(page(),current()) ? '已标过 · 继续下一页' : '标记本页并继续';
+    if (complete) complete.textContent = humanMarked(page(),current()) ? '已标过 · 继续下一页' : '标记本页并继续 →';
+    applyPageFilter();
   }
 
   function payload() {
@@ -344,6 +355,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     const open = Boolean(state.reviewOpen);
     drawer.hidden = !open;
     drawer.setAttribute('aria-hidden', String(!open));
+    app.querySelector('#openTextEditor')?.setAttribute('aria-expanded',String(open));
   }
 
   function setImage() {
@@ -395,9 +407,9 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   function render() {
     const p = page();
     const review = current();
-    const candidates = Array.isArray(review.candidates) ? review.candidates : [];
-    app.innerHTML = `<main class="page">
-      <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / ${assignment ? `成员 ${assignment.id} · ${esc(assignment.name)} / 原第${part}份` : `原第${part}份完整视图`} / 原 PDF ${state.data.pages[0].page}–${state.data.pages.at(-1).page} 页</span><h1>原文对照校勘</h1><p>机器识别 → 大模型复核 → 人工全文检查</p></div><span class="progress" id="progress">已标过 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
+    window.WorkspaceUI.mount('proof');
+    app.innerHTML = `<main class="page proof-workspace">
+      <div class="heading"><div><h1>《历代书法论文选》</h1><span class="eyebrow">${assignment ? `成员 ${assignment.id} · ${esc(assignment.name)}` : `原第${part}份完整视图`} / ${state.data.pages[0].page}–${state.data.pages.at(-1).page} 页</span></div><span class="progress" id="progress">已标过 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
         <div class="tools">${assignment ? assignment.segments.filter(s=>s.part!==part).map(s=>`<a class="assignment-switch download" href="${assignmentHref(assignment.id,s.part)}">另一段 ${s.start}–${s.end} →</a>`).join('') : ''}<button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : assignment ? '导出本段ZIP' : '一键导出全部'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">${assignment ? '本段正文与表格打包导出；JSON保留原分份全部个人记录。另一段需分别导出。' : '一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。'}</p><a class="download" href="./screening-data/part-${part}-work.txt" download>下载本份工作TXT</a>${teamRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-collated.txt" download>原第${part}份已修订 TXT</a><a class="download" href="./screening-data/part-${part}-collated-status.csv" download>原第${part}份修改状态表</a>` : ''}${targetedRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-targeted.txt" download>原第${part}份局部修订TXT</a><a class="download" href="./screening-data/part-${part}-targeted-status.csv" download>原第${part}份局部状态表</a>` : ''}<a class="download" href="${taskOcrHref(part)}" download>${assignment ? `下载原第${part}份完整OCR` : '下载原始 OCR（历史）'}</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
@@ -406,35 +418,14 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
           <label class="file-button">或选择图片<input id="scanFiles" type="file" accept="image/jpeg" multiple /></label>
           <label class="file-button">载入本地 OCR<input id="locatorFile" type="file" accept="text/html,.html" /></label></div></details></div></details></div></section>
       <div id="saveRecovery"></div><div id="messageSlot"></div>
-      <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.pages[0].page}" max="${state.data.pages.at(-1).page}" placeholder="${state.data.pages[0].page}–${state.data.pages.at(-1).page}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${humanMarked(item,r) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${esc(rowLabel(item, r))}</small></button>`; }).join('')}</div></aside>
-      <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已标过。Alt + ← / → 翻页。</p></div></section>
-      <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>框选文字后右键可直接替换；通读全文后，点击“检查 / 修改本页”确认或修改。</small></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制本页</button><button type="button" id="openTextEditor">检查 / 修改本页</button></div></div><div class="form-body">
-        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '本页人工稿已保留' : '本页TXT'}</span><strong class="publication-status">${humanMarkLabel(p,review)}</strong>${p.collated || p.targeted ? '<button type="button" id="openPublished">查看历史记录</button>' : ''}</div>
-        <div class="editor-main">
-        <div class="theory-toolbar"><small id="theoryStatus">原图与完整正文逐页核对；不标出修改处。</small></div>
-        <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
-        <div class="change-log" id="changeLog" aria-live="polite"></div>
-        </div><aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen ? '' : 'hidden'} aria-hidden="${state.reviewOpen ? 'false' : 'true'}"><div class="drawer-head"><div><strong>本页编辑器 · 第 ${p.page} 页</strong><small>修改会自动保存到本机；完成后整包交回</small></div><div class="drawer-head-actions"><button type="button" id="copyEditorPage" data-copy-current>复制本页</button><button type="button" data-export-all class="drawer-save" ${exporting ? 'disabled' : ''}>一键导出全部</button><button type="button" id="closeReviewDrawer" class="drawer-close" aria-label="关闭本页编辑器">关闭编辑器</button></div></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><div class="drawer-editor"><label for="editText">编辑校勘正文</label><div class="editor-tools"><button id="makeDraft">${draft().text !== undefined ? '重新生成草稿' : '生成分栏草稿'}</button><button id="renumber">重新编号</button><button id="lineUp" title="将光标所在栏向前移动">本栏上移</button><button id="lineDown" title="将光标所在栏向后移动">本栏下移</button></div><textarea id="editText" aria-label="第 ${p.page} 页编辑校勘正文" spellcheck="false" placeholder="对照左侧扫描图，在这里修改 TXT。">${esc(draft().text || '')}</textarea><small>${esc(layoutNote())} 对照左侧扫描图修改；无法辨认填 □，待查写【待核：…】。</small></div>${publishedMarkup(p)}<details class="ocr"><summary>查看原始 OCR（保留原样）</summary><pre>${esc(p.ocr || '本页没有可用 OCR，请对照原页录入。')}</pre></details>
-        <div class="validation" id="validation" aria-live="polite"></div>
-        <label>备注（选填）<textarea id="question" rows="2" placeholder="可记下看不清的字，留待后续复核；无需为格式或符号填写说明">${esc(review.question || '')}</textarea></label>
-        <p class="hint">逐栏检查本页全文，发现错误直接修改TXT；确认后进入下一页。修改正文后需重新确认。</p>
-        <details class="secondary-review"><summary>证据候选与旧初筛记录（${candidates.length} 条）</summary>
-        <div class="form-actions"><button type="button" id="markSeen" class="primary">${review.seen ? '撤销已看标记' : '已看这页扫描图'}</button>${review.seen ? '<span class="hint">已记录看图；可继续补充候选。</span>' : ''}</div>
-        <label class="check"><input id="redoOcr" type="checkbox" ${review.redoOcr ? 'checked' : ''} /> 需重做 OCR</label>
-        <h3>新证据候选 · ${candidates.length}</h3><p class="hint">只记能回到本页扫描图和连续原文的风格线索；不确定处保留待核。</p>
-        <div id="candidates">${candidates.map((item, index) => `<div class="candidate"><button type="button" data-remove="${index}" aria-label="删除候选 ${index + 1}">删除</button><strong>${esc(item.author || '书家待核')} · ${esc(item.style || '书体待核')}</strong><br>${esc(item.quote || '')}<br><small>${esc(item.basis || '')}</small></div>`).join('')}</div>
-        <form id="candidateForm"><div class="row"><label>书家<input name="author" maxlength="100" placeholder="可写待核" /></label><label>书体<input name="style" maxlength="100" placeholder="可写待核" /></label></div>
-          <label>连续原文摘录<textarea name="quote" rows="2" required></textarea></label><label>风格描述依据<textarea name="basis" rows="2" required></textarea></label>
-          <label>不确定或待核事项<textarea name="uncertainty" rows="2"></textarea></label><button type="submit">添加本页候选</button></form>
-        <h3>交回负责人</h3><p class="hint">初筛表与候选表一起放入ZIP，未审核页保留空行便于查漏。</p><div class="form-actions"><button type="button" data-export-all class="primary" ${exporting ? 'disabled' : ''}>一键导出全部</button></div>
-      </details></div><div class="drawer-footer"><div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${humanMarked(p,review) || draft().checks?.wording ? 'checked' : ''} />${key === 'wording' ? '已对照原图逐栏检查本页全文' : label}</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">查看文本提醒</button><button id="verifyNext" class="primary">标记本页并继续</button></div></div></aside></div></section></div>
-      <div id="selectionMenu" class="selection-menu" role="dialog" aria-label="替换选中文字" hidden>
-        <div class="selection-menu-title"><strong>替换选中文字</strong><span data-selection-count></span></div>
-        <div class="selection-preview">“<span data-selection-text></span>”</div>
-        <label for="selectionReplacement">改为<input id="selectionReplacement" type="text" autocomplete="off" spellcheck="false" /></label>
-        <div class="selection-menu-actions"><button type="button" id="applySelectionReplace" class="primary">替换</button><button type="button" id="selectionDelete">删除选中</button><button type="button" id="closeSelectionMenu">取消</button></div>
-        <small>替换会写回当前 TXT 草稿，并保留这段文字在原文中的位置。</small>
-      </div></main>`;
+      <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.pages[0].page}" max="${state.data.pages.at(-1).page}" placeholder="页码" /></label><div class="page-filters" role="group" aria-label="人工标记筛选">${[['all','全部'],['unmarked','未标过'],['marked','已标过']].map(([value,label])=>`<button type="button" data-page-filter="${value}" aria-pressed="${state.pageFilter===value}">${label}</button>`).join('')}</div></div><div class="page-list" id="pageList">${state.data.pages.map((item,index)=>`<button type="button" data-index="${index}" class="${index===state.index?'selected ':''}${humanMarked(item,state.reviews[item.page])?'done':''}" aria-current="${index===state.index}"><span>${item.page} 页</span><small>${humanMarkLabel(item,state.reviews[item.page])}</small></button>`).join('')}<p id="pageFilterEmpty" class="workspace-hint" hidden>此筛选下没有页面</p></div></aside>
+      <section class="panel viewer-panel"><div class="panel-head viewer-bar"><h2>原图 · 第 ${p.page} 页</h2><div class="tools"><button type="button" id="prev" ${state.index===0?'disabled':''} aria-label="上一页">←</button><button type="button" id="next" ${state.index===state.data.pages.length-1?'disabled':''} aria-label="下一页">→</button><label class="scan-zoom">缩放<select id="zoom">${[100,125,150,200].map(value=>`<option value="${value}" ${state.zoom===value?'selected':''}>${value}%</option>`).join('')}</select></label></div></div><div class="viewer"><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原图</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">原 PDF 第 ${p.local} 页 ↗</a></div></div></section>
+      <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">第 ${p.page} 页全文</h2></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制</button><button type="button" id="openTextEditor" aria-controls="reviewDrawer" aria-expanded="${state.reviewOpen}">备注与历史</button></div></div><div class="form-body">
+        <div class="source-version-bar"><span>${review.collation?.text!==undefined?'本页人工稿':'当前工作正文'}</span><strong class="publication-status">${humanMarkLabel(p,review)}</strong>${p.collated||p.targeted?'<button type="button" id="openPublished">查看原记录</button>':''}</div>
+        <div class="editor-main"><div class="theory-toolbar"><small id="theoryStatus">对照原图逐栏检查全文</small></div><div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="editText" aria-label="第 ${p.page} 页校勘全文" spellcheck="false">${esc(draft().text||'')}</textarea></div></div>
+        <aside class="review-controls review-drawer" id="reviewDrawer" ${state.reviewOpen?'':'hidden'} aria-hidden="${!state.reviewOpen}" aria-label="备注与历史"><div class="drawer-head"><strong>第 ${p.page} 页 · 备注与历史</strong><button type="button" id="closeReviewDrawer" class="drawer-close">关闭</button></div><div class="drawer-body"><div id="drawerMessage" aria-live="polite"></div><label>备注（选填）<textarea id="question" rows="3" placeholder="记录看不清的字或后续需要查证的内容">${esc(review.question||'')}</textarea></label>${publishedMarkup(p)}<details class="ocr"><summary>原始 OCR（保留原样）</summary><pre>${esc(p.ocr||'本页没有可用OCR')}</pre></details><details><summary>个人替换历史</summary><div id="changeLog">${editHistoryMarkup(draft().edits||[])}</div></details><details><summary>旧初筛记录与候选</summary><pre>${esc(JSON.stringify({seen:review.seen,candidates:review.candidates||[],redoOcr:review.redoOcr},null,2))}</pre></details><details><summary>正文辅助工具</summary><p class="hint">${esc(layoutNote())}</p><div class="editor-tools"><button id="makeDraft">重新生成草稿</button><button id="renumber">重新编号</button><button id="lineUp">本栏上移</button><button id="lineDown">本栏下移</button></div></details></div></aside>
+      </div><div class="validation" id="validation" aria-live="polite"></div><div class="drawer-footer proof-confirmation"><div class="checklist">${Object.entries(CHECKS).map(([key])=>`<label class="check"><input type="checkbox" data-check="${key}" ${humanMarked(p,review)||draft().checks?.wording?'checked':''}/>已对照原图逐栏检查本页全文</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">文本提醒</button><button id="verifyNext" class="primary">标记本页并继续 →</button></div></div></section></div>
+      <div id="selectionMenu" class="selection-menu" role="dialog" aria-label="替换选中文字" hidden><div class="selection-menu-title"><strong>替换选中文字</strong><span data-selection-count></span></div><div class="selection-preview">“<span data-selection-text></span>”</div><label for="selectionReplacement">改为<input id="selectionReplacement" type="text" autocomplete="off" spellcheck="false"/></label><div class="selection-menu-actions"><button type="button" id="applySelectionReplace" class="primary">替换</button><button type="button" id="selectionDelete">删除选中</button><button type="button" id="closeSelectionMenu">取消</button></div></div></main>`;
     showMessage();
     syncReviewDrawer();
     updateSaveStatus();
@@ -444,7 +435,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     syncSelectionMenu();
     editorObserver?.disconnect();
     editorObserver = new ResizeObserver(syncHighlight);
-    editorObserver.observe(app.querySelector('#collationText'));
+    editorObserver.observe(app.querySelector('#editText'));
     revealCurrentPage();
     for (const input of app.querySelectorAll('#candidateForm [name]')) input.value = current().candidateDraft?.[input.name] || '';
   }
@@ -502,7 +493,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       state.notice = `第 ${number} 页校勘正文已复制到剪贴板，可直接粘贴。`;
       setTimeout(() => { if (button.isConnected) button.textContent = label; }, 2000);
     } catch {
-      const editor = page().page === number ? app.querySelector(state.reviewOpen ? '#editText' : '#collationText') : null;
+      const editor = page().page === number ? app.querySelector(state.reviewOpen ? '#editText' : '#editText') : null;
       if (editor) { editor.focus({ preventScroll: true }); editor.select(); }
       state.error = editor
         ? '浏览器未允许自动复制，已选中本页正文。请使用系统“复制”或按 Ctrl+C（Mac：⌘C）。'
@@ -561,7 +552,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   }
 
   app.addEventListener('click', async (event) => {
-    if (state.selectionMenu.open && !event.target.closest('#selectionMenu') && !event.target.closest('#editText, #collationText')) closeSelectionMenu();
+    if (state.selectionMenu.open && !event.target.closest('#selectionMenu') && !event.target.closest('#editText')) closeSelectionMenu();
     const button = event.target.closest('button');
     if (!button) return;
     if (button.id === 'openPublished') { state.reviewOpen = true; render(); const details = app.querySelector('#publishedRevision'); details.open = true; details.scrollIntoView({ block: 'nearest' }); return; }
@@ -591,7 +582,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     if (button.id === 'openTextEditor') {
       state.reviewOpen = true;
       syncReviewDrawer();
-      app.querySelector('#editText')?.focus({ preventScroll: true });
+      app.querySelector('#question')?.focus({ preventScroll: true });
       return;
     }
     if (button.id === 'closeReviewDrawer') {
@@ -611,6 +602,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       else updateSaveStatus();
       return;
     }
+    if (button.dataset.pageFilter) {state.pageFilter=button.dataset.pageFilter;applyPageFilter();return;}
     if (button.dataset.index !== undefined) return select(Number(button.dataset.index));
     if (button.id === 'prev') return select(state.index - 1);
     if (button.id === 'next') return select(state.index + 1);
@@ -663,7 +655,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   app.addEventListener('contextmenu', openSelectionMenu);
 
   app.addEventListener('mousedown', (event) => {
-    const target = event.target.closest('#editText, #collationText');
+    const target = event.target.closest('#editText');
     if (!target || event.button !== 2) {
       state.lastTextSelection = null;
       return;
@@ -689,7 +681,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   });
 
   app.addEventListener('scroll', (event) => {
-    if (event.target.id === 'collationText') syncHighlight();
+    if (event.target.id === 'editText') syncHighlight();
   }, true);
 
   function jumpTo(value) {
@@ -779,6 +771,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
   });
 
   async function init() {
+    window.WorkspaceUI.mount('proof');
     if (![1, 2, 3, 4].includes(part)) { app.innerHTML = '<p class="loading">请从团队任务选择成员1–7的分工入口；原文材料仍按原四份定位。</p>'; return; }
     try {
       assignment = assignmentFor(member);

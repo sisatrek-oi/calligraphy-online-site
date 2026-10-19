@@ -181,7 +181,7 @@ const state = {
   detailCollapsed: Boolean(narrowWorkbench?.matches),
   reviewFocusLayout: true,
   filtersCollapsed: true,
-  railCollapsed: Boolean(compactWorkbench?.matches),
+  railCollapsed: true,
   tableFocus: false,
   tableHeaderCollapsed: false,
   batchMode: false,
@@ -2702,14 +2702,14 @@ function resultTable(rows) {
   const batchMode = Boolean(state.batchMode);
   return `
     <div class="table-shell">
-      <table>
+      <table class="${state.schemaTemplateId === 'calligraphy-style' ? 'concise-table' : ''}">
         <thead>
           <tr>
             ${batchMode ? `<th class="batch-select-col"><input type="checkbox" data-batch-select-visible aria-label="选择当前筛选条目" aria-checked="${selection.mixed ? "mixed" : String(selection.all)}" ${selection.all ? "checked" : ""} ${selectionLocked ? "disabled" : ""} /></th>` : ""}
             <th class="review-col">审校</th>
-            <th>字段</th>
-            <th>等级</th>
-            <th>附表</th>
+            <th class="table-quality">字段</th>
+            <th class="table-confidence">等级</th>
+            <th class="table-appendix">附表</th>
             ${tableFields.map((field) => `<th class="${fieldColumnClass(field)} ${field.type === "longtext" ? "longtext-col" : ""}">${escapeHtml(field.label)}</th>`).join("")}
           </tr>
         </thead>
@@ -2720,9 +2720,9 @@ function resultTable(rows) {
             <tr class="${row.id === state.selectedId ? "selected" : ""} ${state.batchSelectedIds.has(row.id) ? "batch-selected" : ""} ${sourceNeedsReview(row) ? "abnormal" : ""} ${row.flagged ? "flagged" : ""} ${!rowValidation(row).ok ? "invalid" : ""} confidence-row confidence-${quality.tone}" data-row-id="${escapeHtml(row.id)}" style="--row-delay:${Math.min(index, 22) * 18}ms">
               ${batchMode ? `<td class="batch-select-col"><input type="checkbox" data-batch-select="${escapeHtml(row.id)}" aria-label="选择 ${escapeHtml(row.id)}" ${state.batchSelectedIds.has(row.id) ? "checked" : ""} ${selectionLocked ? "disabled" : ""} /><button type="button" class="row-open-control" data-row-open data-row-id="${escapeHtml(row.id)}" aria-label="查看 ${escapeHtml(row.id)}" title="查看条目">›</button></td>` : ""}
               <td class="review-cell">${reviewCell(row)}</td>
-              <td>${validationBadge(row)}</td>
-              <td>${confidencePill(row)}</td>
-              <td><span class="appendix">${escapeHtml(row.appendixCode)}</span>${escapeHtml(row.status)}</td>
+              <td class="table-quality">${validationBadge(row)}</td>
+              <td class="table-confidence">${confidencePill(row)}</td>
+              <td class="table-appendix"><span class="appendix">${escapeHtml(row.appendixCode)}</span>${escapeHtml(row.status)}</td>
               ${tableFields.map((field, fieldIndex) => {
                 const value = fieldValue(row, field.id);
                 const isLongText = field.type === "longtext";
@@ -2836,10 +2836,11 @@ function reviewControls(row, compact = false) {
         <strong>${row.reviewed ? "下一条" : "确认并下一条"}</strong>
       </button>
       <button type="button" class="nav-action" data-row-action="next" data-row-id="${escapeHtml(row.id)}" aria-label="下一条" title="下一条">›</button>
-      <button type="button" class="flag-action ${row.flagged ? "active" : ""}" data-row-action="flag" data-row-id="${escapeHtml(row.id)}" aria-pressed="${row.flagged ? "true" : "false"}" aria-label="${row.flagged ? "取消人工标注" : "人工标注为有问题"}" title="${row.flagged ? "取消人工标注" : "人工标注为有问题"}">!</button>
+      <button type="button" class="secondary-action" data-row-action="edit" data-row-id="${escapeHtml(row.id)}" aria-label="修改字段" title="修改字段">修改字段</button>
+      <details class="entry-more-actions"><summary>更多</summary><div>      <button type="button" class="flag-action ${row.flagged ? "active" : ""}" data-row-action="flag" data-row-id="${escapeHtml(row.id)}" aria-pressed="${row.flagged ? "true" : "false"}" aria-label="${row.flagged ? "取消人工标注" : "人工标注为有问题"}" title="${row.flagged ? "取消人工标注" : "人工标注为有问题"}">!</button>
       <button type="button" class="icon-control ai-panel-trigger" data-ai-panel-open aria-expanded="${String(state.aiPanelOpen)}" aria-controls="aiEvidencePanel" aria-label="打开 AI 字段理由" title="打开 AI 字段理由">✦</button>
-      <button type="button" class="secondary-action" data-row-action="edit" data-row-id="${escapeHtml(row.id)}" aria-label="修改字段" title="修改字段">改</button>
-      <button type="button" class="danger icon-only" data-row-action="delete" data-row-id="${escapeHtml(row.id)}" aria-label="删除条目" title="删除条目">×</button>
+
+      <button type="button" class="danger icon-only" data-row-action="delete" data-row-id="${escapeHtml(row.id)}" aria-label="删除条目" title="删除条目">×</button></div></details>
     </div>
     ${compact ? `<details class="review-extra-controls"><summary>问题标签与处理状态</summary>${problemTagControls(row)}${problemStatusControls(row)}</details>` : `${problemTagControls(row)}${problemStatusControls(row)}`}
   `;
@@ -3045,7 +3046,7 @@ function sourceCardContent(row) {
       <div class="master-evidence-factors">
         ${quality.factors.map((factor) => `<span class="${factor.ok ? "ok" : "warn"}">${escapeHtml(factor.label)}</span>`).join("")}
       </div>
-      ${reviewControls(row)}
+      ${reviewControls(row,true)}
     `;
   }
   return `
@@ -6453,6 +6454,7 @@ function renderShell(content) {
   const motionClass = state.motionName ? `motion-${state.motionName}` : "";
   const workspaceEntryClass = state.workspaceEntryMotion ? "workspace-entering" : "";
   const sectionLabel = currentSectionLabel();
+  window.WorkspaceUI.mount(state.view === "detail" ? "entries" : state.view === "ingest" ? "materials" : "home");
   app.innerHTML = `
     <main class="app-shell ${state.view === "home" ? "home-shell" : ""} ${state.view === "ingest" ? "ingest-shell" : ""} ${state.view === "detail" ? `detail-shell detail-mode-${state.detailMode}` : ""} ${state.tableFocus ? "table-focus-shell" : ""} ${motionClass} ${workspaceEntryClass}" ${state.primaryNavOpen ? "inert" : ""}>
       <header class="topbar compact">
@@ -6469,6 +6471,7 @@ function renderShell(content) {
           ${topUserControl()}
         </div>
       </header>
+      ${state.view === "detail" ? window.WorkspaceUI.tabs(state.detailMode) : ""}
       ${content}
     </main>
     <div class="primary-nav-layer ${state.primaryNavOpen ? "open" : ""}" data-primary-nav-layer aria-hidden="${String(!state.primaryNavOpen)}">
@@ -6518,21 +6521,13 @@ function renderShell(content) {
 }
 
 function renderHome() {
-  renderShell(`
-    <section class="dashboard-grid dashboard-grid-focused">
-      <main class="dashboard-center" aria-label="工作区待办">
-        ${dashboardWorkflow()}
-        ${dashboardPath()}
-      </main>
-      <aside class="dashboard-right" aria-label="项目概况">
-        ${dashboardProjectCard()}
-        <details class="dash-card dashboard-utilities"><summary>协作状态与流程日志</summary>
-          <div class="dashboard-utilities-body">${cloudStatusPanel()}${dashboardLogTable()}</div>
-        </details>
-      </aside>
-    </section>
-  `);
-  attachHomeEvents();
+  if (location.hash === '#settings') {
+    renderShell(`<section class="device-account-panel"><h2>设置与账户</h2><p>${state.cloud.config?.enabled ? escapeHtml(cloudLabel()) : window.DeviceSession.read(workspaceStorage) ? '已在此设备记住登录状态' : '本地预览工作区'}</p><p class="workspace-hint">退出登录会清除设备登录记忆，保留材料、正文与草稿。</p><button type="button" id="leaveDevice" class="quiet-button">退出本设备登录</button><details class="workspace-panel"><summary>工作区设置</summary>${cloudStatusPanel()}${workspaceActions()}${templatePanel()}</details></section>`);
+    document.querySelector('#leaveDevice').onclick=()=>leaveDeviceSession().catch(error=>window.alert(error.message));
+    attachHomeEvents();
+    return;
+  }
+  renderShell(window.WorkspaceUI.homeMarkup());
 }
 
 function renderDetail() {
@@ -6627,19 +6622,35 @@ function teamTasksLoginRequested() {
 }
 
 function restoreLocalDemoSession() {
-  if (!localDemoSessionAvailable()) return false;
-  try { workspaceStorage.setItem(LOCAL_DEMO_SESSION_KEY, "active"); } catch { /* Local preview can still continue without storage. */ }
+  if (window.CalligraphySession || state.cloud.config?.enabled) {
+    if (!window.CalligraphySession && state.cloud.status === "ready" && state.cloud.user) state.entryStage = "workspace";
+    return false;
+  }
+  const explicitLogin = new URLSearchParams(location.search).get('login') === '1';
+  const remembered = window.DeviceSession.read(workspaceStorage);
+  const preview = localDemoSessionAvailable() && !window.DeviceSession.wasSignedOut(workspaceStorage);
+  if (explicitLogin || (!remembered && !preview)) { state.entryStage = "signin"; return false; }
   state.entryStage = "workspace";
-  state.entryAccount = "";
-  state.entryEmail = "";
-  state.entryRememberEmail = false;
+  state.entryAccount = remembered?.account || "";
   state.entryError = "";
   return true;
 }
 
 function persistLocalDemoSession() {
-  if (!localDemoSessionAvailable()) return;
-  try { workspaceStorage.setItem(LOCAL_DEMO_SESSION_KEY, "active"); } catch { /* Login remains usable when storage is blocked. */ }
+  if (!window.CalligraphySession && !state.cloud.config?.enabled) return window.DeviceSession.remember(workspaceStorage, state.entryAccount);
+  return false;
+}
+
+async function leaveDeviceSession() {
+  if (window.CalligraphySession) { await window.CalligraphySession.logout(); return; }
+  if (state.cloud.config?.enabled && state.cloud.store) await state.cloud.store.signOut();
+  window.DeviceSession.forget(workspaceStorage);
+  state.entryStage = "signin";
+  state.entryError = "";
+  state.entryNotice = "已退出本设备登录，工作记录继续保留。";
+  state.cloud.user = null;
+  if (state.cloud.config?.enabled) state.cloud.status = "signed-out";
+  render();
 }
 
 function emailMemoryEnabled() {
@@ -6672,6 +6683,7 @@ function persistRememberedEmail(email, remember) {
 function renderEntry() {
   clearTimeout(entryStageTimer);
   document.body?.setAttribute("data-entry-active", "true");
+  if (state.entryStage === "welcome") state.entryStage = "signin";
   const signingIn = state.entryStage === "signin";
   const registering = state.entryStage === "register";
   const authenticating = signingIn || registering;
@@ -6691,7 +6703,7 @@ function renderEntry() {
               <label><span>显示名称</span><input type="text" name="displayName" autocomplete="name" maxlength="60" required autofocus /></label>
               <label><span>工作邮箱</span><input type="email" name="email" value="${escapeHtml(state.entryEmail)}" autocomplete="${emailMemoryEnabled() ? "email" : "off"}" required /></label>
               <p class="entry-register-help">验证后可创建团队，也可接受已有团队的邀请。</p>
-              ${state.entryError ? `<p class="entry-login-error" role="alert" aria-live="polite">${escapeHtml(state.entryError)}</p>` : ""}
+              ${state.entryError ? `<p class="entry-login-error" role="alert" aria-live="polite">${escapeHtml(state.entryError)}</p><p class="entry-register-notice" role="status">${escapeHtml(state.entryNotice || "")}</p>` : ""}
               ${state.entryNotice ? `<p class="entry-register-notice" role="status" aria-live="polite">${escapeHtml(state.entryNotice)}</p>` : ""}
               <button type="submit" class="entry-login-submit">发送注册链接</button>
               <div class="entry-auth-switch"><span>已有账号？</span><button type="button" data-entry-signin>返回登录</button></div>
@@ -6700,12 +6712,12 @@ function renderEntry() {
             <form class="entry-login-form" id="entryLoginForm" autocomplete="off">
               <header><h1 id="entryLoginTitle">${teamTasksEntry ? "登录团队任务" : "登录工作区"}</h1><p>${teamTasksEntry ? "使用工作区账号进入分工页面" : "进入书论材料整理与审校平台"}</p></header>
               <label><span>账号</span><input type="text" name="account" value="${escapeHtml(state.entryAccount)}" autocomplete="username" autocapitalize="none" spellcheck="false" required /></label>
-              <label><span>密码</span><input type="password" name="password" autocomplete="current-password" required autofocus aria-invalid="${String(Boolean(state.entryError))}" /></label>
+              ${state.cloud.config?.enabled ? '<p class="entry-register-help">使用邮箱登录链接；有效会话会在本设备保留。</p>' : `<label><span>密码</span><input type="password" name="password" autocomplete="current-password" required autofocus aria-invalid="${String(Boolean(state.entryError))}" /></label><p class="entry-register-help">成功登录后在此设备记住30天；不会保存密码。</p>`}
               ${emailMemoryEnabled() ? `<label class="entry-remember"><input type="checkbox" name="rememberEmail" ${state.entryRememberEmail ? "checked" : ""} /><span>在此设备记住账号</span></label>` : ""}
-              <p class="entry-login-error" role="alert" aria-live="polite">${escapeHtml(state.entryError)}</p>
-              <button type="submit" class="entry-login-submit">登录</button>
+              <p class="entry-login-error" role="alert" aria-live="polite">${escapeHtml(state.entryError)}</p><p class="entry-register-notice" role="status">${escapeHtml(state.entryNotice || "")}</p>
+              <button type="submit" class="entry-login-submit">${state.cloud.config?.enabled ? "发送登录链接" : "登录"}</button>
               ${window.CalligraphySession ? `<p class="entry-register-help">五用户隔离模拟 · 请使用测试账号登录</p>` : `<div class="entry-auth-switch"><span>还没有账号？</span><button type="button" data-entry-register>邮箱免密注册</button></div>`}
-              ${teamTasksEntry ? "" : `<button type="button" class="entry-login-back" data-entry-back>返回介绍</button>`}
+
             </form>
           `}
         </section>
@@ -6787,6 +6799,12 @@ function renderEntry() {
       catch (error) { state.entryError = error.message; renderEntry(); }
       return;
     }
+    if (state.cloud.config?.enabled) {
+      if (!state.cloud.store) { state.entryError = "认证服务暂不可用，请稍后重试。"; renderEntry(); return; }
+      try { await state.cloud.store.signInWithEmail(state.entryAccount,{createUser:false}); state.entryNotice = "登录链接已发送，请在此设备打开邮件中的链接。"; }
+      catch(error) { state.entryError = error.message || "登录失败"; }
+      renderEntry(); return;
+    }
     if (!verifyDemoCredentials(state.entryAccount, values.get("password"))) {
       state.entryError = "账号或密码不正确";
       renderEntry();
@@ -6795,7 +6813,9 @@ function renderEntry() {
     state.entryStage = "workspace";
     state.entryError = "";
     persistRememberedEmail(state.entryAccount, state.entryRememberEmail);
-    persistLocalDemoSession();
+    const remembered = persistLocalDemoSession();
+    if (!remembered) state.entryNotice = "本设备无法记住登录，下次可能需要重新登录。";
+    const cleanUrl = new URL(location.href); cleanUrl.searchParams.delete("login"); history.replaceState(null,"",cleanUrl);
     state.workspaceEntryMotion = true;
     render();
     if (state.view === "detail") loadSelectedSource();
@@ -6808,6 +6828,7 @@ function render() {
     return;
   }
   if (state.entryStage !== "workspace") {
+    window.WorkspaceUI.mount("home");
     renderEntry();
     return;
   }
@@ -6859,9 +6880,9 @@ function activateWorkspaceTool(tool) {
 }
 
 function currentSectionLabel() {
-  if (state.view === "home") return "工作台";
-  if (state.view === "ingest") return "材料准备";
-  return state.detailMode === "review" ? "回检修订" : "统一主表";
+  if (state.view === "home") return location.hash === "#settings" ? "设置与账户" : "任务首页";
+  if (state.view === "ingest") return "材料导入与处理";
+  return state.detailMode === "review" ? "条目整理 · 需回检" : "条目整理 · 全部条目";
 }
 
 function setPrimaryNav(open, restoreFocus = true) {
@@ -7774,7 +7795,7 @@ async function init() {
     state.originalRows = [];
     state.manifest = buildManifest([]);
   }
-  if (!window.CalligraphySession && !state.rows.length && !state.uploadedPages.size) {
+  if (!window.CalligraphySession && state.view === "detail" && !state.rows.length && !state.uploadedPages.size) {
     await loadBundledSampleData();
     saveWorkspace();
   }
@@ -7803,7 +7824,7 @@ window.addEventListener("hashchange", () => {
 window.addEventListener("keydown", handleWorkbenchShortcut);
 
 compactWorkbench?.addEventListener("change", (event) => {
-  state.railCollapsed = event.matches;
+  if(event.matches) state.railCollapsed = true;
   if (state.manifest) applyTableViewState();
 });
 narrowWorkbench?.addEventListener("change", (event) => {
