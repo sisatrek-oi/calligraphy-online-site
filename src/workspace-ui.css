@@ -6,6 +6,19 @@
 .workspace-brand{height:68px;display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--ws-ink);font:600 23px "Songti SC","STSong",serif;white-space:nowrap;border-bottom:1px solid var(--ws-line);margin:0 -12px 20px;padding:0 18px}
 .workspace-brand img{width:24px;height:29px;object-fit:contain}.workspace-navigation nav{display:grid;gap:9px}.workspace-navigation nav>a{display:flex;align-items:center;gap:15px;min-height:48px;padding:0 17px;border-radius:var(--ws-radius);text-decoration:none;color:var(--ws-ink);font-weight:500}.workspace-navigation nav>a[aria-current]{background:var(--ws-accent);color:#fff}.workspace-navigation svg,.navigation-tile svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;flex:none}.workspace-navigation nav>a:hover:not([aria-current]){background:var(--ws-active)}
 .workspace-nav-bottom{margin-top:auto;border-top:1px solid var(--ws-line);padding:20px 10px 0;display:grid;gap:15px}.workspace-nav-bottom>a{color:var(--ws-ink);text-decoration:none}.workspace-nav-bottom>span{font-size:11px;color:var(--ws-muted)}.workspace-mobile-navigation{display:none}
+.workspace-nav-bottom #workspaceSidebarToggle,.workspace-nav-bottom .workspace-settings-link{display:flex;align-items:center;gap:10px;min-height:36px;padding:6px 0;border:0;background:transparent;color:var(--ws-ink);font:inherit;white-space:nowrap;cursor:pointer;text-align:left}
+#workspaceSidebarToggle:hover{color:var(--ws-accent);background:var(--ws-active)}
+@media(min-width:761px){
+  .workspace-ui.workspace-nav-collapsed{--ws-sidebar:64px}
+  .workspace-nav-collapsed .workspace-navigation{padding-right:7px;padding-left:7px}
+  .workspace-nav-collapsed .workspace-brand{justify-content:center;padding:0;margin-right:-7px;margin-left:-7px}
+  .workspace-nav-collapsed .workspace-brand>span,.workspace-nav-collapsed .workspace-navigation nav>a>span,.workspace-nav-collapsed .workspace-nav-bottom>a>span,.workspace-nav-collapsed #workspaceSidebarToggle>span,.workspace-nav-collapsed .workspace-nav-bottom>span{display:none}
+  .workspace-nav-collapsed .workspace-navigation nav>a{justify-content:center;padding:0;gap:0}
+  .workspace-nav-collapsed .workspace-nav-bottom{padding:15px 0 0;gap:10px}
+  .workspace-nav-collapsed #workspaceSidebarToggle,.workspace-nav-collapsed .workspace-settings-link{justify-content:center;padding:6px 0}
+  .workspace-nav-collapsed #workspaceSidebarToggle svg{transform:rotate(180deg)}
+}
+
 .workspace-ui :is(button,a,input,select,textarea,summary):focus-visible{outline:2px solid #8e6d2e;outline-offset:3px}.workspace-ui button,.workspace-ui .button,.workspace-ui .download{border-radius:var(--ws-radius)}
 .workspace-ui button.primary,.workspace-ui .primary,.workspace-ui .unit-primary{background:var(--ws-accent);border-color:var(--ws-accent);color:white}.workspace-ui :is(input,textarea,select){accent-color:var(--ws-accent)}
 .workspace-ui .public-review-entry,.workspace-ui .team-app-sidebar,.workspace-ui .team-mobile-header,.workspace-ui .team-sidebar-scrim{display:none!important}.workspace-ui .team-shell{display:block;height:100dvh}.workspace-ui .team-content{height:100%;min-width:0;overflow:auto}.workspace-ui .team-content>main{padding:30px 40px}.workspace-ui .overview-heading h1{font-size:28px}.workspace-ui .overview-heading p{max-width:760px}.workspace-ui .overview-card,.workspace-ui .overview-unit{border-color:var(--ws-line);box-shadow:none}.workspace-ui .overview-card{background:var(--ws-surface)}.workspace-ui .overview-stats{display:none}.workspace-ui .overview-unit{padding:18px 26px}.workspace-ui .overview-card-head{padding:22px 26px}.workspace-ui .task-overview{max-width:1120px;margin:auto}.workspace-ui .overview-note{font-size:12px}
