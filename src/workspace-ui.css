@@ -118,3 +118,17 @@ html,body{background:var(--ws-paper,#f5f4ed)}
   ::view-transition-new(root){animation:none;transform:none}
   .workspace-ui,.workspace-ui .workspace-navigation,.workspace-ui .workspace-nav-scrim{transition:none!important}
 }
+
+/* User-supplied rice paper and ink landscape; fixed across workspace routes. */
+body.workspace-ui{
+  background-color:var(--ws-paper);
+  background-image:url('./assets/workspace-landscape.png');
+  background-position:center bottom;
+  background-size:cover;
+  background-repeat:no-repeat;
+  background-attachment:fixed;
+}
+.workspace-ui .app-shell,.workspace-ui .entry-gate{background:transparent}
+/* Keep reading and editing surfaces opaque; scenery belongs to the outer canvas. */
+.workspace-ui .navigation-tile{background:var(--ws-surface)}
+.workspace-ui .navigation-tile:hover{background:#fffdf6}
