@@ -5,7 +5,7 @@ import { annotationSource, sourceStamp } from './annotation-source.js?v=task-spl
 import { assignmentFor, assignmentPages } from './team-assignments.js?v=entry-20261019';
 import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
 import { zipStore } from './zip-store.js?v=20261018-bundle';
-import { validateProgress } from './delivery-core.js?v=annotations-20261019';
+import { validateProgress } from './delivery-core.js?v=release-20261019';
 const esc = value => String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const cell = value => { const s=String(value??'');return `"${(/^[=+@\-\t\r]/u.test(s)?"'"+s:s).replaceAll('"','""')}"`; };
 const csv = rows => rows.map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n';

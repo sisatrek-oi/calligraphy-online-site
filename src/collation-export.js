@@ -34,7 +34,7 @@ export function checksCsv({ pages, progress }) {
     })]);
 }
 
-export async function buildCollationBundle({ progress, pages, member = null, exportedAt = new Date().toISOString(), exportId = crypto.randomUUID(), unsaved = false, saveConflict = false }) {
+export async function buildCollationBundle({ progress, pages, member = null, memberOnly = false, exportedAt = new Date().toISOString(), exportId = crypto.randomUUID(), unsaved = false, saveConflict = false }) {
   // Freeze independently of the caller; hashing is asynchronous.
   progress = clone(progress); pages = clone(pages).filter(p => isTaskPage(p.page));
   unsaved = Boolean(unsaved || saveConflict);
@@ -45,8 +45,15 @@ export async function buildCollationBundle({ progress, pages, member = null, exp
   const expected = Array.from({length:end-start+1}, (_,i)=>start+i).filter(isTaskPage);
   if (pages.length !== expected.length || pages.some((p,i)=>p.page !== expected[i] || p.local !== p.page-start+1)) throw new Error('导出页码与本份完整任务范围不匹配，请重试。');
   const assignment = assignmentFor(member), segment = assignmentSegment(member, progress.part);
-  // Validate the full source part first. Scope text/tables without filtering the backup.
+  // Validate the full source part first; legacy callers retain a complete backup.
   if (assignment) pages = assignmentPages(pages, member, progress.part);
+  if (memberOnly) {
+    if (!assignment) throw new Error('本人范围导出需要成员分工。');
+    const numbers = new Set(pages.map(p=>String(p.page)));
+    progress.reviews = Object.fromEntries(Object.entries(progress.reviews).filter(([n])=>numbers.has(n)));
+    progress.lastPage = numbers.has(String(progress.lastPage)) ? progress.lastPage : pages[0].page;
+    progress.exportScope = { type:'member-segment', member:assignment.id, part:progress.part, start:segment.start, end:segment.end };
+  }
   const at = new Date(exportedAt);
   if (!Number.isFinite(at.getTime()) || typeof exportId !== 'string' || !exportId) throw new Error('导出批次无效。');
   const { part, reviews } = progress, person = progress.person.trim(), counts = progressSummary(pages, reviews);
@@ -55,7 +62,7 @@ export async function buildCollationBundle({ progress, pages, member = null, exp
   add(`${prefix}-逐页校勘.txt`, exportText({ part, person, pages, reviews }));
   add(`${prefix}-TXT校验表.csv`, checksCsv({ pages, progress }));
   add(`${prefix}-修改率汇总.csv`, metricsCsv({ part, person, pages, reviews, savedAt: progress.savedAt || '', unsaved }));
-  // Preserve every original review, including old excluded-page records and baselines.
+  // Preserve each selected review intact; default mode also keeps excluded pages.
   add(`${prefix}-初筛进度备份.json`, JSON.stringify(progress, null, 2), 'json');
   add(`${prefix}-逐页初筛回收表.csv`, csv([['原PDF物理页', '分册页', '已看扫描页', '发现候选数', '需重做OCR', '疑问与处理', '审核人'],
     ...pages.map(p => {
@@ -69,7 +76,8 @@ export async function buildCollationBundle({ progress, pages, member = null, exp
     `《历代书法论文选》${prefix}一键交付包`, `导出人：${person}`, `导出时间：${exportedAt}`, `导出批次：${exportId}`,
     `本机个人标记 ${counts.verified} 页；其余个人页未标。团队已回收页和本机记录按页去重，详见校验表。`,
     ...(assignment ? [`当前分工：成员${assignment.id} ${assignment.name}，原第${part}份第${segment.start}–${segment.end}页。`,
-      'TXT与CSV仅列当前成员本段；进度JSON保留此原分份全部个人记录，包括已移交页草稿、比较底稿与编辑历史。跨两个原分份的成员请分别导出两包。'] : []),
+      memberOnly ? 'TXT、CSV与进度JSON都只列本人负责的本段；本段疑字、比较底稿和编辑历史完整保留。跨段文件已统一放入本人任务总ZIP。'
+        : 'TXT与CSV仅列当前成员本段；进度JSON保留此原分份全部个人记录，包括已移交页草稿、比较底稿与编辑历史。跨两个原分份的成员请分别导出两包。'] : []),
     unsaved ? `注意：本包包含当前页面尚未保存的修改${saveConflict ? '，存在其他标签页进度冲突' : ''}；以本次点击时的内存快照导出，不表示已保存到浏览器。` : '本包取自本次点击时的当前浏览器进度。',
     '请将整个ZIP文件交回负责人，不必拆开分次发送。',
     '负责人解压后，校勘TXT含正文，校验表/修改率表用于查漏，进度JSON保留底稿、编辑记录和完整状态。',
@@ -78,12 +86,12 @@ export async function buildCollationBundle({ progress, pages, member = null, exp
     '人工标过为已标过，未标为未标过；大模型是否处理不改变人工状态。有人工稿时优先保留人工稿，其余使用工作TXT。',
     '旧人工标记继续有效；修改正文后需要重新标记。原疑难字及备注保留在记录中。',
     '净修改率沿用已保存比较底稿计算，不代表OCR准确率；旧草稿缺少比较底稿时留空。',
-    '已排除的封面/目录等不计任务表，但原有记录继续保存在JSON备份中。',
+    memberOnly ? '本包不包含已移交页或排除页；本机这些原记录仍然保留。' : '已排除的封面/目录等不计任务表，但原有记录继续保存在JSON备份中。',
     '文件清单.json记录各文件SHA256及页码来源；原PDF和扫描图不打包，可回网页对应物理页查看。',
     `回查入口：https://sisatrek-oi.github.io/calligraphy-online-site/screening.html?part=${part}${assignment ? `&member=${assignment.id}` : ''}`,
   ].join('\n'));
   const manifest = { format: 'shulun-collation-bundle', version: 1, exportId, exportedAt, part, person,
-    ...(assignment ? { assignment: { revision:assignmentRevision, member:assignment.id, name:assignment.name, start:segment.start, end:segment.end, backupScope:'entire-original-part' } } : {}),
+    ...(assignment ? { assignment: { revision:assignmentRevision, member:assignment.id, name:assignment.name, start:segment.start, end:segment.end, backupScope:memberOnly?'member-segment':'entire-original-part' } } : {}),
     scope: '本次点击时本机个人校勘进度；不是全员实时汇总或专家金标准', pageNumbers: pages.map(p=>p.page), counts,
     savedAt: progress.savedAt || '', unsaved: Boolean(unsaved), saveConflict: Boolean(saveConflict),
     files: await Promise.all(files.map(async f => ({ name: f.name, bytes: encoder.encode(f.content).length, sha256: await digest(f.content) }))),
@@ -105,7 +113,7 @@ export function createBundleExporter({ capture, loadMaterials, build, download }
     pending = true;
     try {
       const snapshot = clone(capture());
-      await loadMaterials();
+      await loadMaterials(snapshot);
       const bundle = await build(snapshot);
       await download(bundle);
       return bundle;

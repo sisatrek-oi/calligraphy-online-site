@@ -98,7 +98,7 @@ import { assignments, assignmentCount, assignmentHref } from './team-assignments
         <p class="source-task-description">${annotationTask ? '启动后只使用人工已校验且无待核的正文。可以先登记成员，页段留待后续安排。' : '原七人的页段、已做正文和草稿保持。新添加成员仅登记，页段待后续安排。'}</p>
         <div class="entry-task-roster" data-roster-host></div>
       </article></div>
-      <p class="entry-task-footnote">${annotationTask ? '标注任务暂不开放分工入口；已有标注记录、正文和草稿均保留。' : '按原PDF物理页定位。跨段成员仍在任务内切换和导出；本机标记不代表已交回负责人。'} 成员名单保存在本机，添加姓名不会创建账号或改派页段。</p>
+      <p class="entry-task-footnote">${annotationTask ? '标注任务暂不开放分工入口；已有标注记录、正文和草稿均保留。' : '按原PDF物理页定位。点击“导出我的任务”，本人跨段也合成一个ZIP；本机标记不代表已交回负责人。'} 成员名单保存在本机，添加姓名不会创建账号或改派页段。</p>
       <details class="source-task-history workspace-panel"><summary>材料与历史记录</summary><p>原稿、草稿、修改率底稿与全部历史记录保留。原四份完整视图可查看已移交页的旧稿，材料下载仍在任务内“材料与恢复”。</p><div class="source-history-links">${screeningRanges.map((_,i)=>`<a href="./screening.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div><p><a href="./review.html">旧条目独立文件审核 →</a></p></details>
     </section>`);
     window.EntryTaskBoard.attach({storage: localStorage, taskOptions: () => ({

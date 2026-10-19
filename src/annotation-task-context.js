@@ -1,6 +1,6 @@
 import { annotationSource, annotationHref } from './annotation-source.js?v=task-split-20261019';
 import { segmentHasPage } from './team-assignments.js?v=entry-20261019';
-import { readProgress } from './delivery-core.js?v=annotations-20261019';
+import { readProgress } from './delivery-core.js?v=release-20261019';
 import { annotationView } from './theory-annotations.js?v=annotations-20261019';
 
 export function annotationTaskContext(storage,assignment,indexes) {

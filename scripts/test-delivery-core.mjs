@@ -23,3 +23,19 @@ test('unreadable prior records are surfaced rather than silently replaced',()=>{
 test('legacy unnamed backups remain valid and page aliases cannot hide duplicate records',()=>{
  const v={version:1,part:1,reviews:{6:{collation:{text:'旧草稿'}}}};const before=JSON.stringify(v);assert.equal(validateProgress(v),v);assert.equal(JSON.stringify(v),before);assert.throws(()=>validateProgress({...v,reviews:{'006':{}}}));
 });
+
+test('member-scoped delivery restore retains other pages, history and comparison baselines',()=>{
+ const d=disk(),old=source(),raw=JSON.stringify(old);d.setItem(progressKey(1),raw);
+ const incoming={version:1,part:1,person:'成员5',reviews:{200:{collation:{text:'本人修订',verified:false}}},exportScope:{type:'member-segment',member:5,part:1,start:159,end:258}};
+ validateProgress(incoming);restoreProgress(d,incoming,raw);
+ const result=JSON.parse(d.getItem(progressKey(1)));
+ assert.deepEqual(result.reviews[5],old.reviews[5]);assert.deepEqual(result.reviews[7],old.reviews[7]);assert.deepEqual(result.reviews[200],incoming.reviews[200]);
+ assert.throws(()=>validateProgress({...incoming,reviews:{5:{collation:{text:'越界'}}}}),/越界/);
+ assert.throws(()=>validateProgress({...incoming,exportScope:{...incoming.exportScope,end:259}}),/越界/);
+});
+
+test('scoped restore refuses unreadable local data and concurrent updates without overwriting',()=>{
+ const d=disk(),key=progressKey(1),incoming={version:1,part:1,reviews:{200:{}},exportScope:{type:'member-segment',member:5,part:1,start:159,end:258}};
+ d.setItem(key,'{bad');assert.throws(()=>restoreProgress(d,incoming,'{bad'));assert.equal(d.getItem(key),'{bad');
+ d.setItem(key,'another tab');assert.throws(()=>restoreProgress(d,incoming,'old'),/其他标签页/);assert.equal(d.getItem(key),'another tab');
+});

@@ -1,3 +1,4 @@
+import {mergeMemberBackup} from './member-task-export.js?v=release-20261019';
 import { validateAnnotations } from './theory-annotations.js?v=annotations-20261019';
 const ranges=[[1,258],[259,527],[528,776],[777,1052]];
 export const progressKey=part=>`shulun-screening-v1-part-${part}`;
@@ -10,6 +11,7 @@ export function validateProgress(value){
   const d=review.collation;
   if(d!==undefined&&(!d||typeof d!=='object'||Array.isArray(d)||(d.text!==undefined&&typeof d.text!=='string')||(d.edits!==undefined&&!Array.isArray(d.edits))))throw new Error('备份正文或修改历史结构无效，原进度未改变。');
  }
+ if(value.exportScope!==undefined)mergeMemberBackup(value,{version:1,part:value.part,reviews:{}},value.exportScope?.member);
  return value;
 }
 export function readProgress(storage,part){
@@ -20,7 +22,8 @@ export function restoreProgress(storage,value,expectedRaw){
  validateProgress(value);
  const key=progressKey(value.part);
  if(storage.getItem(key)!==expectedRaw)throw new Error('其他标签页已更新此分份，请重新选择备份并核对。');
- storage.setItem(key,JSON.stringify(value));
+ const next=value.exportScope!==undefined?mergeMemberBackup(value,readProgress(storage,value.part).value,value.exportScope.member):value;
+ storage.setItem(key,JSON.stringify(next));
 }
 export function compareProgress(before,incoming){
  const old=before?.reviews||{},next=incoming.reviews;

@@ -5,7 +5,8 @@ import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=fulltex
 import { publicationLabel, teamRelease } from './team-collation.js?v=20261018-part3';
 import { targetedLabel, targetedRelease } from './targeted-ocr.js?v=20261018-part3';
 import { copyText } from './clipboard.js?v=20261012-copy';
-import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=task-split-20261019';
+import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=release-20261019';
+import { captureMemberTask, buildMemberTaskBundle, mergeMemberBackup } from './member-task-export.js?v=release-20261019';
 import { assignmentFor, assignmentSegment, assignmentPages, assignmentHref } from './team-assignments.js?v=seven-20261018';
 import { readJson, createMaterialLoader } from './screening-loader.js?v=fulltext-20261019';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft } from './collation-core.js?v=human-mark-20261019';
@@ -13,7 +14,7 @@ import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.
 import { createProgressStore, initialPageIndex } from './screening-workflow.js?v=20261013-typo-only';
 import { highlightHtml } from './theory-highlight.js?v=20261003-theory';
 import { annotationView, addAnnotation, removeAnnotation, restoreAnnotation, relocateAnnotation, completeAnnotations, rebaseAnnotations } from './theory-annotations.js?v=annotations-20261019';
-import { validateProgress } from './delivery-core.js?v=annotations-20261019';
+import { validateProgress } from './delivery-core.js?v=release-20261019';
 import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
 (() => {
@@ -512,7 +513,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     app.innerHTML = `<main class="page proof-workspace">
       <div class="heading"><div><h1>《历代书法论文选》</h1><span class="eyebrow">${assignment ? `成员 ${assignment.id} · ${esc(assignment.name)}` : `原第${part}份完整视图`} / ${state.data.pages[0].page}–${state.data.pages.at(-1).page} 页</span></div><span class="progress" id="progress">已标过 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
-        <div class="tools">${assignment ? assignment.segments.filter(s=>s.part!==part).map(s=>`<a class="assignment-switch download" href="${assignmentHref(assignment.id,s.part)}">另一段 ${s.start}–${s.end} →</a>`).join('') : ''}<button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : assignment ? '导出本段ZIP' : '一键导出全部'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">${assignment ? '本段正文与表格打包导出；JSON保留原分份全部个人记录。另一段需分别导出。' : '一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。'}</p><a class="download" href="./screening-data/part-${part}-work.txt" download>下载本份工作TXT</a>${teamRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-collated.txt" download>原第${part}份已修订 TXT</a><a class="download" href="./screening-data/part-${part}-collated-status.csv" download>原第${part}份修改状态表</a>` : ''}${targetedRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-targeted.txt" download>原第${part}份局部修订TXT</a><a class="download" href="./screening-data/part-${part}-targeted-status.csv" download>原第${part}份局部状态表</a>` : ''}<a class="download" href="${taskOcrHref(part)}" download>${assignment ? `下载原第${part}份完整OCR` : '下载原始 OCR（历史）'}</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
+        <div class="tools">${assignment ? assignment.segments.filter(s=>s.part!==part).map(s=>`<a class="assignment-switch download" href="${assignmentHref(assignment.id,s.part)}">另一段 ${s.start}–${s.end} →</a>`).join('') : ''}<button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : annotationMode ? '导出标注ZIP' : assignment ? '导出我的任务' : '导出本份材料'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">${annotationMode ? '标注仅导出当前段合格正文；JSON保留原分份完整记录。' : assignment ? '一次导出本人负责的全部页段；正文、表格和JSON仅含本人任务，跨段也只需一个ZIP。' : '一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。'}</p><a class="download" href="./screening-data/part-${part}-work.txt" download>下载本份工作TXT</a>${teamRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-collated.txt" download>原第${part}份已修订 TXT</a><a class="download" href="./screening-data/part-${part}-collated-status.csv" download>原第${part}份修改状态表</a>` : ''}${targetedRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-targeted.txt" download>原第${part}份局部修订TXT</a><a class="download" href="./screening-data/part-${part}-targeted-status.csv" download>原第${part}份局部状态表</a>` : ''}<a class="download" href="${taskOcrHref(part)}" download>${assignment ? `下载原第${part}份完整OCR` : '下载原始 OCR（历史）'}</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
           <label class="file-button">导入进度 JSON<input id="backupFile" type="file" accept="application/json,.json" /></label><p class="hint">恢复时先解压交付包，再选择其中的进度备份JSON；旧版备份也可使用。</p>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
@@ -613,11 +614,27 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
+  let exportMaterials = {};
   const runBundleExport = createBundleExporter({
-    capture: () => ({ progress: payload(), unsaved: Boolean(state.saveProblem), saveConflict: state.saveConflict,
-      exportedAt: new Date().toISOString(), ...(assignment ? { member: assignment.id } : {}) }),
-    loadMaterials: () => materialLoader.ensureAll(),
-    build: snapshot => (annotationMode?buildAnnotationBundle:buildCollationBundle)({ ...snapshot, pages: state.data.allPages }),
+    capture: () => !annotationMode && assignment ? captureMemberTask({ storage:localStorage, member:assignment.id,
+      currentProgress:payload(), unsaved:Boolean(state.saveProblem), saveConflict:state.saveConflict })
+      : { progress:payload(), unsaved:Boolean(state.saveProblem), saveConflict:state.saveConflict, exportedAt:new Date().toISOString(), ...(assignment ? {member:assignment.id}: {}) },
+    loadMaterials: async snapshot => {
+      exportMaterials = {};
+      await materialLoader.ensureAll();
+      exportMaterials[part] = state.data.allPages;
+      if (!annotationMode && assignment) for (const entry of snapshot.snapshots) {
+        const otherPart = entry.progress.part;
+        if (otherPart === part) continue;
+        const data = await readJson(`./screening-data/part-${otherPart}-index.json?v=remaining-final-20261019`);
+        if (data.part!==otherPart || !Array.isArray(data.pages) || data.pages.length!==data.end-data.start+1 || !data.materials)
+          throw new Error(`原第${otherPart}份索引不完整`);
+        await createMaterialLoader(data).ensureAll();
+        exportMaterials[otherPart] = data.pages;
+      }
+    },
+    build: snapshot => annotationMode ? buildAnnotationBundle({...snapshot,pages:state.data.allPages}) : assignment ? buildMemberTaskBundle({ ...snapshot, pagesByPart:exportMaterials })
+      : buildCollationBundle({ ...snapshot, pages:state.data.allPages }),
     download: bundle => downloadBlob(bundle.name, new Blob([bundle.bytes], { type: 'application/zip' })),
   });
   async function exportAll() {
@@ -628,7 +645,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     state.notice = '正在打包完整交付材料，请稍候…'; state.error = ''; showMessage();
     try {
       const bundle = await runBundleExport();
-      state.notice = `已发起${taskName}ZIP下载，当前任务成果和完整进度备份已打包，请整包交回。包内为点击时的进度，后续改动请再次导出。${bundle.manifest.unsaved ? '本包包含尚未保存的修改，请保留备份。' : ''}`;
+      state.notice = `已发起${taskName}ZIP下载，${!annotationMode && assignment ? '本人任务成果和范围内进度备份' : '当前任务成果和完整进度备份'}已打包，请整包交回。包内为点击时的进度，后续改动请再次导出。${bundle.manifest.unsaved ? '本包包含尚未保存的修改，请保留备份。' : ''}`;
     } catch (error) {
       state.error = `${error.message || '打包失败'}。未生成不完整交付包，请再次点击重试；如材料持续无法载入，可先抢救进度。`;
       state.notice = '';
@@ -764,7 +781,7 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
       const completed = page().page;
       const next = nextUnmarkedIndex(state.data.pages, state.reviews, state.index);
       if (next >= 0) select(next, `第 ${completed} 页已标过并保存；已转到第 ${state.data.pages[next].page} 页继续。`);
-      else { state.notice = assignment ? '当前分工段已全部标过，请导出本段ZIP；如另有页段，可通过导出按钮旁的链接切换。' : '本份已全部标过，请一键导出全部并将ZIP交回负责人。'; render(); }
+      else { state.notice = assignment ? '当前分工段已全部标过，可导出我的任务；跨段文件会一并打包。' : '本份已全部标过，请一键导出全部并将ZIP交回负责人。'; render(); }
       return;
     }
     if (button.id === 'markSeen' && (state.imageReady || current().seen)) { record({ seen: !current().seen }); render(); return; }
@@ -868,13 +885,21 @@ import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
     if (event.target.id === 'backupFile') {
       if (!event.target.files?.length) return;
       try {
-        const saved = JSON.parse(await event.target.files[0].text());
+        let saved = JSON.parse(await event.target.files[0].text());
         validateProgress(saved);
         if (saved.part !== part)
           throw new Error('进度备份与本份页段不匹配');
-        if ((Object.keys(state.reviews).length || state.saveProblem) && !confirm('导入会替换本份在当前浏览器的进度，包括其他标签页的更新。请确认已备份，再继续。')) return;
+        const scoped = saved.exportScope !== undefined;
+        if (scoped) {
+          if (progressStore.hasChanged()) throw new Error('其他标签页已更新进度，请先保留当前备份并载入本机最新进度，再恢复本人任务。');
+          saved = mergeMemberBackup(saved,payload(),assignment?.id ?? null);
+        }
+        if ((Object.keys(state.reviews).length || state.saveProblem) && !confirm(scoped
+          ? '导入仅更新本人备份中的页记录，其他页段保留；同页以备份为准。请确认已备份当前修改，再继续。'
+          : '导入会替换本份在当前浏览器的进度，包括其他标签页的更新。请确认已备份，再继续。')) return;
         const restoredIndex = initialPageIndex(state.data.pages, null, saved.lastPage ?? page().page);
         await materialLoader.ensurePage(state.data.pages[restoredIndex].page);
+        if (scoped && progressStore.hasChanged()) throw new Error('恢复期间其他标签页更新了进度，原记录未改变，请重新核对备份。');
         ++selectionRequest;
         progressStore.allowBackupReplacement();
         state.reviews = saved.reviews; state.person = String(saved.person || '');
