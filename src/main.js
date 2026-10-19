@@ -6668,6 +6668,22 @@ async function leaveDeviceSession() {
   render();
 }
 
+// Only the static demo's device memory is handled here. Provider sessions own
+// their own authentication, and signing out must never write workspace records.
+function syncLocalDemoLogout(event) {
+  if (window.CalligraphySession || state.cloud.config?.enabled || state.entryStage !== 'workspace') return false;
+  if (event.type === 'storage') {
+    if (event.key !== null && ![window.DeviceSession.key, window.DeviceSession.signedOutKey].includes(event.key)) return false;
+    if (event.storageArea && event.storageArea !== workspaceStorage) return false;
+  } else if (!window.DeviceSession.wasSignedOut(workspaceStorage)) return false;
+  if (window.DeviceSession.read(workspaceStorage)) return false;
+  state.entryStage = 'signin';
+  state.entryError = '';
+  state.entryNotice = '此设备已在其他页面退出登录，工作记录继续保留。';
+  render();
+  return true;
+}
+
 function emailMemoryEnabled() {
   return Boolean(state.cloud.config?.enabled && state.cloud.config.rememberEmail !== false);
 }
@@ -7198,6 +7214,7 @@ function shouldIgnoreShortcut(event) {
 }
 
 function handleWorkbenchShortcut(event) {
+  if (state.entryStage !== 'workspace') return;
   if (state.batchReviewRowId && event.key === "Escape" && !state.editingId) {
     event.preventDefault();
     closeBatchReview();
@@ -7820,6 +7837,9 @@ async function init() {
   render();
   if (state.entryStage === "workspace" && state.view === "detail") loadSelectedSource();
 }
+
+window.addEventListener('storage', syncLocalDemoLogout);
+window.addEventListener('pageshow', syncLocalDemoLogout);
 
 window.addEventListener("hashchange", () => {
   if (state.suppressHashMotion) {

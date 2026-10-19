@@ -10,5 +10,5 @@
   }
   function forget(storage){try{storage.removeItem(key);storage.removeItem('calligraphy-local-demo-session-v1');storage.setItem(signedOutKey,'true');return true;}catch{return false;}}
   function wasSignedOut(storage){try{return storage.getItem(signedOutKey)==='true';}catch{return true;}}
-  window.DeviceSession={key,lifetime,read,remember,forget,wasSignedOut};
+  window.DeviceSession={key,signedOutKey,lifetime,read,remember,forget,wasSignedOut};
 })();

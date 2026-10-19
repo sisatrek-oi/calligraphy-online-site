@@ -58,6 +58,7 @@ function app({ width, disk = new Map(), hostname = "127.0.0.1", search = "" } = 
     syncRowChangeToCloud = async () => {};
     downloadBlob = (name, content, type) => downloads.push({ name, content, type });
     state.workspaceId = "test-workspace";
+    state.entryStage = "workspace";
     state.schema = defaultSchema();
     state.manifest = buildManifest([]);
   `, context);
@@ -2544,4 +2545,39 @@ test("device memory resumes a successful static login but cannot open cloud or s
   assert.equal(a.run("state.entryStage"),"workspace");
   a.run("window.DeviceSession.forget(localStorage);state.cloud.config=null;state.entryStage='signin'");
   assert.equal(a.run("restoreLocalDemoSession()"),false);
+});
+
+test("external local logout locks the workbench without changing saved records", () => {
+  const a = app();
+  a.run(`state.entryAccount='tongji'; persistLocalDemoSession();
+    localStorage.setItem('shulun-screening-v1-part-3', 'saved draft and baseline');
+    state.rows=[{id:'kept',reviewed:true}]; saveWorkspace();
+    window.DeviceSession.forget(localStorage);`);
+  const before = [...a.disk];
+  assert.equal(a.run("syncLocalDemoLogout({type:'storage',key:window.DeviceSession.key})"), true);
+  assert.equal(a.get("state.entryStage"), 'signin');
+  assert.deepEqual([...a.disk], before);
+  assert.equal(a.get("state.rows[0].reviewed"), true);
+  a.run(`confirmAndNext=()=>{throw Error('must not confirm while signed out')};
+    state.view='detail'; handleWorkbenchShortcut({key:'Enter',preventDefault(){}});`);
+});
+
+test("logout synchronization ignores unrelated storage and real authentication providers", () => {
+  const a = app();
+  assert.equal(a.run("syncLocalDemoLogout({type:'storage',key:'shulun-entry-members-v1:task'})"), false);
+  assert.equal(a.run("syncLocalDemoLogout({type:'pageshow'})"), false);
+  a.run("state.entryAccount='tongji';persistLocalDemoSession()");
+  assert.equal(a.run("syncLocalDemoLogout({type:'storage',key:window.DeviceSession.key})"), false);
+  a.run("window.DeviceSession.forget(localStorage);state.cloud.config={enabled:true}");
+  assert.equal(a.run("syncLocalDemoLogout({type:'storage',key:window.DeviceSession.key})"), false);
+  a.run("state.cloud.config=null;window.CalligraphySession={user:'server-user'}");
+  assert.equal(a.run("syncLocalDemoLogout({type:'pageshow'})"), false);
+  assert.equal(a.get("state.entryStage"), 'workspace');
+});
+
+test("cleared device storage and restored signed-out pages require local reauthentication", () => {
+  const a = app();
+  assert.equal(a.run("syncLocalDemoLogout({type:'storage',key:null})"), true);
+  a.run("state.entryStage='workspace';window.DeviceSession.forget(localStorage)");
+  assert.equal(a.run("syncLocalDemoLogout({type:'pageshow'})"), true);
 });
