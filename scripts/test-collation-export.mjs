@@ -59,12 +59,12 @@ test('one standard ZIP contains all eight files and a verifiable manifest for ea
 test('status, edits and original metric baselines stay consistent without inventing drafts or changing progress', async () => {
   const input=fixture(), bundle=await buildCollationBundle(input), out=unzip(bundle);
   const first=out.checks.find(r=>r['原PDF物理页']==='5'), second=out.checks.find(r=>r['原PDF物理页']==='6');
-  assert.equal(first['校勘状态'],'已校验'); assert.equal(first['校验人'],'旧成员');
+  assert.equal(first['校勘状态'],'已标过'); assert.equal(first['校验人'],'旧成员');
   assert.match(first['直接替换记录'],/乙 → 丙/);
   assert.equal(first['净修改率(%)'],String(pageMetrics(input.pages.find(p=>p.page===5),input.progress.reviews[5]).modificationRate));
-  assert.equal(second['校勘状态'],'草稿'); assert.equal(second['净修改率(%)'],'');
+  assert.equal(second['校勘状态'],'未标过'); assert.equal(second['净修改率(%)'],'');
   const untouched=out.checks.find(r=>r['原PDF物理页']==='13');
-  assert.equal(untouched['校勘状态'],'未开始'); assert.equal(untouched['提醒（不影响本轮完成）'],'');
+  assert.equal(untouched['校勘状态'],'未标过'); assert.equal(untouched['提醒（不影响本轮完成）'],'');
   assert.doesNotMatch(out['第1份-逐页校勘.txt'],/物理页 7｜/);
   assert.equal(JSON.parse(out['第1份-初筛进度备份.json']).reviews[7].collation.text,'历史目录保留');
   assert.match(out['第1份-逐页校勘.txt'],/（未录入）/);

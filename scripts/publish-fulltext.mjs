@@ -33,10 +33,10 @@ if (fs.existsSync(previous)) {
   }
   payload.pages.sort((a,b)=>a.page-b.page);
 }
-const lines=['《历代书法论文选》｜大模型复核全文工作TXT','机器识别—大模型复核—人工全文检查','以下页面均待人工全文检查；不标出修改处。',''];
+const lines=['《历代书法论文选》｜工作TXT','正文供逐页查看；人工标记以已保存或已回收的记录为准。',''];
 const rows=[['原PDF物理页','机器识别','大模型','复核栏数','总栏数','处理状态','人工确认','复核版本','API请求数','API秒数','估算峰价美元','费用口径']];
 for (const p of payload.pages) {
-  lines.push(`===== 原 PDF 物理页 ${p.page}｜分册第 ${p.page-start+1} 页 =====`,'状态：大模型已复核·待人工全文检查',p.text,'');
+  lines.push(`===== 原 PDF 物理页 ${p.page}｜分册第 ${p.page-start+1} 页 =====`,p.text,'');
   rows.push([p.page,p.machineModel,p.model,p.reviewedColumnCount,p.columnCount,p.status,'否',p.revision,p.requests.length,p.requests.reduce((n,r)=>n+r.seconds,0),p.requests.reduce((n,r)=>n+r.estimatedUSDPeak,0),'公开峰价估算，非账单实付']);
 }
 fs.writeFileSync(previous,JSON.stringify(payload,null,2)+'\n');

@@ -37,19 +37,19 @@ test('old completed pages stay verified and partial old drafts never become comp
   assert.equal(isVerified({text:'甲', checks:{wording:true}}), false);
   assert.equal(isVerified(null), false);
   const out = exportText({part:2, person:'测试', pages:[{page:259,local:1}], reviews:{259:{collation:legacy}}});
-  assert.match(out, /状态：已校验/);
+  assert.match(out, /状态：已标过/);
   assert.match(out, /\[x\] 已对照原页核对本页错字/);
-  assert.match(out, /新流程逐栏对照原图检查全文后确认/);
-  assert.match(out, /历史已校验记录沿用原错字核对口径，不追认为全文确认/);
+  assert.match(out, /人工标过为已标过，人工未标为未标过/);
+  assert.match(out, /旧人工标记继续有效/);
   assert.equal(out.includes('已核对本页首尾'), false);
 });
 
 test('TXT export preserves every page and differentiates drafts, old seen flags, and verification', () => {
   const out = exportText({part:2, person:'测试', pages:[{page:259,local:1},{page:260,local:2}],
     reviews:{259:{seen:true},260:{collation:{text:'[001] 甲',verified:false}}}});
-  assert.match(out, /物理页 259｜分册第 1 页 =====\n状态：未开始/);
-  assert.match(out, /物理页 260｜分册第 2 页 =====\n状态：草稿/);
-  assert.equal(out.includes('状态：已校验'), false);
+  assert.match(out, /物理页 259｜分册第 1 页 =====\n状态：未标过/);
+  assert.match(out, /物理页 260｜分册第 2 页 =====\n状态：未标过/);
+  assert.equal(out.includes('状态：已标过'), false);
 });
 
 test('all 1052 layout suggestions preserve every non-whitespace source character', () => {

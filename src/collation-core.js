@@ -1,3 +1,4 @@
+import { humanMarked, humanMarkLabel } from './human-mark.js?v=human-mark-20261019';
 import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
 // Raw OCR remains immutable. These helpers format a draft, never certify its reading order.
 export const CHECKS = {
@@ -49,15 +50,13 @@ export function isVerified(draft = {}, raw = '') {
 }
 
 export function exportText({ part, person, pages, reviews, sourceForPage = page => page.ocr }) {
-  const content = [`《历代书法论文选》｜第 ${part} 份｜逐页 TXT 校勘`, `导出人：${person}`, '说明：新流程逐栏对照原图检查全文后确认；历史已校验记录沿用原错字核对口径，不追认为全文确认。模型工作正文与人工状态分别记录，待核标记保留。未开始表示个人尚未确认或编辑。', ''];
+  const content = [`《历代书法论文选》｜第 ${part} 份｜逐页 TXT 校勘`, `导出人：${person}`, '说明：人工标过为已标过，人工未标为未标过；旧人工标记继续有效。机器处理情况不改变人工标记，正文直接取当前工作TXT。', ''];
   for (const page of pages) {
     if (!isTaskPage(page.page)) continue;
     const review = reviews[page.page] || {}, draft = review.collation || {};
     content.push(`===== 原 PDF 物理页 ${page.page}｜分册第 ${page.local} 页 =====`,
-      `状态：${isVerified(draft, sourceForPage(page)) ? '已校验' : draft.text !== undefined ? '草稿' : '未开始'}`,
-      `校验人：${draft.verifiedBy || person}`, `校验时间：${draft.verifiedAt || '—'}`,
-      ...(page.modelReviewed ? [`机器流程：${page.modelReviewed.machineModel} → ${page.modelReviewed.model} 全文复核`,
-        `全文复核版本：${page.modelReviewed.revision}`, `人工全文检查：${draft.fullTextChecked && isVerified(draft, sourceForPage(page)) ? '已确认' : '待确认'}`] : []),
+      `状态：${humanMarkLabel(page,review)}`,
+      `校验人：${draft.verifiedBy || (humanMarked(page,review) && page.collated ? '已回收团队记录' : '—')}`, `校验时间：${draft.verifiedAt || '—'}`,
       ...Object.entries(CHECKS).map(([key, label]) => `${draft.checks?.[key] ? '[x]' : '[ ]'} ${label}`),
       `疑问与处理：${review.question || '—'}`,
       ...(draft.edits?.length ? ['【直接替换记录】', ...draft.edits.map((edit) => {
@@ -65,7 +64,7 @@ export function exportText({ part, person, pages, reviews, sourceForPage = page 
         const chars = edit.charStart === edit.charEnd ? `第 ${edit.charStart} 字` : `第 ${edit.charStart}–${edit.charEnd} 字`;
         return `${line}·${chars}：${edit.before || '（删除）'} → ${edit.after || '（删除）'}`;
       })] : []),
-      '【正文·一栏一行】', draft.text ?? (!page.collated && page.modelReviewed ? page.modelReviewed.text : '（未录入）'), '');
+      '【正文·一栏一行】', draft.text ?? page.collated?.text ?? page.modelReviewed?.text ?? '（未录入）', '');
   }
   return content.join('\n');
 }

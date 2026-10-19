@@ -1,16 +1,16 @@
-import { modelReviewLabel, humanReviewStage } from './model-reviewed.js?v=fulltext-20261019';
+import { humanMarked, humanMarkLabel, nextUnmarkedIndex } from './human-mark.js?v=human-mark-20261019';
 import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=fulltext-20261019';
 import { publicationLabel, teamRelease } from './team-collation.js?v=20261018-part3';
 import { targetedLabel, targetedRelease } from './targeted-ocr.js?v=20261018-part3';
 import { copyText } from './clipboard.js?v=20261012-copy';
-import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=fulltext-20261019';
+import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=human-mark-20261019';
 import { assignmentFor, assignmentSegment, assignmentPages, assignmentHref } from './team-assignments.js?v=seven-20261018';
 import { readJson, createMaterialLoader } from './screening-loader.js?v=fulltext-20261019';
-import { CHECKS, makeDraft, numberLines, moveLine, validateDraft, isVerified } from './collation-core.js?v=fulltext-20261019';
+import { CHECKS, makeDraft, numberLines, moveLine, validateDraft } from './collation-core.js?v=human-mark-20261019';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
-import { createProgressStore, initialPageIndex, nextPendingIndex } from './screening-workflow.js?v=20261013-typo-only';
+import { createProgressStore, initialPageIndex } from './screening-workflow.js?v=20261013-typo-only';
 import { highlightHtml } from './theory-highlight.js?v=20261003-theory';
-import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
+import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
 
 (() => {
   const app = document.querySelector('#screeningApp');
@@ -34,12 +34,12 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
   const scanHref = (number) => `./screening-data/scans/${filename(number)}`;
   const pdfHref = (local) => `./screening-data/part-${part}.pdf#page=${local}`;
   const sourceText = item => item.ocr;
-  const sourceLabel = () => page().collated ? `团队校订版 ${page().collated.reviewedAt}` : page().modelReviewed ? `大模型全文复核稿 ${page().modelReviewed.reviewedAt.slice(0,10)}（待人工全文检查）` : page().targeted ? `局部修订版 ${page().targeted.reviewedAt}（整页未校）` : '原始 OCR';
-  const rowLabel = (item, review) => isVerified(review.collation, sourceText(item)) ? '已校验' : review.collation?.text !== undefined ? '草稿' : publicationLabel(item) || modelReviewLabel(item) || targetedLabel(item) || (review.seen ? '已看' : '待校');
+  const sourceLabel = () => page().collated ? '团队校订TXT' : '工作TXT';
+  const rowLabel = (item, review) => humanMarkLabel(item,review);
   const draft = () => draftForPage(page(), current());
   const layoutNote = () => page().layout?.method === 'aligned-lines' ? '已按逐栏 OCR 对齐分栏；栏界为机器建议，请看图核对。'
     : page().layout?.method === 'ocr-lines' ? '沿用竖排 OCR 栏序；请逐栏对照原图检查全文。' : '本页保留原段落；本轮无需整理分栏格式。';
-  const verifiedCount = () => state.data.pages.filter(item => isVerified(state.reviews[item.page]?.collation, sourceText(item))).length;
+  const verifiedCount = () => state.data.pages.filter(item => humanMarked(item,state.reviews[item.page])).length;
 
   function editLocation(text, index) {
     const before = String(text || '').slice(0, index);
@@ -267,18 +267,18 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
   function updateValidation() {
     const result = validateDraft(draft(), sourceText(page()));
     const slot = app.querySelector('#validation');
-    if (slot) slot.innerHTML = `<span>${result.lines} 栏 · ${result.chars} 汉字 · ${isVerified(draft(), sourceText(page())) ? '已校验' : '待人工校验'}</span>${state.validation ? `<ul>${[...result.errors, ...result.warnings].map(message => `<li>${esc(message)}</li>`).join('') || '<li>未发现文本提醒；全文仍需对照原页核对。</li>'}</ul>` : ''}`;
-    for (const checkbox of app.querySelectorAll('[data-check]')) checkbox.checked = Boolean(draft().checks?.fulltext);
+    if (slot) slot.innerHTML = `<span>${result.lines} 栏 · ${result.chars} 汉字 · ${humanMarkLabel(page(),current())}</span>${state.validation ? `<ul>${[...result.errors, ...result.warnings].map(message => `<li>${esc(message)}</li>`).join('') || '<li>未发现文本提醒；全文仍需对照原页核对。</li>'}</ul>` : ''}`;
+    for (const checkbox of app.querySelectorAll('[data-check]')) checkbox.checked = humanMarked(page(),current()) || Boolean(draft().checks?.wording);
     const progress = app.querySelector('#progress');
-    if (progress) progress.textContent = `已校验 ${verifiedCount()} / ${state.data.pages.length} 页`;
+    if (progress) progress.textContent = `已标过 ${verifiedCount()} / ${state.data.pages.length} 页`;
     for (const row of app.querySelectorAll('[data-index]')) {
       const item = state.data.pages[Number(row.dataset.index)], review = state.reviews[item.page] || {};
-      const verified = isVerified(review.collation, sourceText(item));
+      const verified = humanMarked(item,review);
       row.querySelector('small').textContent = rowLabel(item, review);
       row.classList.toggle('done', verified);
     }
     const complete = app.querySelector('#verifyNext');
-    if (complete) complete.textContent = isVerified(draft(), sourceText(page())) ? '已校验 · 继续待校页' : '完成本页并继续';
+    if (complete) complete.textContent = humanMarked(page(),current()) ? '已标过 · 继续下一页' : '标记本页并继续';
   }
 
   function payload() {
@@ -395,19 +395,19 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
     const review = current();
     const candidates = Array.isArray(review.candidates) ? review.candidates : [];
     app.innerHTML = `<main class="page">
-      <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / ${assignment ? `成员 ${assignment.id} · ${esc(assignment.name)} / 原第${part}份` : `原第${part}份完整视图`} / 原 PDF ${state.data.pages[0].page}–${state.data.pages.at(-1).page} 页</span><h1>原文对照校勘</h1><p>机器识别 → 大模型复核 → 人工全文检查</p></div><span class="progress" id="progress">已校验 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
+      <div class="heading"><div><span class="eyebrow">《历代书法论文选》 / ${assignment ? `成员 ${assignment.id} · ${esc(assignment.name)} / 原第${part}份` : `原第${part}份完整视图`} / 原 PDF ${state.data.pages[0].page}–${state.data.pages.at(-1).page} 页</span><h1>原文对照校勘</h1><p>机器识别 → 大模型复核 → 人工全文检查</p></div><span class="progress" id="progress">已标过 ${verifiedCount()} / ${state.data.pages.length} 页</span></div>
       <section class="setup"><label class="person-field">校勘人<input id="person" maxlength="80" value="${esc(state.person)}" placeholder="填写真实姓名" /></label><p><span id="saveStatus" role="status"></span><br>完成后导出交回负责人。</p>
-        <div class="tools">${assignment ? assignment.segments.filter(s=>s.part!==part).map(s=>`<a class="assignment-switch download" href="${assignmentHref(assignment.id,s.part)}">另一段 ${s.start}–${s.end} →</a>`).join('') : ''}<button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : assignment ? '导出本段ZIP' : '一键导出全部'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">${assignment ? '本段正文与表格打包导出；JSON保留原分份全部个人记录。另一段需分别导出。' : '一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。'}</p>${state.data.allPages.some(p=>p.modelReviewSummary) ? `<a class="download" href="./screening-data/part-${part}-model-reviewed.txt" download>大模型复核全文TXT（待人工）</a><a class="download" href="./screening-data/part-${part}-model-reviewed-status.csv" download>大模型全文复核状态</a>` : ''}${teamRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-collated.txt" download>原第${part}份已修订 TXT</a><a class="download" href="./screening-data/part-${part}-collated-status.csv" download>原第${part}份修改状态表</a>` : ''}${targetedRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-targeted.txt" download>原第${part}份局部修订TXT</a><a class="download" href="./screening-data/part-${part}-targeted-status.csv" download>原第${part}份局部状态表</a>` : ''}<a class="download" href="${taskOcrHref(part)}" download>${assignment ? `下载原第${part}份完整OCR` : '下载原始 OCR（历史）'}</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
+        <div class="tools">${assignment ? assignment.segments.filter(s=>s.part!==part).map(s=>`<a class="assignment-switch download" href="${assignmentHref(assignment.id,s.part)}">另一段 ${s.start}–${s.end} →</a>`).join('') : ''}<button type="button" id="exportBundle" class="primary" ${exporting ? 'disabled' : ''}>${exporting ? '正在打包…' : assignment ? '导出本段ZIP' : '一键导出全部'}</button><details class="extra-tools"><summary>材料与恢复</summary><div class="tools"><p class="hint">${assignment ? '本段正文与表格打包导出；JSON保留原分份全部个人记录。另一段需分别导出。' : '一次下载ZIP，正文、校验表、修改率和进度备份都在里面。整包交回即可。'}</p>${state.data.allPages.some(p=>p.modelReviewSummary) ? `<a class="download" href="./screening-data/part-${part}-model-reviewed.txt" download>下载本份工作TXT</a>` : ''}${teamRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-collated.txt" download>原第${part}份已修订 TXT</a><a class="download" href="./screening-data/part-${part}-collated-status.csv" download>原第${part}份修改状态表</a>` : ''}${targetedRelease.parts[part] ? `<a class="download" href="./screening-data/part-${part}-targeted.txt" download>原第${part}份局部修订TXT</a><a class="download" href="./screening-data/part-${part}-targeted-status.csv" download>原第${part}份局部状态表</a>` : ''}<a class="download" href="${taskOcrHref(part)}" download>${assignment ? `下载原第${part}份完整OCR` : '下载原始 OCR（历史）'}</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-conservative.txt" download>下载历史模型保守稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-normalized.txt" download>下载历史模型语义稿（未核）</a><a class="download" href="./tasks/2026-10-11-ocr-cleaning/full-book-comparison.md" target="_blank" rel="noopener">查看两版比对报告</a>
           <a class="download" href="./screening-data/part-${part}.pdf" target="_blank" rel="noopener">打开本份原 PDF</a>
           <label class="file-button">导入进度 JSON<input id="backupFile" type="file" accept="application/json,.json" /></label><p class="hint">恢复时先解压交付包，再选择其中的进度备份JSON；旧版备份也可使用。</p>
         <details class="local-fallback"><summary>本地材料备用</summary><div class="tools"><label class="file-button">选择扫描页文件夹<input id="scanFolder" type="file" webkitdirectory multiple /></label>
           <label class="file-button">或选择图片<input id="scanFiles" type="file" accept="image/jpeg" multiple /></label>
           <label class="file-button">载入本地 OCR<input id="locatorFile" type="file" accept="text/html,.html" /></label></div></details></div></details></div></section>
       <div id="saveRecovery"></div><div id="messageSlot"></div>
-      <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.pages[0].page}" max="${state.data.pages.at(-1).page}" placeholder="${state.data.pages[0].page}–${state.data.pages.at(-1).page}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${isVerified(r.collation, sourceText(item)) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${esc(rowLabel(item, r))}</small></button>`; }).join('')}</div></aside>
-      <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已校验。Alt + ← / → 翻页。</p></div></section>
+      <div class="layout"><aside class="panel page-panel"><div class="panel-head"><h2>页码</h2><small>以原 PDF 物理页定位</small><label class="jump">跳到原 PDF 页<input id="jump" type="number" min="${state.data.pages[0].page}" max="${state.data.pages.at(-1).page}" placeholder="${state.data.pages[0].page}–${state.data.pages.at(-1).page}" /></label></div><div class="page-list" id="pageList">${state.data.pages.map((item, index) => { const r = state.reviews[item.page] || {}; return `<button type="button" data-index="${index}" class="${index === state.index ? 'selected ' : ''}${humanMarked(item,r) ? 'done' : ''}" aria-current="${index === state.index}"><span>${item.page} 页</span><small>${esc(rowLabel(item, r))}</small></button>`; }).join('')}</div></aside>
+      <section class="panel viewer-panel"><div class="panel-head viewer-bar"><div><h2>原 PDF · 第 ${p.page} 页</h2><small>分册第 ${p.local} 页 · 竖排正文从右往左读</small></div><div class="tools"><button type="button" id="prev" ${state.index === 0 ? 'disabled' : ''}>上一页</button><button type="button" id="next" ${state.index === state.data.pages.length - 1 ? 'disabled' : ''}>下一页</button></div></div><div class="viewer"><div class="source-controls"><span>原 PDF 高清单页</span><label>缩放 <select id="zoom">${[100, 125, 150, 200].map(value => `<option value="${value}" ${state.zoom === value ? 'selected' : ''}>${value}%</option>`).join('')}</select></label></div><div class="scan-wrap" id="scanWrap"></div><div class="source-links"><a href="${scanHref(p.page)}" target="_blank" rel="noopener">单独打开原页</a><a href="${pdfHref(p.local)}" target="_blank" rel="noopener">打开 PDF 第 ${p.local} 页 ↗</a></div><p class="hint">原页取自原 PDF；翻页保留草稿，不会自动标为已标过。Alt + ← / → 翻页。</p></div></section>
       <section class="panel form-panel"><div class="panel-head txt-head"><div><h2 id="editorHeading" tabindex="-1">TXT · 第 ${p.page} 页</h2><small>框选文字后右键可直接替换；通读全文后，点击“检查 / 修改本页”确认或修改。</small></div><div class="txt-actions"><button type="button" id="copyCurrentPage" data-copy-current>复制本页</button><button type="button" id="openTextEditor">检查 / 修改本页</button></div></div><div class="form-body">
-        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '已保留本页人工稿及原比较底稿' : `底稿：${sourceLabel()} · 对照扫描图校勘`}</span>${p.collated ? `<strong class="publication-status">团队：${esc(publicationLabel(p))}</strong><button type="button" id="openPublished">查看校订版与记录</button>` : p.modelReviewed ? `<span class="publication-status">大模型已复核 · ${esc(humanReviewStage(review))}</span>` : p.targeted ? `<strong class="publication-status">${esc(targetedLabel(p))}</strong><button type="button" id="openPublished">查看区域与记录</button>` : `<span class="publication-status">待大模型全文复核 · 请对照原图检查</span>`}</div>
+        <div class="source-version-bar"><span>${current().collation?.text !== undefined ? '本页人工稿已保留' : '本页TXT'}</span><strong class="publication-status">${humanMarkLabel(p,review)}</strong>${p.collated || p.targeted ? '<button type="button" id="openPublished">查看历史记录</button>' : ''}</div>
         <div class="editor-main">
         <div class="theory-toolbar"><small id="theoryStatus">原图与完整正文逐页核对；不标出修改处。</small></div>
         <div class="highlight-editor"><div id="theoryLayer" aria-hidden="true"></div><textarea id="collationText" aria-label="第 ${p.page} 页 TXT 预览" readonly spellcheck="false" placeholder="本页尚无校勘草稿，请点击“编辑本页”开始。">${esc(draft().text || '')}</textarea></div>
@@ -425,7 +425,7 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
           <label>连续原文摘录<textarea name="quote" rows="2" required></textarea></label><label>风格描述依据<textarea name="basis" rows="2" required></textarea></label>
           <label>不确定或待核事项<textarea name="uncertainty" rows="2"></textarea></label><button type="submit">添加本页候选</button></form>
         <h3>交回负责人</h3><p class="hint">初筛表与候选表一起放入ZIP，未审核页保留空行便于查漏。</p><div class="form-actions"><button type="button" data-export-all class="primary" ${exporting ? 'disabled' : ''}>一键导出全部</button></div>
-      </details></div><div class="drawer-footer"><div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${draft().checks?.fulltext ? 'checked' : ''} />${key === 'wording' ? '已对照原图逐栏检查本页全文' : label}</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">查看文本提醒</button><button id="verifyNext" class="primary">完成本页并继续</button></div></div></aside></div></section></div>
+      </details></div><div class="drawer-footer"><div class="checklist">${Object.entries(CHECKS).map(([key, label]) => `<label class="check"><input type="checkbox" data-check="${key}" ${humanMarked(p,review) || draft().checks?.wording ? 'checked' : ''} />${key === 'wording' ? '已对照原图逐栏检查本页全文' : label}</label>`).join('')}</div><div class="form-actions drawer-actions"><button id="validate">查看文本提醒</button><button id="verifyNext" class="primary">标记本页并继续</button></div></div></aside></div></section></div>
       <div id="selectionMenu" class="selection-menu" role="dialog" aria-label="替换选中文字" hidden>
         <div class="selection-menu-title"><strong>替换选中文字</strong><span data-selection-count></span></div>
         <div class="selection-preview">“<span data-selection-text></span>”</div>
@@ -531,8 +531,7 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
     state.notice = '正在打包完整交付材料，请稍候…'; state.error = ''; showMessage();
     try {
       const bundle = await runBundleExport();
-      const c = bundle.manifest.counts;
-      state.notice = `已发起一个ZIP下载：已校验 ${c.verified} 页、草稿 ${c.draft} 页、未开始 ${c.unstarted} 页。正文、表格和进度备份均在包内，请整包交回。包内为点击时的进度，后续改动请再次导出。${bundle.manifest.unsaved ? '本包包含尚未保存的修改，请保留备份。' : ''}`;
+      state.notice = `已发起ZIP下载，正文、人工标记和进度备份已打包，请整包交回。包内为点击时的进度，后续改动请再次导出。${bundle.manifest.unsaved ? '本包包含尚未保存的修改，请保留备份。' : ''}`;
     } catch (error) {
       state.error = `${error.message || '打包失败'}。未生成不完整交付包，请再次点击重试；如材料持续无法载入，可先抢救进度。`;
       state.notice = '';
@@ -629,21 +628,26 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
     }
     if (button.id === 'validate') { state.validation = true; updateValidation(); return; }
     if (button.id === 'verifyNext') {
+      if (humanMarked(page(),current())) {
+        const next = nextUnmarkedIndex(state.data.pages,state.reviews,state.index);
+        if (next >= 0) return select(next);
+        state.notice = '当前页段已全部标过，可导出交回。'; showMessage(); return;
+      }
       state.validation = true; updateValidation();
       const validation = validateDraft(draft(), sourceText(page()));
       const problems = [...validation.errors];
       if (!state.person.trim()) problems.unshift('请填写校勘人真实姓名。');
       if (!state.imageReady) problems.push('原页尚未载入，请载入后核对。');
-      if (!draft().checks?.fulltext) problems.push('请勾选“已对照原图逐栏检查本页全文”。');
+      if (!draft().checks?.wording) problems.push('请勾选“已对照原图逐栏检查本页全文”。');
       if (problems.length) { state.error = problems.join(' '); showMessage();
-        app.querySelector(!state.person.trim() ? '#person' : validation.errors.length ? '#editText' : !draft().checks?.fulltext ? '[data-check]:not(:checked)' : '#question')?.focus(); return; }
+        app.querySelector(!state.person.trim() ? '#person' : validation.errors.length ? '#editText' : !draft().checks?.wording ? '[data-check]:not(:checked)' : '#question')?.focus(); return; }
       const saved = record({ seen: true, collation: { ...draft(), verified: true, fullTextChecked: true, workflow: page().modelReviewed ? 'machine-model-human-fulltext-v1' : 'human-fulltext-v1', ...(page().modelReviewed ? { modelRevision: page().modelReviewed.revision } : {}), verifiedBy: state.person.trim(), verifiedAt: new Date().toISOString() } });
       updateValidation();
       if (!saved) return;
       const completed = page().page;
-      const next = nextPendingIndex(state.data.pages, state.reviews, state.index);
-      if (next >= 0) select(next, `第 ${completed} 页已校验并保存；已转到第 ${state.data.pages[next].page} 页继续。`);
-      else { state.notice = assignment ? '当前分工段已校验完成，请导出本段ZIP；如另有页段，可通过导出按钮旁的链接切换。' : '本份全部校验完成，请一键导出全部并将ZIP交回负责人。'; render(); }
+      const next = nextUnmarkedIndex(state.data.pages, state.reviews, state.index);
+      if (next >= 0) select(next, `第 ${completed} 页已标过并保存；已转到第 ${state.data.pages[next].page} 页继续。`);
+      else { state.notice = assignment ? '当前分工段已全部标过，请导出本段ZIP；如另有页段，可通过导出按钮旁的链接切换。' : '本份已全部标过，请一键导出全部并将ZIP交回负责人。'; render(); }
       return;
     }
     if (button.id === 'markSeen' && (state.imageReady || current().seen)) { record({ seen: !current().seen }); render(); return; }
@@ -778,7 +782,7 @@ import { pageMetrics } from './task-metrics.js?v=20261013-typo-only';
       assignment = assignmentFor(member);
       segment = assignmentSegment(member, part);
       app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
-      state.data = await readJson(`./screening-data/part-${part}-index.json?v=fulltext-20261019`);
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=remaining-20261019`);
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
       materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;

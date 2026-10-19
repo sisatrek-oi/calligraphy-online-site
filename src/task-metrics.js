@@ -1,5 +1,6 @@
 import { isVerified } from './collation-core.js?v=20261013-typo-only';
 import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
+import { humanMarkLabel } from './human-mark.js?v=human-mark-20261019';
 
 export const METRICS_VERSION = 'collation-v1';
 export const rate = (n, d) => d ? Math.round(n / d * 10000) / 100 : null;
@@ -82,7 +83,7 @@ export function metricsCsv({ part, person, pages, reviews, savedAt = '', unsaved
     [m.version, part, person, unsaved ? '当前页面含未保存修改' : '当前浏览器记录', savedAt, m.comparablePages, m.baselineChars, m.changes, m.modificationRate],
     [], ['口径', '净修改率=编辑距离/比较底稿字数；忽略栏号及空白，保留标点，可超过100%。旧草稿无明确底稿时不计算。该数值只供负责人复核修改幅度，不代表校勘准确率。'],
     [], ['原PDF物理页', '分册页', '校勘状态', '比较底稿', '底稿字符数', '当前字符数', '净修改字符数', '净修改率(%)'],
-    ...m.rows.map(r => [r.page, r.local, r.status, r.baseline, r.baselineChars, r.currentChars, r.changes, r.modificationRate]),
+    ...m.rows.map(r => [r.page, r.local, humanMarkLabel(pages.find(p=>p.page===r.page),reviews[r.page]), r.baseline, r.baselineChars, r.currentChars, r.changes, r.modificationRate]),
   ];
   const cell = value => {
     const text = String(value ?? '');
