@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>原文对照校勘 · 书论工作区</title>
+  <title>原文校勘与书论标注 · 书论工作区</title>
   <link rel="icon" type="image/png" href="./src/assets/shulun-mark.png" />
   <link rel="stylesheet" href="./src/screening.css?v=20261017-team" />
-  <link rel="stylesheet" href="./src/workspace-ui.css?v=redesign-local-20261019" />
+  <link rel="stylesheet" href="./src/workspace-ui.css?v=annotations-20261019" />
   <script src="./src/device-session.js?v=redesign-local-20261019"></script>
-  <script src="./src/workspace-ui.js?v=redesign-local-20261019"></script>
+  <script src="./src/workspace-ui.js?v=annotations-20261019"></script>
 </head>
 <body>
-  <header class="topbar"><a href="./team-tasks.html">← 团队任务</a><span>书论工作区 · 原文对照校勘</span></header>
+  <header class="topbar"><a href="./team-tasks.html">← 团队任务</a><span>书论工作区 · 原文校勘与书论标注</span></header>
   <div id="screeningApp"><div class="loading"><p id="startupStatus" role="status">正在加载校勘工作区…</p><button id="startupRetry" type="button" hidden>重试加载</button></div></div>
   <script>
     // Keep feedback available even if the module itself cannot be downloaded.
@@ -23,7 +23,7 @@
       }
     }, 12000);
     document.getElementById('startupRetry').onclick = () => location.reload();
-    import('./src/screening.js?v=redesign-local-20261019').then(() => clearTimeout(timer)).catch(() => {
+    import('./src/screening.js?v=annotations-20261019').then(() => clearTimeout(timer)).catch(() => {
       clearTimeout(timer);
       document.getElementById('startupStatus').textContent = '页面程序未能载入，请检查网络后重试。本机进度保留。';
       document.getElementById('startupRetry').hidden = false;

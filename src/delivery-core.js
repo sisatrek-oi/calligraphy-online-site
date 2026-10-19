@@ -1,3 +1,4 @@
+import { validateAnnotations } from './theory-annotations.js?v=annotations-20261019';
 const ranges=[[1,258],[259,527],[528,776],[777,1052]];
 export const progressKey=part=>`shulun-screening-v1-part-${part}`;
 export function validateProgress(value){
@@ -5,6 +6,7 @@ export function validateProgress(value){
  const [start,end]=ranges[value.part-1];
  for(const [key,review]of Object.entries(value.reviews)){
   if(!/^\d+$/.test(key)||String(Number(key))!==key||Number(key)<start||Number(key)>end||!review||typeof review!=='object'||Array.isArray(review))throw new Error('备份页码或记录结构无效，原进度未改变。');
+  if(review.theoryAnnotations!==undefined)validateAnnotations(review.theoryAnnotations);
   const d=review.collation;
   if(d!==undefined&&(!d||typeof d!=='object'||Array.isArray(d)||(d.text!==undefined&&typeof d.text!=='string')||(d.edits!==undefined&&!Array.isArray(d.edits))))throw new Error('备份正文或修改历史结构无效，原进度未改变。');
  }

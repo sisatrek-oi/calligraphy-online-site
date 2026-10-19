@@ -94,7 +94,7 @@ import { assignments, assignmentCount, assignmentHref, assignmentProgress, assig
     return release ? `<span class="local-progress">已回收人工标记 ${release.pages} 页</span>` : '';
   }
   function offline() {
-    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>逐页校勘</h1><p>选择自己的分工，进入原图与全文同屏的校勘工作区。</p></header>
+    shell(`<div class="task-overview"><header class="overview-heading"><span class="eyebrow">团队任务 / 静态协作</span><h1>逐页校勘</h1><p>选择自己的分工，对照原图校勘全文，并在原文中圈选书论。</p></header>
       <div hidden class="overview-stats" aria-label="当前任务规模"><div><strong>7</strong><span>校勘成员</span></div><div><strong>851</strong><span>后续整页校对</span></div><div><strong>${taskPageCount(1, 1052)}</strong><span>本轮有效页</span></div><div><strong id="localSeenTotal">—</strong><span>当前浏览器已标过</span></div></div>
       <section class="overview-card" aria-labelledby="screeningTitle"><div class="overview-card-head"><div><span class="eyebrow">校勘分工</span><h2 id="screeningTitle">《历代书法论文选》原文校勘</h2><p>沿用现有七人分工与全部已做记录。人工标记在总览和校勘页使用同一口径。</p></div><span class="task-state">分工已更新</span></div>
         <div class="overview-list-head"><h3>选择成员</h3><span>按原 PDF 物理页定位</span></div>

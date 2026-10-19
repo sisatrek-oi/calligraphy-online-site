@@ -9,7 +9,7 @@
   };
   const items = [
     ['home','任务首页','./index.html#home',''],
-    ['proof','逐页校勘','./team-tasks.html','对照原图检查全文，修改并逐页标记。'],
+    ['proof','逐页校勘','./team-tasks.html','对照原图校勘全文，在原文中圈选书论。'],
     ['entries','条目整理','./index.html#detail','整理书论条目、核对证据与独立审核。'],
     ['materials','材料管理','./materials.html','查看原始材料、工作正文与历史版本。'],
     ['delivery','成果交付','./delivery.html','导出成果、恢复进度与检查回收文件。'],

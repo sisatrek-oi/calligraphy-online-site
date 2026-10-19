@@ -1,8 +1,8 @@
 import {assignments,assignmentFor,assignmentHref} from './team-assignments.js?v=entry-20261019';
 import {readJson,createMaterialLoader} from './screening-loader.js?v=fulltext-20261019';
-import {buildCollationBundle} from './collation-export.js?v=human-mark-20261019';
+import {buildCollationBundle} from './collation-export.js?v=annotations-20261019';
 import {zipStore} from './zip-store.js?v=20261018-bundle';
-import {readProgress,validateProgress,restoreProgress,compareProgress} from './delivery-core.js?v=redesign-local-20261019';
+import {readProgress,validateProgress,restoreProgress,compareProgress} from './delivery-core.js?v=annotations-20261019';
 const ui=window.WorkspaceUI,host=document.querySelector('#workspacePage');ui.mount('delivery');
 let remembered;try{remembered=localStorage.getItem('shulun-active-member-v1');}catch{}
 const params=new URLSearchParams(location.search);
