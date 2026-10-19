@@ -122,7 +122,7 @@ html,body{background:var(--ws-paper,#f5f4ed)}
 /* User-supplied rice paper and ink landscape; fixed across workspace routes. */
 body.workspace-ui{
   background-color:var(--ws-paper);
-  background-image:url('./assets/workspace-landscape.png');
+  background-image:url('./assets/workspace-landscape.webp');
   background-position:center bottom;
   background-size:cover;
   background-repeat:no-repeat;

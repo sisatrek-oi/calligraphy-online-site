@@ -91,7 +91,7 @@
       const slot = document.querySelector('#app > .workspace-startup');
       if(!slot)return;
       slot.setAttribute('role','alert');
-      slot.innerHTML='<strong>工作区未能完成加载</strong><p>请重新加载后继续。原有正文、草稿和进度仍保留在此浏览器。</p><button type="button">重新加载</button> <a href="./team-tasks.html">前往原文校对 →</a>';
+      slot.innerHTML='<strong>工作区加载较慢</strong><p>仍在等待程序下载，完成后会自动打开。也可重新加载；原有正文、草稿和进度均保留。</p><button type="button">重新加载</button> <a href="./team-tasks.html">前往原文校对 →</a>';
       slot.querySelector('button').addEventListener('click',()=>location.reload());
     }, 8000);
   }

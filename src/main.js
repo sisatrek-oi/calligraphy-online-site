@@ -7761,6 +7761,16 @@ async function loadBundledSampleData() {
   try {
     const requestedIngest = location.hash === "#ingest" || state.view === "ingest";
     const requestedReviewMode = location.hash === "#review" || state.detailMode === "review";
+    if (!window.CALLIGRAPHY_EMBEDDED_SAMPLE) {
+      await new Promise((resolve, reject) => {
+        const script=document.createElement('script');
+        script.src='./src/embedded-sample.js?v=20260914-file-fallback';script.async=true;
+        const done=error=>{clearTimeout(timer);script.onload=script.onerror=null;if(error){script.remove();reject(error);}else resolve();};
+        const timer=setTimeout(()=>done(new Error('样本资料加载较慢，请稍后重试；已有资料和草稿保留。')),5000);
+        script.onload=()=>done();script.onerror=()=>done(new Error('样本资料未能载入，请重试。'));
+        document.head.append(script);
+      });
+    }
     const embedded = window.CALLIGRAPHY_EMBEDDED_SAMPLE;
     let csvText = embedded?.csv || "";
     if (!csvText) {
