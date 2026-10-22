@@ -5,6 +5,13 @@ import {buildAnnotationBundle} from '../src/theory-annotation-export.js';
 import {buildCollationBundle} from '../src/collation-export.js';
 import {completeAnnotations} from '../src/theory-annotations.js';
 import {assignments} from '../src/team-assignments.js';
+import {attachReviewedPart,loadReviewedIndex} from '../src/reviewed-annotation.js';
+import {createHash} from 'node:crypto';
+const hash=text=>createHash('sha256').update(text).digest('hex');
+async function attachHuman(pages,page=528,text=pages.find(p=>p.page===page).collated.text) {
+ const source={kind:'human-txt',page,part:3,label:'人工审核原TXT',verifiedBy:'原校验人',verifiedAt:'2026-10-18T00:00:00Z',revision:hash(text),textSha256:hash(text),fileSha256:'a'.repeat(64),txtPath:'human.txt',reviewCsvPath:'review.csv'};
+ await attachReviewedPart(pages,{version:1,batch:'human-txt-20261020',part:3,revision:'fixture',pages:[{page,part:3,text,source,eligible:true,blockedReasons:[],candidates:[],contextNotes:[],segments:[{start:0,end:text.length,quote:text,role:'theory',category:'书家评价',note:'',contextStatus:'complete'}]}]},3);
+}
 const team=(page=528,pending=[])=>({page,text:'[001] 团队人工校验完毕正文。',revision:'team-v1',reviewedAt:'2026-10-18',status:pending.length?'已修订·待核':'已修改完毕',pending,corrections:[],notes:[]});
 const personal=(text='[001] 个人已校验正文。')=>({text,verified:true,checks:{wording:true},verifiedBy:'旧校验人',verifiedAt:'2026-10-19'});
 test('OCR, model, partial OCR and pending team pages do not supply annotation text',()=>{
@@ -12,8 +19,9 @@ test('OCR, model, partial OCR and pending team pages do not supply annotation te
   assert.equal(annotationSource(item),null);assert.equal(annotationSource(item,{}, {summary:true}),null);
  }
 });
-test('unfinished local drafts cannot displace finished team sources',()=>{
+test('unfinished local drafts cannot displace version-checked original human TXT',async()=>{
  const page={page:528,collated:team()},draft={collation:{text:'[001] 不可进入标注的草稿。',verified:false,metricBaseline:{text:'旧底稿'}}};
+ await attachHuman([page]);
  const before=JSON.stringify(draft);assert.equal(annotationSource(page,draft).text,page.collated.text);assert.equal(JSON.stringify(draft),before);
  assert.equal(annotationSource(page,{collation:personal()}).kind,'personal');
 });
@@ -21,23 +29,28 @@ test('old human confirmations remain valid; pending markers or unchecked text fa
  assert.equal(annotationSource({page:528},{collation:personal()}).kind,'personal');
  for(const d of [{...personal(),verified:false},{...personal(),checks:{}},personal('[001] □'),personal('[001] 【待核：某字】'),personal('[001] �')])assert.equal(annotationSource({page:528},{collation:d}),null);
 });
-test('source index summaries are only valid for overview counts, never for reader/export text',()=>{
+test('original human source summaries are only valid for overview counts, never reader/export text',()=>{
  const page={page:528,publication:{status:'已修改完毕',pending:0,revision:'team-v1',reviewedAt:'2026-10-18'}};
- assert.equal(annotationSource(page),null);assert.equal(annotationSource(page,{}, {summary:true}).kind,'team');
+ assert.equal(annotationSource(page,{}, {summary:true}),null);
+ page.humanReviewedSummary={page:528,eligible:true,source:{kind:'human-txt',revision:'human-v1'}};
+ assert.equal(annotationSource(page),null);assert.equal(annotationSource(page,{}, {summary:true}).kind,'human-txt');
 });
-test('public annotation queue has 173 finished team pages, plus deduplicated verified personal pages',()=>{
+test('annotation queue uses the independently audited original TXT registry, plus distinct verified personal pages',async()=>{
  const indexes=Object.fromEntries([1,2,3,4].map(n=>[n,JSON.parse(fs.readFileSync(new URL(`../screening-data/part-${n}-index.json`,import.meta.url)))]));
  const values=new Map(),storage={getItem:k=>values.get(k)||null};
- assert.deepEqual(assignments.map(a=>annotationTaskContext(storage,a,indexes).total),[26,67,71,9,0,0,0]);
- const r={528:{collation:personal()},603:{collation:personal()},604:{collation:{...personal(),verified:false}}};
- values.set('shulun-screening-v1-part-3',JSON.stringify({version:1,part:3,reviews:r,lastPage:604,annotationLastPage:603}));
- const context=annotationTaskContext(storage,assignments[2],indexes);assert.equal(context.total,72);assert.equal(context.page,603);assert.match(context.href,/annotation.html/);
+ await loadReviewedIndex(indexes,{storage,fetcher:async()=>({ok:true,json:async()=>JSON.parse(fs.readFileSync(new URL('../annotation-data/index.json',import.meta.url)))})});
+ const expected=JSON.parse(fs.readFileSync(new URL('../annotation-data/index.json',import.meta.url))).pages.filter(p=>p.eligible);
+ assert.equal(assignments.reduce((n,a)=>n+annotationTaskContext(storage,a,indexes).total,0),expected.length);
+ const r={528:{collation:personal()},649:{collation:personal()},604:{collation:{...personal(),verified:false}}};
+ values.set('shulun-screening-v1-part-3',JSON.stringify({version:1,part:3,reviews:r,lastPage:604,annotationLastPage:649}));
+ const context=annotationTaskContext(storage,assignments[2],indexes);assert.equal(context.total,expected.filter(p=>p.part===3&&p.page<=676).length+1);assert.equal(context.page,649);assert.match(context.href,/annotation.html/);
 });
 test('annotation package only exports approved full text but JSON retains every old draft/annotation',async()=>{
  const pages=Array.from({length:249},(_,i)=>({page:528+i,local:i+1,ocr:'原OCR'}));pages[0].collated=team();pages[1].collated=team(529,[{note:'尚待核'}]);
+ await attachHuman(pages);
  const progress={version:1,part:3,person:'标注人',lastPage:604,annotationLastPage:528,reviews:{528:{collation:{text:'不合格私稿',verified:false,metricBaseline:{text:'旧底稿'}},theoryAnnotations:completeAnnotations(undefined,pages[0].collated.text,'标注人')},603:{collation:personal()},604:{collation:{text:'未核对草稿',verified:false},theoryAnnotations:completeAnnotations(undefined,'未核对草稿','旧标注人')},700:{question:'移交页历史'}}};
  const before=JSON.stringify(progress),bundle=await buildAnnotationBundle({progress,pages,member:3});
- assert.deepEqual(bundle.manifest.pageNumbers,[528,603]);assert.equal(bundle.manifest.sources[0].kind,'team');assert.equal(bundle.manifest.sources[1].kind,'personal');
+ assert.deepEqual(bundle.manifest.pageNumbers,[528,603]);assert.equal(bundle.manifest.sources[0].kind,'human-txt');assert.equal(bundle.manifest.sources[1].kind,'personal');
  assert.ok(bundle.manifest.excludedPageNumbers.includes(529));assert.ok(bundle.manifest.excludedPageNumbers.includes(604));assert.equal(JSON.stringify(progress),before);
  const proof=await buildCollationBundle({progress,pages,member:3});assert.equal(proof.manifest.files.length,7);assert.equal(proof.manifest.files.some(f=>f.name.endsWith('html')),false);
 });

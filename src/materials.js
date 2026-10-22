@@ -1,5 +1,5 @@
-import {readJson} from './screening-loader.js?v=fulltext-20261019';
-import {teamRelease} from './team-collation.js?v=20261018-part3';
+import {readJson} from './screening-loader.js?v=release-20261022';
+import {teamRelease} from './team-collation.js?v=release-20261022';
 import {targetedRelease} from './targeted-ocr.js?v=20261018-part4';
 import {taskOcrHref} from './screening-page-policy.js?v=20261003-trim';
 const ui=window.WorkspaceUI,host=document.querySelector('#workspacePage');ui.mount('materials');
@@ -11,7 +11,7 @@ async function render(){
  host.innerHTML=`<header class="workspace-page-header"><div><h1>材料管理</h1><p>查看来源与版本，保留原始文件。</p></div><a class="action-button" href="./index.html#ingest">＋ 导入材料</a></header><div class="workspace-page-content"><div class="workspace-fields"><label>当前古籍<select disabled><option>历代书法论文选</option></select></label><label>原分份<select id="materialPart">${[1,2,3,4].map(p=>`<option value="${p}" ${p===part?'selected':''}>原第 ${p} 份</option>`).join('')}</select></label></div><div class="import-steps"><span>① 选择文件</span><span>→</span><span>② 核对范围</span><span>→</span><span>③ 预览确认</span></div><p class="workspace-hint">PDF 导入与 OCR 处理需要连接本机服务。校勘正文无需重新生成。</p><div id="materialGroups" role="status">读取材料范围…</div></div>`;
  document.querySelector('#materialPart').onchange=e=>{part=Number(e.target.value);history.replaceState(null,'',`?part=${part}`);render();};
  try{
-  const requested=part,index=await readJson(`./screening-data/part-${part}-index.json?v=remaining-final-20261019`);
+  const requested=part,index=await readJson(`./screening-data/part-${part}-index.json?v=release-20261022`);
   if(requested!==part)return;
   const scope=`物理页 ${index.start}–${index.end}`;
   let current=row(`原第${part}份 · 当前工作TXT`,scope,'当前公开工作稿',`./screening-data/part-${part}-work.txt`,true);

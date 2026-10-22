@@ -1,29 +1,35 @@
-import { annotationSource, annotationHref, sourceStamp } from './annotation-source.js?v=task-split-20261019';
-import { buildAnnotationBundle } from './theory-annotation-export.js?v=task-split-20261019';
+import {loadChapterIndex,chapterHref} from './annotation-chapters.js?v=release-20261022';
+import { annotationSource, annotationHref, sourceStamp } from './annotation-source.js?v=release-20261022';
+import {loadReviewedPart,loadReviewedIndex,candidateView,deleteDefaultAnnotation,confirmDefaultAnnotations,annotationDisplayRanges} from './reviewed-annotation.js?v=release-20261022';
+import {unifiedAnnotationContext} from './annotation-task-context.js?v=release-20261022';
+import { buildAnnotationBundle,buildUnifiedAnnotationBundle } from './theory-annotation-export.js?v=release-20261022';
 import { humanMarked, humanMarkLabel, nextUnmarkedIndex } from './human-mark.js?v=human-mark-20261019';
 import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=fulltext-20261019';
-import { publicationLabel, teamRelease } from './team-collation.js?v=20261018-part3';
+import { publicationLabel, teamRelease } from './team-collation.js?v=release-20261022';
 import { targetedLabel, targetedRelease } from './targeted-ocr.js?v=20261018-part3';
 import { copyText } from './clipboard.js?v=20261012-copy';
-import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=release-20261019';
-import { captureMemberTask, buildMemberTaskBundle, mergeMemberBackup } from './member-task-export.js?v=release-20261019';
-import { assignmentFor, assignmentSegment, assignmentPages, assignmentHref } from './team-assignments.js?v=seven-20261018';
-import { readJson, createMaterialLoader } from './screening-loader.js?v=fulltext-20261019';
+import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=release-20261022';
+import { captureMemberTask, buildMemberTaskBundle, mergeMemberBackup } from './member-task-export.js?v=release-20261022';
+import { assignmentFor, assignmentSegment, assignmentPages, assignmentHref } from './team-assignments.js?v=release-20261022';
+import { readJson, createMaterialLoader } from './screening-loader.js?v=release-20261022';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft } from './collation-core.js?v=human-mark-20261019';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { createProgressStore, initialPageIndex } from './screening-workflow.js?v=20261013-typo-only';
 import { highlightHtml } from './theory-highlight.js?v=20261003-theory';
-import { annotationView, addAnnotation, removeAnnotation, restoreAnnotation, relocateAnnotation, completeAnnotations, rebaseAnnotations } from './theory-annotations.js?v=annotations-20261019';
-import { validateProgress } from './delivery-core.js?v=release-20261019';
+import { annotationView, addAnnotation, removeAnnotation, restoreAnnotation, relocateAnnotation, rebaseAnnotations } from './theory-annotations.js?v=release-20261022';
+import { validateProgress,readProgress } from './delivery-core.js?v=release-20261022';
 import { pageMetrics } from './task-metrics.js?v=human-mark-20261019';
-import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buffer-20261019';
+import { mountTabletProofInput,textareaSourceOffset } from './tablet-proof-input.js?v=handwriting-buffer-20261019';
+import {annotationReading} from './annotation-reading.js?v=release-20261022';
 
 (() => {
   const app = document.querySelector('#screeningApp');
   const annotationMode = location.pathname.endsWith('/annotation.html');
+  const unifiedMode = annotationMode&&new URLSearchParams(location.search).get('scope')==='all';
+  const chapterId=unifiedMode?new URLSearchParams(location.search).get('chapter'):null;
   const taskName = annotationMode ? '书论标注' : '原文校对';
   const part = Number(new URLSearchParams(location.search).get('part'));
-  const member = new URLSearchParams(location.search).get('member');
+  const member = unifiedMode?null:new URLSearchParams(location.search).get('member');
   let assignment = null, segment = null;
   const state = { data: null, index: 0, reviews: {}, files: new Map(), imageUrl: '', imageReady: false,
     person: '', notice: '', error: '', saveProblem: '', saveConflict: false, savedAt: '', lastPage: null, annotationLastPage: null, annotationSavedAt: '', zoom: 100, validation: false, resetPending: false, annotationOpen: false, reviewOpen: false };
@@ -40,11 +46,26 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
   const progressStore = createProgressStore(localStorage, key(), part);
   const page = () => state.data.pages[state.index];
   const current = () => state.reviews[page().page] || {};
+  const unifiedContext = () => {
+    const all=unifiedAnnotationContext({getItem:name=>name===key()?JSON.stringify(payload()):localStorage.getItem(name)},state.annotationIndexes);
+    if(!state.annotationChapter)return all;
+    const numbers=new Set(state.annotationChapter.fragments.map(f=>f.page)),pages=all.pages.filter(p=>numbers.has(p.page));
+    return {...all,pages,total:pages.length,completed:pages.filter(p=>p.completed).length,candidates:pages.reduce((n,p)=>n+p.candidates,0)};
+  };
+  async function openUnifiedPage(target) {
+    if(!target)return;
+    if(target.part===part)return select(state.data.pages.findIndex(p=>p.page===target.page));
+    if(state.saveProblem&&!persist()){showMessage();return;}
+    location.assign(annotationHref(null,target.part,target.page)+'&scope=all'+(chapterId?'&chapter='+encodeURIComponent(chapterId):''));
+  }
   const seen = () => state.data.pages.filter((item) => state.reviews[item.page]?.seen).length;
   const filename = (number) => `page-${String(number).padStart(4, '0')}.jpg`;
   const scanHref = (number) => `./screening-data/scans/${filename(number)}`;
   const pdfHref = (local) => `./screening-data/part-${part}.pdf#page=${local}`;
   const sourceText = item => item.ocr;
+  const visibleOffset = (text, offset) => annotationMode?annotationReading(text).visibleOffset(offset):text.slice(0,offset).replace(/\r\n?/g,'\n').length;
+  const readingText=text=>annotationMode?annotationReading(text).text:text;
+  const sourceSelection=(text,start,end)=>annotationMode?[annotationReading(text).sourceStart(start),annotationReading(text).sourceEnd(end)]:[textareaSourceOffset(text,start),textareaSourceOffset(text,end)];
   const sourceLabel = () => page().collated ? '团队校订TXT' : '工作TXT';
   const rowLabel = (item, review) => annotationMode ? annotationView(review?.theoryAnnotations,annotationSource(item,review)?.text||'').label : humanMarkLabel(item,review);
   const draft = () => annotationMode ? {text:annotationSource(page(),current())?.text || ''} : draftForPage(page(), current());
@@ -140,6 +161,11 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
     state.notice = ''; state.error = '';
     const changed = Object.hasOwn(patch, 'text') && (reset || patch.text !== draft().text);
     if (Object.hasOwn(patch, 'text') && !changed) return;
+    if(changed) {
+      state.sourceRiskApproval=null;
+      const check=app.querySelector('#sourceRiskResolved'),button=app.querySelector('#approveAnnotationSource');
+      if(check)check.checked=false;if(button)button.disabled=true;
+    }
     const clearHistory = changed && !Object.hasOwn(patch, 'edits');
     const existingBaseline = current().collation?.metricBaseline;
     const metricBaseline = reset ? { version: 1, text: String(patch.text || ''), label: sourceLabel() }
@@ -202,6 +228,8 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
       x: event.clientX,
       y: event.clientY,
       targetId: target.id,
+      page:page().page,
+      sourceText:String(draft().text||''),
     };
     if(annotationMode) {
       const menu=app.querySelector('#selectionMenu');menu.querySelector('label')?.remove();menu.querySelector('#selectionReplacement')?.remove();menu.querySelector('#applySelectionReplace')?.remove();menu.querySelector('#selectionDelete')?.remove();
@@ -284,9 +312,10 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
     if (!layer) return;
     const text = String(draft().text || '');
     const view = annotationMode ? annotationView(current().theoryAnnotations, text) : {ranges:[]};
-    const ranges = view.ranges;
-    layer.innerHTML = highlightHtml(text, ranges);
-    if(status)status.textContent = annotationMode ? `书论 ${ranges.length} 处 · ${view.label}` : '任务一 · 对照原图校验全文，书论在独立任务中标注。';
+    const suggestions=annotationMode?candidateView(page(),current(),annotationSource(page(),current())):{pending:[]};
+    const ranges = annotationMode?annotationDisplayRanges(view.ranges,suggestions.pending):view.ranges;
+    layer.innerHTML = annotationMode?highlightHtml(annotationReading(text).text,annotationReading(text).ranges(ranges)):highlightHtml(text,ranges);
+    if(status)status.textContent = annotationMode ? `保留AI标注 ${suggestions.pending.length} 处 · 已保存标注 ${view.ranges.length} 处 · ${view.label}` : '任务一 · 对照原图校验全文，书论在独立任务中标注。';
     if(annotationMode)updateAnnotationList(view);
     syncHighlight();
   }
@@ -299,11 +328,13 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
 
   function updateAnnotationList(view) {
     const list=app.querySelector('#annotationList');if(!list)return;
-    list.innerHTML=`<p class="annotation-summary">${view.label} · ${view.ranges.length} 处书论</p>`+(view.passages.length?view.passages.map((a,i)=>`<article class="annotation-item ${a.status==='needs-review'?'pending':''}"><strong>${i+1}. ${a.status==='needs-review'?'正文来源已变化 · 待重新定位':'书论'}</strong><blockquote>${esc(a.quote)}</blockquote><small>${esc(a.createdBy)}</small><div class="tools">${a.status==='active'?`<button type="button" data-locate-annotation="${esc(a.id)}">定位原文</button>`:''}<button type="button" data-relocate-annotation="${esc(a.id)}">用当前选区重新定位</button><button type="button" data-remove-annotation="${esc(a.id)}">撤销标注</button></div></article>`).join(''):'<p class="hint">还没有标注。若已通读确认没有书论，可直接点击“确认本页无书论”。</p>');
+    const suggestions=candidateView(page(),current(),annotationSource(page(),current()));
+    const ai=`<section class="annotation-suggestions" aria-label="AI书论初标"><h3>默认AI标注</h3><p class="hint">无需逐条判断。标错处选中文字后右键删除标注，通读后一次确认本页。</p>${suggestions.available?`<p class="hint">${esc(suggestions.summary)}</p>${suggestions.contextNotes.map(n=>`<p class="hint">${esc(n)}</p>`).join('')}${suggestions.all.map(c=>`<article class="annotation-item" data-candidate-id="${esc(c.id)}"><strong>${esc(c.category)}${c.contextStatus==='needs-context'?' · 语境提示':''} · ${c.decision==='accepted'?'随本页已确认':c.decision==='rejected'?'已删除':c.remaining.length!==1||c.remaining[0]?.quote!==c.quote?'保留调整后的范围':'默认保留'}</strong><blockquote>${esc(readingText(c.quote))}</blockquote><p class="hint">${esc(c.note)}</p><button type="button" data-locate-candidate="${esc(c.id)}">定位原文</button></article>`).join('')||'<p class="hint">本页没有AI标注；有遗漏可自行补选，通读后确认本页。</p>'}`:'<p class="hint">当前本机正文与初标来源版本不同，初标不套用新稿；旧标注仍保留，可手工圈选。</p>'}</section>`;
+    list.innerHTML=ai+`<h3>人工标注</h3><p class="annotation-summary">${view.label} · ${view.ranges.length} 处书论</p>`+(view.passages.length?view.passages.map((a,i)=>`<article class="annotation-item ${a.status==='needs-review'?'pending':''}"><strong>${i+1}. ${a.status==='needs-review'?'正文来源已变化 · 待重新定位':esc(a.category||'书论')}</strong><blockquote>${esc(readingText(a.quote))}</blockquote><small>${esc(a.createdBy)}</small>${a.contextNote?`<p class="hint">${esc(a.contextNote)}</p>`:''}<div class="tools">${a.status==='active'?`<button type="button" data-locate-annotation="${esc(a.id)}">定位原文</button>`:''}<button type="button" data-relocate-annotation="${esc(a.id)}">用当前选区重新定位</button><button type="button" data-remove-annotation="${esc(a.id)}">撤销标注</button></div></article>`).join(''):'<p class="hint">尚无人工标注；请复核上方初标并通读全文。</p>');
     const complete=app.querySelector('#completeAnnotations');complete.disabled=Boolean(view.pending.length)||view.completed;
-    complete.textContent=view.completed?view.label:view.ranges.length?'确认本页标注完成':'确认本页无书论';
-    app.querySelector('#annotationHistory').innerHTML=view.removed.map(a=>`<article class="annotation-item"><blockquote>${esc(a.quote)}</blockquote><button type="button" data-restore-annotation="${esc(a.id)}">恢复标注</button></article>`).join('')||'<p class="hint">没有撤销记录。</p>';
-    app.querySelector('#openAnnotations').textContent=`标注列表 · ${view.passages.length}`;
+    complete.textContent=view.completed?view.label:view.ranges.length||suggestions.pending.length?'确认本页标注':'确认本页无书论';
+    app.querySelector('#annotationHistory').innerHTML=view.removed.map(a=>`<article class="annotation-item"><blockquote>${esc(readingText(a.quote))}</blockquote><button type="button" data-restore-annotation="${esc(a.id)}">恢复标注</button></article>`).join('')||'<p class="hint">没有撤销记录。</p>';
+    app.querySelector('#openAnnotations').textContent=`标注详情 · ${view.passages.length+suggestions.pending.length}`;
     for(const badge of app.querySelectorAll('[data-annotation-page]')) { const d=state.reviews[badge.dataset.annotationPage]?.theoryAnnotations; badge.textContent=d?(d.passages.some(a=>a.status==='needs-review')?'论 · 待定位':d.completion?(d.completion.kind==='none'?'论 · 无书论':'论 · 已确认'):`论 · ${d.passages.filter(a=>a.status==='active').length}处`):'论 · 未确认'; if(Number(badge.dataset.annotationPage)===page().page)badge.textContent=`论 · ${view.label}`; }
   }
 
@@ -312,7 +343,7 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
       if(!annotationMode)throw new Error('请进入独立的书论标注任务。');
       if(state.saveConflict || progressStore.hasChanged())throw new Error('人工校验资料已在其他标签页更新，请先载入本机最新进度再标注。');
       const source=annotationSource(page(),current());
-      if(!source || source.text!==app.querySelector('#editText')?.value)throw new Error('本页没有可用的人工已校验正文，请先完成原文校对。');
+      if(!source || readingText(source.text)!==app.querySelector('#editText')?.value)throw new Error('本页没有可用的人工已校验正文，请先完成原文校对。');
       const previousSource=current().theoryAnnotations?.source;
       const data={...transform(current().theoryAnnotations),source:sourceStamp(source,part)};
       if(previousSource && JSON.stringify(previousSource)!==JSON.stringify(data.source))data.events.push({action:'source-change',id:'',by:state.person,at:new Date().toISOString(),previous:previousSource,next:data.source});
@@ -324,8 +355,19 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
     const editor=app.querySelector('#editText'),selection=state.selectionMenu;
     const start=selection.open?selection.start:editor.selectionStart,end=selection.open?selection.end:editor.selectionEnd;
     if(selection.open && editor.value.slice(start,end)!==selection.text) {state.error='正文已变化，请重新选择书论范围。';showMessage();closeSelectionMenu();return;}
-    changeAnnotations(data=>addAnnotation(data,editor.value,start,end,state.person),'已标为书论，黄色底纹已保存在本机进度中。');
+    const text=String(draft().text||'');
+    changeAnnotations(data=>addAnnotation(data,text,...sourceSelection(text,start,end),state.person),'已标为书论，黄色底纹已保存在本机进度中。');
     closeSelectionMenu(); editor.focus({preventScroll:true});editor.setSelectionRange(end,end);
+  }
+
+  function deleteSelectedAnnotation() {
+    const editor=app.querySelector('#editText'),selection=state.selectionMenu,text=String(draft().text||'');
+    const start=selection.open?selection.start:editor.selectionStart,end=selection.open?selection.end:editor.selectionEnd;
+    if(selection.open&&(selection.page!==page().page||selection.sourceText!==text||editor.value.slice(start,end)!==selection.text)) {
+      state.error='正文或页面已变化，请重新选择标注范围。';showMessage();closeSelectionMenu();return;
+    }
+    changeAnnotations(data=>deleteDefaultAnnotation(page(),data,annotationSource(page(),current()),...sourceSelection(text,start,end),state.person),'已删除选中范围的标注，原文保持原样；通读后确认本页即可。');
+    closeSelectionMenu();editor.focus({preventScroll:true});editor.setSelectionRange(start,end);
   }
 
   function scrollToTextRange(editor,start) {
@@ -349,9 +391,10 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
 
   function updateValidation() {
     if(annotationMode) {
-      const progress=app.querySelector('#progress');if(progress)progress.textContent=`标注已确认 ${verifiedCount()} / ${state.data.pages.length} 页`;
+      const overall=unifiedMode?unifiedContext():null;
+      const progress=app.querySelector('#progress');if(progress)progress.textContent=`标注已确认 ${overall?overall.completed:verifiedCount()} / ${overall?overall.total:state.data.pages.length} 页`;
       const view=annotationView(current().theoryAnnotations,String(draft().text||''));
-      const complete=app.querySelector('#verifyNext');if(complete)complete.textContent=view.completed?'已确认 · 下一页 →':view.ranges.length?'确认标注并继续 →':'确认无书论并继续 →';
+      const complete=app.querySelector('#verifyNext');if(complete)complete.textContent=view.completed?'已确认 · 下一页 →':'确认本页并继续 →';
       for(const row of app.querySelectorAll('[data-index]')) {const item=state.data.pages[Number(row.dataset.index)],done=annotationView(state.reviews[item.page]?.theoryAnnotations,annotationSource(item,state.reviews[item.page])?.text||'').completed;row.querySelector('small').textContent=rowLabel(item,state.reviews[item.page]);row.classList.toggle('done',done);}
       applyPageFilter();return;
     }
@@ -496,17 +539,21 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
     if(!annotationMode) {
       app.querySelector('#annotationDrawer')?.remove();
       app.querySelector('#selectionMarkTheory')?.remove();
-      app.querySelector('.theory-toolbar').innerHTML='<small id="theoryStatus"></small><a class="annotation-task-link" href="./annotation-tasks.html">任务二 · 书论标注 →</a>';
+      app.querySelector('.theory-toolbar').innerHTML='<small id="theoryStatus"></small><a class="annotation-task-link" href="./review-metrics.html">量化检测 →</a><a class="annotation-task-link" href="./annotation-tasks.html">任务二 · 书论标注 →</a>';
       app.querySelectorAll('[data-annotation-page]').forEach(e=>e.remove());
       app.querySelector('#verifyNext').textContent=humanMarked(page(),current())?'已标过 · 继续下一页':'校验本页并继续 →';
+      mountSourceRisks();
       return;
     }
     const source=annotationSource(page(),current()),editor=app.querySelector('#editText');
-    editor.readOnly=true;editor.setAttribute('aria-label',`第 ${page().page} 页人工已校验正文（只读标注）`);
-    app.querySelector('.source-version-bar').innerHTML=`<span>${esc(source.label)} · ${esc(source.verifiedBy)}${source.verifiedAt?` · ${esc(source.verifiedAt)}`:''}</span><strong>人工校验完毕 · 只读</strong>`;
+    editor.value=readingText(source.text);editor.readOnly=true;editor.setAttribute('aria-label',`第 ${page().page} 页人工已校验正文（无序号只读标注）`);
+    app.querySelector('.source-version-bar').innerHTML=`<span>${esc(source.label)} · ${esc(source.verifiedBy)}${source.verifiedAt?` · ${esc(source.verifiedAt)}`:''}</span><strong>审核版本对应 · 只读</strong>`;
     app.querySelector('.person-field').childNodes[0].textContent='标注人';
     app.querySelector('#openTextEditor')?.remove();app.querySelector('#reviewDrawer')?.remove();app.querySelector('#validation')?.remove();
-    app.querySelector('.proof-confirmation .checklist').innerHTML='<span class="hint">任务二 · 仅在已人工校验的正文中圈选书论。</span>';
+    app.querySelector('.proof-confirmation .checklist').innerHTML='<span class="hint">默认保留AI标注；标错处选中文字，右键删除标注，通读后确认本页。</span>';
+    app.querySelector('#annotationHelp').textContent='AI标注默认保留，无需逐条采纳。标错处选中文字，右键“删除标注”；漏标处选中后“标为书论”。正文只读，最后确认本页即可。';
+    if(!app.querySelector('#deleteSelectedAnnotation'))app.querySelector('#markTheory').insertAdjacentHTML('afterend','<button type="button" id="deleteSelectedAnnotation">删除选区标注</button>');
+    if(!app.querySelector('#selectionDeleteAnnotation'))app.querySelector('#selectionMarkTheory').insertAdjacentHTML('afterend','<button type="button" id="selectionDeleteAnnotation">删除标注</button>');
     app.querySelector('#validate')?.remove();
     const proofLink=document.createElement('a');proofLink.className='annotation-task-link';proofLink.href=`./screening.html?part=${part}${assignment?`&member=${assignment.id}`:''}&page=${page().page}`;proofLink.textContent='返回原文校对';app.querySelector('.drawer-actions').prepend(proofLink);
     app.querySelector('.page-filters').setAttribute('aria-label','书论标注状态筛选');
@@ -517,6 +564,27 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
     for(const a of app.querySelectorAll('.assignment-switch')){const url=new URL(a.href);a.href=annotationHref(assignment.id,Number(url.searchParams.get('part')),url.searchParams.get('page'));}
     app.querySelector('#selectionMenu label')?.remove();app.querySelector('#selectionReplacement')?.remove();app.querySelector('#applySelectionReplace')?.remove();app.querySelector('#selectionDelete')?.remove();
     const top=document.querySelector('.topbar');if(top)top.innerHTML='<a href="./annotation-tasks.html">← 书论标注任务</a><span>任务二 · 仅使用人工已校验资料</span>';
+    if(unifiedMode) {
+      const overall=unifiedContext(),position=overall.pages.findIndex(p=>p.page===page().page);
+      const breadcrumb=app.querySelector('.heading .eyebrow');
+      breadcrumb.textContent='书论标注 / 全部人工审核合格材料';
+      if(state.annotationChapter){const c=state.annotationChapter;breadcrumb.innerHTML=`<a href="${chapterHref(c.id)}">← ${esc(c.workTitle)} · ${esc(c.title)} · 按章阅读</a>`;breadcrumb.title=c.author+' · '+c.workTitle+' · '+c.title;app.querySelector('.proof-confirmation .checklist .hint').textContent='本章来源页；此处显示完整原页，整页确认含该页全部章节。标错处选中文字右键删除标注。';}
+      app.querySelector('#prev').disabled=position<=0;app.querySelector('#next').disabled=position>=overall.pages.length-1;
+      const options=[1,2,3,4].map(n=>{const pages=overall.pages.filter(p=>p.part===n);return pages.length?`<option value="${n}" ${n===part?'selected':''}>第 ${pages[0].page}–${pages.at(-1).page} 页（${pages.length}页）</option>`:'';}).join('');
+      app.querySelector('.setup>.tools').insertAdjacentHTML('afterbegin',`<label class="annotation-material-switch">查看材料 <select id="annotationMaterial">${options}</select></label>`);
+      exportButton.textContent='导出全部标注ZIP';
+      extra.innerHTML='<p class="hint">一个任务覆盖全部合格材料；导出统一ZIP，原四份完整进度与历史分别保留。</p><button type="button" data-export-all>导出全部标注ZIP</button><a class="download" href="./delivery.html?task=annotation&scope=all&mode=restore">恢复进度JSON</a>';
+    }
+  }
+
+  function mountSourceRisks() {
+    if(annotationMode||!state.data||!app.querySelector('#validation'))return;
+    app.querySelector('#sourceRiskPanel')?.remove();
+    const human=page().humanReviewed;
+    if(!human||human.eligible)return;
+    const panel=document.createElement('section');panel.id='sourceRiskPanel';panel.className='published-revision';
+    panel.innerHTML=`<strong>本页有来源待核，暂不能进入书论标注</strong><ul>${human.blockedReasons.map(reason=>`<li>${esc(reason)}</li>`).join('')}</ul><label class="check"><input id="sourceRiskResolved" type="checkbox">我已对照原图逐项解决以上问题，并确认当前正文</label><button id="approveAnnotationSource" type="button" disabled>重新校验并开放本页标注</button><p class="hint">此操作只记录你对当前版本的明确确认；原备注和旧稿保留。</p>`;
+    app.querySelector('#validation').before(panel);
   }
 
   function render() {
@@ -604,7 +672,7 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
 
   async function copyCurrentPage(button) {
     const number = page().page;
-    const text = String(draft().text || '');
+    const text = readingText(String(draft().text || ''));
     if (!text.trim()) { state.error = '本页正文为空，暂无可复制内容。'; showMessage(); return; }
     button.disabled = true;
     const label = '复制本页';
@@ -631,26 +699,33 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
-  let exportMaterials = {};
+  let exportMaterials = {},exportChapterIndex=null;
   const runBundleExport = createBundleExporter({
-    capture: () => !annotationMode && assignment ? captureMemberTask({ storage:localStorage, member:assignment.id,
+    capture: () => unifiedMode?{person:state.person,exportedAt:new Date().toISOString(),unsaved:Boolean(state.saveProblem),saveConflict:state.saveConflict,progressByPart:Object.fromEntries([1,2,3,4].map(n=>[n,n===part?payload():readProgress(localStorage,n).value]))}:!annotationMode && assignment ? captureMemberTask({ storage:localStorage, member:assignment.id,
       currentProgress:payload(), unsaved:Boolean(state.saveProblem), saveConflict:state.saveConflict })
       : { progress:payload(), unsaved:Boolean(state.saveProblem), saveConflict:state.saveConflict, exportedAt:new Date().toISOString(), ...(assignment ? {member:assignment.id}: {}) },
     loadMaterials: async snapshot => {
       exportMaterials = {};
+      if(unifiedMode)exportChapterIndex=await loadChapterIndex();
       await materialLoader.ensureAll();
+      if(annotationMode)await loadReviewedPart(state.data.allPages,part);
       exportMaterials[part] = state.data.allPages;
+      if(unifiedMode)for(const n of [1,2,3,4]) {
+        if(n===part)continue;
+        const data=await readJson(`./screening-data/part-${n}-index.json?v=release-20261022`);
+        await createMaterialLoader(data).ensureAll();await loadReviewedPart(data.pages,n);exportMaterials[n]=data.pages;
+      }
       if (!annotationMode && assignment) for (const entry of snapshot.snapshots) {
         const otherPart = entry.progress.part;
         if (otherPart === part) continue;
-        const data = await readJson(`./screening-data/part-${otherPart}-index.json?v=remaining-final-20261019`);
+        const data = await readJson(`./screening-data/part-${otherPart}-index.json?v=release-20261022`);
         if (data.part!==otherPart || !Array.isArray(data.pages) || data.pages.length!==data.end-data.start+1 || !data.materials)
           throw new Error(`原第${otherPart}份索引不完整`);
         await createMaterialLoader(data).ensureAll();
         exportMaterials[otherPart] = data.pages;
       }
     },
-    build: snapshot => annotationMode ? buildAnnotationBundle({...snapshot,pages:state.data.allPages}) : assignment ? buildMemberTaskBundle({ ...snapshot, pagesByPart:exportMaterials })
+    build: snapshot => unifiedMode?buildUnifiedAnnotationBundle({...snapshot,pagesByPart:exportMaterials,chapterIndex:exportChapterIndex}):annotationMode ? buildAnnotationBundle({...snapshot,pages:state.data.allPages}) : assignment ? buildMemberTaskBundle({ ...snapshot, pagesByPart:exportMaterials })
       : buildCollationBundle({ ...snapshot, pages:state.data.allPages }),
     download: bundle => downloadBlob(bundle.name, new Blob([bundle.bytes], { type: 'application/zip' })),
   });
@@ -690,17 +765,26 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
   }
 
   app.addEventListener('click', async (event) => {
-    if (state.selectionMenu.open && !event.target.closest('#selectionMenu') && !event.target.closest('#editText') && !event.target.closest('#markTheory')) closeSelectionMenu();
+    if (state.selectionMenu.open && !event.target.closest('#selectionMenu') && !event.target.closest('#editText') && !event.target.closest('#markTheory') && !event.target.closest('#deleteSelectedAnnotation')) closeSelectionMenu();
     const button = event.target.closest('button');
     if (!button) return;
     if (button.id === 'markTheory' || button.id === 'selectionMarkTheory') { markSelection(); return; }
+    if(annotationMode&&(button.id==='selectionDeleteAnnotation'||button.id==='deleteSelectedAnnotation')){deleteSelectedAnnotation();return;}
     if (button.id === 'openAnnotations') { state.annotationOpen=true; state.reviewOpen=false; syncReviewDrawer(); syncAnnotationDrawer(); app.querySelector('#closeAnnotations')?.focus({preventScroll:true}); return; }
     if (button.id === 'closeAnnotations') { state.annotationOpen=false; syncAnnotationDrawer(); app.querySelector('#openAnnotations')?.focus({preventScroll:true}); return; }
-    if (button.id === 'completeAnnotations') { changeAnnotations(data=>completeAnnotations(data,String(draft().text||''),state.person),'本页书论标注已确认。'); return; }
+    if (button.id === 'completeAnnotations') { changeAnnotations(data=>confirmDefaultAnnotations(page(),data,annotationSource(page(),current()),state.person),'本页书论标注已确认。'); return; }
+    const candidateId=button.dataset.locateCandidate;
+    if(annotationMode&&candidateId) {
+      const source=annotationSource(page(),current()),candidate=candidateView(page(),current(),source).all.find(c=>c.id===candidateId);
+      if(!candidate){state.error='初标来源已变化，请重新载入。';showMessage();return;}
+      if(button.dataset.locateCandidate) {
+        const e=app.querySelector('#editText'),start=visibleOffset(source.text,candidate.start),end=visibleOffset(source.text,candidate.end);state.annotationOpen=false;syncAnnotationDrawer();e.focus({preventScroll:true});e.setSelectionRange(start,end);scrollToTextRange(e,start);return;
+      }
+    }
     if (button.dataset.removeAnnotation) { changeAnnotations(data=>removeAnnotation(data,String(draft().text||''),button.dataset.removeAnnotation,state.person),'标注已撤销，可在列表底部恢复。'); return; }
     if (button.dataset.restoreAnnotation) { changeAnnotations(data=>restoreAnnotation(data,String(draft().text||''),button.dataset.restoreAnnotation,state.person),'标注已恢复；如正文已变化，请重新定位。'); return; }
-    if (button.dataset.relocateAnnotation) { const e=app.querySelector('#editText'); changeAnnotations(data=>relocateAnnotation(data,e.value,button.dataset.relocateAnnotation,e.selectionStart,e.selectionEnd,state.person),'已按当前选区重新定位。'); return; }
-    if (button.dataset.locateAnnotation) { const a=annotationView(current().theoryAnnotations,String(draft().text||'')).ranges.find(a=>a.id===button.dataset.locateAnnotation); if(a) { const e=app.querySelector('#editText'); state.annotationOpen=false; syncAnnotationDrawer(); e.focus({preventScroll:true}); e.setSelectionRange(a.start,a.end); scrollToTextRange(e,a.start); } return; }
+    if (button.dataset.relocateAnnotation) { const e=app.querySelector('#editText'),text=String(draft().text||''); changeAnnotations(data=>relocateAnnotation(data,text,button.dataset.relocateAnnotation,...sourceSelection(text,e.selectionStart,e.selectionEnd),state.person),'已按当前选区重新定位。'); return; }
+    if (button.dataset.locateAnnotation) { const text=String(draft().text||''),a=annotationView(current().theoryAnnotations,text).ranges.find(a=>a.id===button.dataset.locateAnnotation); if(a) { const e=app.querySelector('#editText'),start=visibleOffset(text,a.start),end=visibleOffset(text,a.end); state.annotationOpen=false; syncAnnotationDrawer(); e.focus({preventScroll:true}); e.setSelectionRange(start,end); scrollToTextRange(e,start); } return; }
     if (button.id === 'openPublished') { state.reviewOpen = true; state.annotationOpen=false; render(); const details = app.querySelector('#publishedRevision'); details.open = true; details.scrollIntoView({ block: 'nearest' }); return; }
     if (button.id === 'retryLoad') { await init(); return; }
     if (!state.data || !app.querySelector('#pageList')) return;
@@ -750,8 +834,11 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
     }
     if (button.dataset.pageFilter) {state.pageFilter=button.dataset.pageFilter;applyPageFilter();return;}
     if (button.dataset.index !== undefined) return select(Number(button.dataset.index));
-    if (button.id === 'prev') return select(state.index - 1);
-    if (button.id === 'next') return select(state.index + 1);
+    if (button.id === 'prev'||button.id==='next') {
+      const delta=button.id==='prev'?-1:1;
+      if(unifiedMode){const context=unifiedContext(),i=context.pages.findIndex(p=>p.page===page().page);return openUnifiedPage(context.pages[i+delta]);}
+      return select(state.index+delta);
+    }
     if (button.id === 'cancelDraftReset') { state.resetPending = false; showMessage(); return; }
     if (['makeDraft', 'confirmDraftReset', 'renumber', 'lineUp', 'lineDown'].includes(button.id)) {
       const editor = app.querySelector('#editText');
@@ -769,8 +856,13 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
     if (button.id === 'validate') { state.validation = true; updateValidation(); return; }
     if (button.id === 'verifyNext' && annotationMode) {
       if(!annotationView(current().theoryAnnotations,String(draft().text||'')).completed) {
-        changeAnnotations(data=>completeAnnotations(data,String(draft().text||''),state.person),'本页书论标注已确认。');
+        changeAnnotations(data=>confirmDefaultAnnotations(page(),data,annotationSource(page(),current()),state.person),'本页书论标注已确认。');
         if(state.error||state.saveProblem)return;
+      }
+      if(unifiedMode) {
+        const context=unifiedContext(),i=context.pages.findIndex(p=>p.page===page().page),target=context.pages.find((p,j)=>j>i&&!p.completed)||context.pages.find(p=>!p.completed);
+        if(target)return openUnifiedPage(target);
+        state.notice='全部合格材料已确认，可导出全部标注成果。';showMessage();updateValidation();return;
       }
       const next=state.data.pages.findIndex((item,i)=>i>state.index&&!annotationView(state.reviews[item.page]?.theoryAnnotations,annotationSource(item,state.reviews[item.page])?.text||'').completed);
       const earlier=state.data.pages.findIndex(item=>!annotationView(state.reviews[item.page]?.theoryAnnotations,annotationSource(item,state.reviews[item.page])?.text||'').completed);
@@ -778,8 +870,8 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
       else {state.notice='当前人工已校验资料的标注均已确认，可导出标注成果。';showMessage();updateValidation();}
       return;
     }
-    if (button.id === 'verifyNext') {
-      if (humanMarked(page(),current())) {
+    if (button.id === 'verifyNext'||button.id==='approveAnnotationSource') {
+      if (humanMarked(page(),current())&&button.id!=='approveAnnotationSource') {
         const next = nextUnmarkedIndex(state.data.pages,state.reviews,state.index);
         if (next >= 0) return select(next);
         state.notice = '当前页段已全部标过，可导出交回。'; showMessage(); return;
@@ -790,11 +882,16 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
       if (!state.person.trim()) problems.unshift('请填写校勘人真实姓名。');
       if (!state.imageReady) problems.push('原页尚未载入，请载入后核对。');
       if (!draft().checks?.wording) problems.push('请勾选“已对照原图逐栏检查本页全文”。');
+      const human=page().humanReviewed,clearance=state.sourceRiskApproval;
+      if(button.id==='approveAnnotationSource'&&(!human||human.eligible||!clearance||clearance.page!==page().page||clearance.text!==draft().text||!app.querySelector('#sourceRiskResolved')?.checked))problems.push('请逐项解决来源待核并重新勾选；正文变化后需再次核对。');
       if (problems.length) { state.error = problems.join(' '); showMessage();
         app.querySelector(!state.person.trim() ? '#person' : validation.errors.length ? '#editText' : !draft().checks?.wording ? '[data-check]:not(:checked)' : '#question')?.focus(); return; }
-      const saved = record({ seen: true, collation: { ...draft(), verified: true, fullTextChecked: true, workflow: page().modelReviewed ? 'machine-model-human-fulltext-v1' : 'human-fulltext-v1', ...(page().modelReviewed ? { modelRevision: page().modelReviewed.revision } : {}), verifiedBy: state.person.trim(), verifiedAt: new Date().toISOString() } });
+      const verifiedAt=new Date().toISOString(),by=state.person.trim();
+      const sourceApproval=button.id==='approveAnnotationSource'?{version:1,text:draft().text,by,at:verifiedAt,blockedSourceRevision:human.source.revision,blockedReasons:JSON.stringify(human.blockedReasons)}:null;
+      const saved = record({ seen: true, collation: { ...draft(), verified: true, fullTextChecked: true, workflow: page().modelReviewed ? 'machine-model-human-fulltext-v1' : 'human-fulltext-v1', ...(page().modelReviewed ? { modelRevision: page().modelReviewed.revision } : {}), verifiedBy: by, verifiedAt,...(sourceApproval?{annotationSourceApproval:sourceApproval}:{}) } });
       updateValidation();
       if (!saved) return;
+      if(sourceApproval){state.notice='当前正文已重新人工校验，可从书论标注任务进入；原稿和备注保留。';showMessage();return;}
       const completed = page().page;
       const next = nextUnmarkedIndex(state.data.pages, state.reviews, state.index);
       if (next >= 0) select(next, `第 ${completed} 页已标过并保存；已转到第 ${state.data.pages[next].page} 页继续。`);
@@ -822,7 +919,7 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
 
   app.addEventListener('compositionend', (event) => {
     composingInput = null;
-    if (!state.data || event.target.id !== 'editText') return;
+    if (annotationMode || !state.data || event.target.id !== 'editText') return;
     if (event.target.value !== draft().text) updateDraft({ text: event.target.value }, { fromEditor: true });
     else refreshDraftUI();
   });
@@ -843,8 +940,9 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
   app.addEventListener('input', (event) => {
     if (!state.data) return;
     if (event.target.closest('#candidateForm') && event.target.name) { record({ candidateDraft: { ...current().candidateDraft, [event.target.name]: event.target.value } }); return; }
-    if (event.target.id === 'person') { state.person = event.target.value; persist(); }
+    if (event.target.id === 'person') { state.person = event.target.value;if(unifiedMode)try{localStorage.setItem('shulun-annotation-person-v1',state.person);}catch{} persist(); }
     if (event.target.id === 'editText') {
+      if(annotationMode)return;
       if (event.isComposing) composingInput = event.target;
       updateDraft({ text: event.target.value }, { fromEditor: true });
     }
@@ -862,6 +960,12 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
 
   function jumpTo(value) {
     const target = Number(value);
+    if(unifiedMode) {
+      const destination=unifiedContext().pages.find(p=>p.page===target);
+      if(destination)openUnifiedPage(destination);
+      else {state.error=`第 ${value} 页暂无可标注的人工审核正文；来源待核页不进入本任务。`;showMessage();}
+      return;
+    }
     if (Number.isInteger(target) && target >= state.data.start && target <= state.data.end) {
       const index = state.data.pages.findIndex(item => item.page === target);
       if (index >= 0) select(index);
@@ -899,6 +1003,15 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
   });
 
   app.addEventListener('change', async (event) => {
+    if(event.target.id==='annotationMaterial') {
+      const destination=unifiedContext().pages.find(p=>p.part===Number(event.target.value)&&!p.completed)||unifiedContext().pages.find(p=>p.part===Number(event.target.value));
+      return openUnifiedPage(destination);
+    }
+    if(event.target.id==='sourceRiskResolved') {
+      state.sourceRiskApproval=event.target.checked?{page:page().page,text:draft().text}:null;
+      const button=app.querySelector('#approveAnnotationSource');if(button)button.disabled=!event.target.checked;
+      return;
+    }
     if (event.target.id === 'zoom') { state.zoom = Number(event.target.value); const image = app.querySelector('#scanWrap img'); if (image) image.style.width = `${state.zoom}%`; }
     if (event.target.id === 'jump') {
       jumpTo(event.target.value);
@@ -967,17 +1080,25 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
       assignment = assignmentFor(member);
       segment = assignmentSegment(member, part);
       app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
-      state.data = await readJson(`./screening-data/part-${part}-index.json?v=remaining-final-20261019`);
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=release-20261022`);
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
       materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;
       state.data.pages = assignmentPages(state.data.allPages, member, part);
       if (!state.data.pages.length) throw new Error('当前分工段没有可校勘页面');
       restore();
+      if(unifiedMode)try{state.person=localStorage.getItem('shulun-annotation-person-v1')||state.person;}catch{}
       if(annotationMode) {
         app.innerHTML='<p class="loading" role="status">正在核对人工校验资料来源…</p>';
         await materialLoader.ensureAll();
-        state.data.pages=state.data.pages.filter(item=>annotationSource(item,state.reviews[item.page]));
+        await loadReviewedPart(state.data.allPages,part);
+        if(unifiedMode) {
+          state.annotationIndexes=Object.fromEntries(await Promise.all([1,2,3,4].map(async n=>[n,n===part?{pages:state.data.allPages}:await readJson(`./screening-data/part-${n}-index.json?v=release-20261022`)])));
+          await loadReviewedIndex(state.annotationIndexes,{storage:localStorage});
+          state.chapterIndex=await loadChapterIndex();
+          if(chapterId){state.annotationChapter=state.chapterIndex.chapters.find(c=>c.id===chapterId);if(!state.annotationChapter)throw new Error('未找到这一章节，请返回统一入口选择');}
+        }
+        state.data.pages=state.data.pages.filter(item=>annotationSource(item,state.reviews[item.page])&&(!state.annotationChapter||state.annotationChapter.fragments.some(f=>f.page===item.page)));
         if(!state.data.pages.length) {renderNoAnnotationSource();return;}
       }
       const requested = new URLSearchParams(location.search).get('page');
@@ -995,6 +1116,8 @@ import { mountTabletProofInput } from './tablet-proof-input.js?v=handwriting-buf
       if(annotationMode && requested!==null && Number(requested)!==page().page)state.notice=`第 ${requested} 页尚无可用于标注的人工已校验正文，已转到合格的第 ${page().page} 页。`;
       syncUrl();
       render();
+      if(unifiedMode&&!state.saveProblem)persist();
+      if(!annotationMode)loadReviewedPart(state.data.allPages,part).then(()=>mountSourceRisks()).catch(()=>{});
     } catch (error) { app.innerHTML = `<div class="loading" role="alert">${esc(error.message)}。本机校勘进度保留。<p><button id="retryLoad" type="button">重试加载</button></p></div>`; }
   }
   window.addEventListener('resize', revealCurrentPage);

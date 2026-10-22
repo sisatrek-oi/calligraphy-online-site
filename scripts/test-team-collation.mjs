@@ -10,7 +10,7 @@ const read = name => fs.readFileSync(new URL(`../screening-data/${name}`, import
 const releases = [1, 2].map(part => JSON.parse(read(`part-${part}-collated.json`)));
 const sha = text => crypto.createHash('sha256').update(text).digest('hex');
 
-test('100 reviewed pages have matching source hashes and honest completion labels; unfinished 329 is excluded', () => {
+test('311 reviewed pages retain source hashes and honest completion labels including newly reviewed 329', () => {
   let completed = 0, changes = 0;
   for (const release of releases) {
     const summary = teamRelease.parts[release.part];
@@ -22,7 +22,7 @@ test('100 reviewed pages have matching source hashes and honest completion label
       const image = fs.readFileSync(new URL(`../screening-data/scans/page-${String(page.page).padStart(4,'0')}.jpg`, import.meta.url));
       assert.equal(sha(image), page.imageSha256);
       assert.equal(page.status, page.pending.length ? '已修订·待核' : '已修改完毕');
-      if (page.pending.length) assert.match(page.text, /【待核：/);
+      if (page.pending.length) assert.ok(page.humanSource || /【待核：/.test(page.text));
       else completed++;
       changes += page.corrections.length;
       assert.ok(page.text.length > page.memberText.length * .65);
@@ -34,8 +34,8 @@ test('100 reviewed pages have matching source hashes and honest completion label
       assert.ok(csv.includes(`${page.page},${page.status},${page.corrections.length},${page.pending.length},${page.reviewedAt}`));
     }
   }
-  assert.equal(completed, 93); assert.equal(changes, 83);
-  assert.deepEqual(releases[1].pages.map(p=>p.page), Array.from({length:70},(_,i)=>259+i));
+  assert.equal(completed, 271); assert.equal(changes, 83);
+  assert.deepEqual(releases[1].pages.map(p=>p.page), [...Array.from({length:169},(_,i)=>259+i),...Array.from({length:46},(_,i)=>461+i)]);
 });
 
 test('published corrections are default only for pages without a personal draft; metrics stay unchanged', () => {
@@ -71,7 +71,7 @@ test('all active material chunks carry exactly the approved revisions and keep u
     const revised = d.pages.filter(p=>p.collated);
     assert.equal(revised.length,teamRelease.parts[part]?.pages || 0);
     for (const page of revised) assert.deepEqual(page.publication,publicationSummary(page.collated));
-    if (part===2) assert.equal(d.pages.find(p=>p.page===329).collated,undefined);
+    if (part===2) assert.equal(d.pages.find(p=>p.page===329).collated.reviewedBy,'郑雨荻');
   }
 });
 

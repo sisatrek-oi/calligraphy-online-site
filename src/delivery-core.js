@@ -1,5 +1,5 @@
-import {mergeMemberBackup} from './member-task-export.js?v=release-20261019';
-import { validateAnnotations } from './theory-annotations.js?v=annotations-20261019';
+import {mergeMemberBackup} from './member-task-export.js?v=release-20261022';
+import { validateAnnotations } from './theory-annotations.js?v=release-20261022';
 const ranges=[[1,258],[259,527],[528,776],[777,1052]];
 export const progressKey=part=>`shulun-screening-v1-part-${part}`;
 export function validateProgress(value){

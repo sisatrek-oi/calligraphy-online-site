@@ -1,5 +1,5 @@
-import { assignmentFor, assignmentSegment, segmentHasPage } from './team-assignments.js?v=seven-20261018';
-import { buildCollationBundle } from './collation-export.js?v=release-20261019';
+import { assignmentFor, assignmentSegment, segmentHasPage } from './team-assignments.js?v=release-20261022';
+import { buildCollationBundle } from './collation-export.js?v=release-20261022';
 import { zipStore } from './zip-store.js?v=20261018-bundle';
 
 const clone = value => JSON.parse(JSON.stringify(value));

@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="./src/workspace-ui.css?v=load-performance-20261019" />
   <link rel="stylesheet" href="./src/tablet-proof-input.css?v=handwriting-buffer-20261019" />
   <script src="./src/device-session.js?v=redesign-local-20261019"></script>
-  <script src="./src/workspace-ui.js?v=load-performance-20261019"></script>
+  <script src="./src/workspace-ui.js?v=release-20261022"></script>
 </head>
 <body>
   <header class="topbar"><a href="./team-tasks.html">← 团队任务</a><span>书论工作区 · 原文校勘与书论标注</span></header>
@@ -24,7 +24,7 @@
       }
     }, 12000);
     document.getElementById('startupRetry').onclick = () => location.reload();
-    import('./src/screening.js?v=handwriting-buffer-20261019').then(() => clearTimeout(timer)).catch(() => {
+    import('./src/screening.js?v=release-20261022').then(() => clearTimeout(timer)).catch(() => {
       clearTimeout(timer);
       document.getElementById('startupStatus').textContent = '页面程序未能载入，请检查网络后重试。本机进度保留。';
       document.getElementById('startupRetry').hidden = false;

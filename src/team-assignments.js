@@ -3,13 +3,13 @@ import { isVerified } from './collation-core.js?v=20261013-typo-only';
 
 export const assignmentRevision = 'seven-20261018';
 export const assignments = Object.freeze([
-  { id: 1, name: '肖源', received: 30, remaining: 118, segments: [{part:1,start:1,end:158}] },
-  { id: 2, name: '郑雨荻', received: 70, remaining: 99, segments: [{part:2,start:259,end:427}] },
-  { id: 3, name: '宋品宣', received: 75, remaining: 74, segments: [{part:3,start:528,end:676}] },
-  { id: 4, name: '帅睿', received: 15, remaining: 160, segments: [{part:4,start:777,end:951}] },
-  { id: 5, name: '新增成员5', received: 0, remaining: 133, segments: [{part:1,start:159,end:258},{part:2,start:428,end:460}] },
-  { id: 6, name: '新增成员6', received: 0, remaining: 133, segments: [{part:2,start:461,end:527},{part:3,start:677,end:742}] },
-  { id: 7, name: '新增成员7', received: 0, remaining: 134, segments: [{part:3,start:743,end:776},{part:4,start:952,end:1051}] },
+  { id: 1, name: '肖源', received: 90, remaining: 58, segments: [{part:1,start:1,end:158}] },
+  { id: 2, name: '郑雨荻', received: 169, remaining: 0, segments: [{part:2,start:259,end:427}] },
+  { id: 3, name: '宋品宣', received: 121, remaining: 28, segments: [{part:3,start:528,end:676}] },
+  { id: 4, name: '帅睿', received: 70, remaining: 105, segments: [{part:4,start:777,end:951}] },
+  { id: 5, name: '尹正荣', received: 6, remaining: 127, segments: [{part:1,start:159,end:258},{part:2,start:428,end:460}] },
+  { id: 6, name: '姜淼', received: 46, remaining: 87, segments: [{part:2,start:461,end:527},{part:3,start:677,end:742}] },
+  { id: 7, name: '彭鹏', received: 50, remaining: 84, segments: [{part:3,start:743,end:776},{part:4,start:952,end:1051}] },
 ].map(a => Object.freeze({...a, segments:Object.freeze(a.segments.map(s=>Object.freeze(s)))})));
 
 export function assignmentFor(id) {

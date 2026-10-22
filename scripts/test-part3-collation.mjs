@@ -13,18 +13,18 @@ const release=json('part-3-collated.json');
 const pages=new Map(release.pages.map(p=>[p.page,p]));
 
 test('third return includes exactly 75 checked pages with original text, scans and explicit unresolved glyphs',()=>{
- assert.deepEqual([...pages.keys()],Array.from({length:75},(_,i)=>528+i));
- assert.deepEqual(teamRelease.parts[3],{pages:75,complete:71,pending:4});
- assert.deepEqual(release.pages.filter(p=>p.pending.length).map(p=>p.page),[537,555,566,586]);
- assert.equal(release.pages.reduce((sum,p)=>sum+p.pending.length,0),6);
+ assert.deepEqual([...pages.keys()],[...Array.from({length:121},(_,i)=>528+i),...Array.from({length:34},(_,i)=>743+i)]);
+ assert.deepEqual(teamRelease.parts[3],{pages:155,complete:142,pending:13});
+ assert.deepEqual(release.pages.filter(p=>p.page<=602&&p.pending.length).map(p=>p.page),[537,555,566,586]);
+ assert.equal(release.pages.filter(p=>p.page<=602).reduce((sum,p)=>sum+p.pending.length,0),6);
  for(const p of release.pages){
   assert.equal(sha(p.memberText),p.memberTextSha256);
   assert.equal(sha(read(`scans/page-${String(p.page).padStart(4,'0')}.jpg`)),p.imageSha256);
   assert.equal(p.status,p.pending.length?'已修订·待核':'已修改完毕');
-  assert.equal([...p.text.matchAll(/【待核：/g)].length,p.pending.length);
+  if(!p.humanSource)assert.equal([...p.text.matchAll(/【待核：/g)].length,p.pending.length);
   assert.ok(read('part-3-collated.txt').toString('utf8').includes(p.text));
   assert.ok(read('part-3-collated-status.csv').toString('utf8').includes(`${p.page},${p.status},${p.corrections.length},${p.pending.length},${p.reviewedAt}`));
-  assert.ok(p.notes.some(n=>n.includes('AI助手')&&n.includes('未进行独立专家盲审')));
+  if(!p.humanSource)assert.ok(p.notes.some(n=>n.includes('AI助手')&&n.includes('未进行独立专家盲审')));
   assert.equal(p.metricBaseline,undefined);
   for(const f of p.facsimiles||[]) assert.ok(read(f.src.replace('./screening-data/','')).length>100);
  }
@@ -48,7 +48,7 @@ test('published third-part materials exclude the 25 draft pages and all later un
  await loader.ensureAll();
  assert.deepEqual(index.pages.filter(p=>p.collated).map(p=>p.page),[...pages.keys()]);
  for(const p of index.pages){
-  if(p.page>=603){assert.equal(p.collated,undefined);assert.equal(p.publication,undefined);}
+  if(!pages.has(p.page)){assert.equal(p.collated,undefined);assert.equal(p.publication,undefined);}
   else {assert.equal(defaultDraftText(p),pages.get(p.page).text);assert.ok(publicationLabel(p));}
  }
 });

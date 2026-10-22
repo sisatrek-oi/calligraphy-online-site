@@ -1,11 +1,12 @@
-import {captureMemberTask,buildMemberTaskBundle} from './member-task-export.js?v=release-20261019';
-import {annotationSource} from './annotation-source.js?v=task-split-20261019';
-import {buildAnnotationBundle} from './theory-annotation-export.js?v=task-split-20261019';
-import {assignments,assignmentFor,assignmentHref,assignmentPages} from './team-assignments.js?v=entry-20261019';
-import {readJson,createMaterialLoader} from './screening-loader.js?v=fulltext-20261019';
-import {buildCollationBundle} from './collation-export.js?v=release-20261019';
+import {captureMemberTask,buildMemberTaskBundle} from './member-task-export.js?v=release-20261022';
+import {annotationSource} from './annotation-source.js?v=release-20261022';
+import {loadReviewedPart} from './reviewed-annotation.js?v=release-20261022';
+import {buildAnnotationBundle} from './theory-annotation-export.js?v=release-20261022';
+import {assignments,assignmentFor,assignmentHref,assignmentPages} from './team-assignments.js?v=release-20261022';
+import {readJson,createMaterialLoader} from './screening-loader.js?v=release-20261022';
+import {buildCollationBundle} from './collation-export.js?v=release-20261022';
 import {zipStore} from './zip-store.js?v=20261018-bundle';
-import {readProgress,validateProgress,restoreProgress,compareProgress} from './delivery-core.js?v=release-20261019';
+import {readProgress,validateProgress,restoreProgress,compareProgress} from './delivery-core.js?v=release-20261022';
 const ui=window.WorkspaceUI,host=document.querySelector('#workspacePage');ui.mount('delivery');
 let remembered;try{remembered=localStorage.getItem('shulun-active-member-v1');}catch{}
 const params=new URLSearchParams(location.search);
@@ -16,7 +17,7 @@ let mode=['export','restore','receive'].includes(params.get('mode'))?params.get(
 const cache=new Map();
 function notify(message,error=false){const slot=document.querySelector('#deliveryNotice');slot.textContent=message;slot.classList.toggle('error',error);}
 function download(name,bytes,type='application/json'){const url=URL.createObjectURL(new Blob([bytes],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);}
-async function materials(part){if(!cache.has(part))cache.set(part,readJson(`./screening-data/part-${part}-index.json?v=remaining-final-20261019`).then(async data=>{await createMaterialLoader(data).ensureAll();return data.pages;}).catch(error=>{cache.delete(part);throw error;}));return cache.get(part);}
+async function materials(part){if(!cache.has(part))cache.set(part,readJson(`./screening-data/part-${part}-index.json?v=release-20261022`).then(async data=>{await createMaterialLoader(data).ensureAll();return data.pages;}).catch(error=>{cache.delete(part);throw error;}));return cache.get(part);}
 function render(){
  previewRequest++;pending=null;const a=assignmentFor(member);
  let name='';try{name=readProgress(localStorage,a.segments[0].part).value.person;}catch{}
@@ -46,6 +47,7 @@ async function exportBundle(){
   const bundles=[],backups=[];
   for(const s of snapshots) {
     const pages=await materials(s.part);
+    if(exportingTask==='annotation')await loadReviewedPart(pages,s.part);
     if(exportingTask==='annotation' && scope==='all' && snapshots.length>1 && !assignmentPages(pages,exportingMember,s.part).some(p=>annotationSource(p,s.progress.reviews[p.page]))) {
       backups.push({name:`第${s.part}份-暂无标注资料-完整进度备份.json`,content:JSON.stringify(s.progress,null,2)});continue;
     }

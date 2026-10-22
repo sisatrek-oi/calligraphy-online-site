@@ -1,14 +1,31 @@
-import {assignmentContext} from './assignment-context.js?v=redesign-local-20261019';
-import {readJson} from './screening-loader.js?v=fulltext-20261019';
+import {loadChapterIndex,chapterDirectoryHtml,attachChapterSearch} from './annotation-chapters.js?v=release-20261022';
+import {assignmentContext} from './assignment-context.js?v=release-20261022';
+import {readJson} from './screening-loader.js?v=release-20261022';
 import { isVerified } from './collation-core.js?v=20261013-typo-only';
 import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
-import { assignments, assignmentCount, assignmentHref } from './team-assignments.js?v=entry-20261019';
+import { assignments, assignmentCount, assignmentHref } from './team-assignments.js?v=release-20261022';
+import {unifiedAnnotationContext} from './annotation-task-context.js?v=release-20261022';
+import {loadReviewedIndex} from './reviewed-annotation.js?v=release-20261022';
 
 (() => {
   const app = document.querySelector('#teamTasksApp');
   const annotationTask=location.pathname.endsWith('/annotation-tasks.html');
-  let publicIndexes=null, indexProblem='';
-  if (!annotationTask) Promise.all([1,2,3,4].map(async part=>[part,await readJson(`./screening-data/part-${part}-index.json?v=remaining-final-20261019`)] )).then(entries=>{publicIndexes=Object.fromEntries(entries);updateOfflineProgress();}).catch(error=>{indexProblem=error.message;updateOfflineProgress();});
+  let publicIndexes=null, indexProblem='',annotationSummary=null,chapterIndex=null,indexRequest=0;
+  async function loadTaskIndexes() {
+    const request=++indexRequest;
+    try {
+      indexProblem='';
+      const entries=await Promise.all([1,2,3,4].map(async part=>[part,await readJson(`./screening-data/part-${part}-index.json?v=release-20261022`)]));
+      const indexes=Object.fromEntries(entries);
+      const summary=annotationTask?await loadReviewedIndex(indexes,{storage:localStorage}):null;
+      if(request!==indexRequest)return;
+      annotationSummary=summary;
+      if(annotationTask)chapterIndex=await loadChapterIndex();
+      publicIndexes=indexes;
+    } catch(error){if(request!==indexRequest)return;publicIndexes=null;indexProblem=error.message;}
+    updateOfflineProgress();
+  }
+  loadTaskIndexes();
   const state = { user: null, role: null, books: [], units: [], bookId: '', unitId: '', unit: null,
     unitsByBook: {}, view: 'overview', draft: '', dirty: false, error: '', notice: '', loading: false, offline: false };
   const labels = { proofread: '原文校对', screen: '全书初筛', review: '条目审核',
@@ -77,38 +94,64 @@ import { assignments, assignmentCount, assignmentHref } from './team-assignments
   }
 
   function updateOfflineProgress() {
-    if (!state.offline || annotationTask) return;
+    if (!state.offline) return;
+    if(annotationTask) {
+      const summary=app.querySelector('[data-annotation-summary]'),issues=app.querySelector('[data-annotation-issues]');
+      if(summary)summary.textContent=annotationSummary&&publicIndexes?`人工审核回收 ${annotationSummary.total} 页 · 本批合格 ${annotationSummary.pages.filter(p=>p.eligible).length} 页 · 来源待核 ${annotationSummary.pages.filter(p=>!p.eligible).length} 页 · AI初标 ${annotationSummary.pages.reduce((n,p)=>n+p.candidateCount,0)} 处`:indexProblem?`材料暂无法读取：${indexProblem}`:'正在核对人工TXT与初标来源…';
+      const directory=app.querySelector('[data-chapter-directory]');if(directory&&chapterIndex&&!directory.dataset.ready){directory.innerHTML=chapterDirectoryHtml(chapterIndex);attachChapterSearch(directory);directory.dataset.ready='1';}
+      const retry=app.querySelector('#retryAnnotationTask');if(retry)retry.hidden=!indexProblem;
+      if(issues&&annotationSummary&&publicIndexes)issues.innerHTML=annotationSummary.pages.filter(p=>!p.eligible).map(p=>`<li>第${p.page}页：${esc(p.blockedReasons.join('；'))}</li>`).join('')||'<li>没有来源待核页。</li>';
+      const entry=app.querySelector('#enterAnnotationTask'),progressSlot=app.querySelector('[data-unified-annotation-progress]');
+      try {
+        const context=publicIndexes?unifiedAnnotationContext(localStorage,publicIndexes):null;
+        if(progressSlot)progressSlot.textContent=context?`人工已确认 ${context.completed} / ${context.total} 页 · 可复核初标 ${context.candidates} 处`:'正在读取本机进度…';
+        if(entry&&context?.href){entry.href=context.href;entry.removeAttribute('aria-disabled');entry.textContent=`${context.completed?'继续标注':'进入标注'} · 第 ${context.page} 页 →`;}
+        else if(entry){entry.removeAttribute('href');entry.setAttribute('aria-disabled','true');entry.textContent=indexProblem?'等待材料重试':'正在读取…';}
+      }catch(error){if(entry){entry.removeAttribute('href');entry.setAttribute('aria-disabled','true');entry.textContent='原记录暂无法读取';}if(progressSlot)progressSlot.textContent='原进度保留，请先检查或恢复本机记录。';}
+      return;
+    }
     for(const a of assignments){
       const slot=app.querySelector(`[data-local-progress="${a.id}"]`),link=app.querySelector(`[data-member="${a.id}"]`);
       if(!slot||!link)continue;
       if(!publicIndexes){slot.textContent=indexProblem?'标记暂无法读取；原记录保留':'读取人工标记…';continue;}
-      const progress=assignmentContext(localStorage,a,publicIndexes);
+      let progress;
+      try {progress=assignmentContext(localStorage,a,publicIndexes);}catch{progress=null;}
       slot.textContent=progress?`已标过 ${progress.marked} / ${progress.total} 页 · 未标过 ${progress.total-progress.marked} 页`:'本机记录无法读取；原记录保留';
       if(progress){link.href=progress.href;link.dataset.part=progress.part;link.textContent=progress.resume?`继续第 ${progress.page} 页 →`:'进入校勘 →';}
     }
   }
 
   function offline() {
+    if(annotationTask) {
+      shell(`<section class="entry-task-board source-task-board" aria-labelledby="sourceTaskHeading">
+        <header class="entry-task-heading"><p class="workspace-kicker">书论标注</p><h1 id="sourceTaskHeading">书论标注</h1><p>统一进入，新旧合格正文按作者、篇目及原有章节共同整理。</p><p data-annotation-summary role="status">正在读取来源…</p><button type="button" id="retryAnnotationTask" hidden>重试读取材料</button></header>
+        <div class="entry-task-list"><article class="entry-task-card"><div class="entry-task-card-head"><span class="entry-task-icon" aria-hidden="true">${window.WorkspaceUI.icon('annotation')}</span><div class="entry-task-title"><h2>《历代书法论文选》书论标注</h2><p data-unified-annotation-progress>正在读取本机进度…</p></div><a id="enterAnnotationTask" class="action-button" aria-disabled="true">正在读取…</a></div><p class="source-task-description">默认保留AI标注；标错处选中文字后右键删除标注，通读后一次确认本页。正文只读，已有标注和历史继续保留。</p></article></div>
+        <section class="chapter-directory workspace-panel"><h2>按作者与篇章阅读、标注</h2><p><a href="./annotation-chapters.html">打开全部章节目录 →</a></p><div data-chapter-directory>正在读取章节…</div></section>
+        <details class="source-task-history workspace-panel"><summary>来源待核页 · 暂不开放标注</summary><ul class="annotation-source-issues" data-annotation-issues></ul></details>
+      </section>`);
+      updateOfflineProgress();return;
+    }
     const taskId = annotationTask ? 'source-annotation:lidaishufalunwenxuan' : 'source-proofread:lidaishufalunwenxuan';
     const title = annotationTask ? '书论标注' : '原文校对';
     shell(`<section class="entry-task-board source-task-board" aria-labelledby="sourceTaskHeading">
-      <header class="entry-task-heading"><p class="workspace-kicker">团队任务 / ${title}</p><h1 id="sourceTaskHeading">${title}</h1><p>${annotationTask ? '任务尚未开始，暂不分工。' : '选择自己的成员入口，继续原有页段的校对。'}</p></header>
+      <header class="entry-task-heading"><p class="workspace-kicker">团队任务 / ${title}</p><h1 id="sourceTaskHeading">${title}</h1><p>${annotationTask ? '人工审核原TXT已初标，请按原页段逐条复核。' : '选择自己的成员入口，继续原有页段的校对。'}</p>${annotationTask ? '<p data-annotation-summary role="status">正在读取来源…</p><button type="button" id="retryAnnotationTask" hidden>重试读取材料</button><div class="annotation-part-links" data-annotation-parts></div>' : '<a class="quiet-button" href="./review-metrics.html">量化检测 · 查看人工修改 →</a>'}</header>
       <div class="entry-task-list"><article class="entry-task-card" data-entry-task="${taskId}" aria-labelledby="sourceBookTitle">
-        <div class="entry-task-card-head"><span class="entry-task-icon" aria-hidden="true">${window.WorkspaceUI.icon(annotationTask ? 'annotation' : 'proof')}</span><div class="entry-task-title"><h2 id="sourceBookTitle">《历代书法论文选》${title}</h2><p>${annotationTask ? '尚未开始 · 暂未分工' : `${taskPageCount(1,1052)} 个有效页 · 沿用现有校对分工`}</p></div><span class="source-task-state ${annotationTask ? 'pending' : ''}">${annotationTask ? '尚未开始' : '进行中'}</span></div>
-        <p class="source-task-description">${annotationTask ? '启动后只使用人工已校验且无待核的正文。可以先登记成员，页段留待后续安排。' : '原七人的页段、已做正文和草稿保持。新添加成员仅登记，页段待后续安排。'}</p>
+        <div class="entry-task-card-head"><span class="entry-task-icon" aria-hidden="true">${window.WorkspaceUI.icon(annotationTask ? 'annotation' : 'proof')}</span><div class="entry-task-title"><h2 id="sourceBookTitle">《历代书法论文选》${title}</h2><p>${annotationTask ? '本地初标已准备 · 待人工复核' : `${taskPageCount(1,1052)} 个有效页 · 沿用现有校对分工`}</p></div><span class="source-task-state">${annotationTask ? '待复核' : '进行中'}</span></div>
+        <p class="source-task-description">${annotationTask ? '正文仅取审核记录对应的原TXT，淡绿为AI初标、黄色为人工标注。采纳或不采用后，通读确认本页；原文只读，旧标注保留。' : '原七人的页段、已做正文和草稿保持。新添加成员仅登记，页段待后续安排。'}</p>
         <div class="entry-task-roster" data-roster-host></div>
       </article></div>
-      <p class="entry-task-footnote">${annotationTask ? '标注任务暂不开放分工入口；已有标注记录、正文和草稿均保留。' : '按原PDF物理页定位。点击“导出我的任务”，本人跨段也合成一个ZIP；本机标记不代表已交回负责人。'} 成员名单保存在本机，添加姓名不会创建账号或改派页段。</p>
+      <p class="entry-task-footnote">${annotationTask ? '按原校对页段开放已审核部分；原分工不变。AI初标不是人工完成量，未回收的新稿不计入本批。' : '按原PDF物理页定位。点击“导出我的任务”，本人跨段也合成一个ZIP；本机标记不代表已交回负责人。'} 成员名单保存在本机，添加姓名不会创建账号或改派页段。</p>
+      ${annotationTask?'<details class="source-task-history workspace-panel"><summary>来源待核页 · 暂不开放标注</summary><ul class="annotation-source-issues" data-annotation-issues></ul></details>':''}
       <details class="source-task-history workspace-panel"><summary>材料与历史记录</summary><p>原稿、草稿、修改率底稿与全部历史记录保留。原四份完整视图可查看已移交页的旧稿，材料下载仍在任务内“材料与恢复”。</p><div class="source-history-links">${screeningRanges.map((_,i)=>`<a href="./screening.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div><p><a href="./review.html">旧条目独立文件审核 →</a></p></details>
     </section>`);
     window.EntryTaskBoard.attach({storage: localStorage, taskOptions: () => ({
-      defaultMembers: annotationTask ? [] : assignments.map(a => ({id: `team-${a.id}`, name: a.name})),
-      richMembers: !annotationTask,
-      caption: annotationTask ? '仅登记成员，尚未分配页段。' : '原七人按既有分工继续；新增成员暂未分工。',
+      defaultMembers: assignments.map(a => ({id: `team-${a.id}`, name: a.name})),
+      richMembers: true,
+      caption: annotationTask ? '沿用原校对页段，只开放本批合格人工TXT；新增成员暂未分工。' : '原七人按既有分工继续；新增成员暂未分工。',
       emptyText: '暂无成员，可先登记，任务启动后再安排分工。',
       onMembersRendered: updateOfflineProgress,
       renderMember: member => {
-        const a = !annotationTask && assignments.find(a => member.id === `team-${a.id}`);
+        const a = assignments.find(a => member.id === `team-${a.id}`);
         if (!a) return `<li class="entry-pending-member"><span class="entry-member-avatar" aria-hidden="true">${esc([...member.name][0])}</span><span>${esc(member.name)}</span><span class="source-member-pending">待分工</span></li>`;
         return `<li class="entry-assigned-member"><article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span class="local-progress" data-local-progress="${a.id}">读取人工标记…</span></div><div class="unit-actions"><a class="unit-primary" data-member="${a.id}" data-part="${a.segments[0].part}" href="${assignmentHref(a.id,a.segments[0].part)}">进入校勘 →</a></div></article></li>`;
       }
@@ -234,6 +277,7 @@ import { assignments, assignmentCount, assignmentHref } from './team-assignments
   app.addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button) return;
+    if(button.id==='retryAnnotationTask'){button.disabled=true;loadTaskIndexes().finally(()=>button.disabled=false);return;}
     if (button.hasAttribute('data-sidebar-toggle')) {
       const shell = app.querySelector('.team-shell');
       const open = shell?.classList.toggle('nav-open') || false;
@@ -329,7 +373,7 @@ import { assignments, assignmentCount, assignmentHref } from './team-assignments
 
   window.addEventListener('storage', (event) => {
     if (state.offline && (!event.key || event.key.startsWith('shulun-screening-v1-part-'))) {
-      updateOfflineProgress(); return;
+      if(annotationTask)loadTaskIndexes();else updateOfflineProgress(); return;
     }
     if (event.key !== 'simulation-identity-changed') return;
     if (state.dirty) {
@@ -339,7 +383,7 @@ import { assignments, assignmentCount, assignmentHref } from './team-assignments
   });
 
   app.addEventListener('click',event=>{const link=event.target.closest('[data-member]');if(link)try{localStorage.setItem('shulun-active-member-v1',link.dataset.member);}catch{}});
-  window.addEventListener('pageshow', updateOfflineProgress);
+  window.addEventListener('pageshow', ()=>{if(annotationTask)loadTaskIndexes();else updateOfflineProgress();});
 
   (async () => {
     if(annotationTask){state.offline=true;offline();return;}

@@ -3,7 +3,7 @@ import { metricsCsv, pageMetrics } from './task-metrics.js?v=human-mark-20261019
 import { progressSummary } from './screening-workflow.js?v=20261013-typo-only';
 import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
 import { zipStore } from './zip-store.js?v=20261018-bundle';
-import { assignmentFor, assignmentSegment, assignmentPages, assignmentRevision } from './team-assignments.js?v=seven-20261018';
+import { assignmentFor, assignmentSegment, assignmentPages, assignmentRevision } from './team-assignments.js?v=release-20261022';
 import { humanMarkLabel } from './human-mark.js?v=human-mark-20261019';
 
 const encoder = new TextEncoder();

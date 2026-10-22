@@ -86,7 +86,8 @@
     document.documentElement.dataset.workspacePageMotion=typeof document.startViewTransition==='function'?'native':'instant';
     const file=location.pathname.split('/').pop()||'index.html';
     const views={'index.html':location.hash==='#detail'||location.hash==='#table'||location.hash==='#review'?'entries':location.hash==='#ingest'?'materials':'home','team-tasks.html':'proof','screening.html':'proof','annotation-tasks.html':'annotation','annotation.html':'annotation','materials.html':'materials','delivery.html':'delivery','review.html':'entries'};
-    if(views[file])mount(views[file]);
+    if(file==='review-metrics.html')mount('proof');
+    else if(views[file])mount(views[file]);
     if(file === 'index.html') window.setTimeout(() => {
       const slot = document.querySelector('#app > .workspace-startup');
       if(!slot)return;

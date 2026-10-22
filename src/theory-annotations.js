@@ -64,6 +64,22 @@ export function removeAnnotation(data,text,id,by,at=stamp()) {
   next.events.push(event('remove',id,by,at));next.completion=null;return next;
 }
 
+export function removeAnnotationSelection(data,text,start,end,by,at=stamp()) {
+  if(!by.trim())throw new Error('请先填写真实姓名。');
+  if(!validRange(text,start,end))throw new Error('请先选中要删除标注的文字。');
+  const next=prepare(data,text);
+  for(const a of [...next.passages]) {
+    if(!active(a)||a.end<=start||a.start>=end)continue;
+    a.previousStatus=a.status;a.status='removed';a.updatedAt=at;
+    next.events.push(event('remove',a.id,by.trim(),at));
+    for(const [s,e] of [[a.start,Math.min(start,a.end)],[Math.max(end,a.start),a.end]]) {
+      if(e<=s||!text.slice(s,e).trim())continue;
+      next.passages.push({...a,...context(text,s,e),id:uid(),parentId:a.id,status:'active',updatedAt:at});
+    }
+  }
+  next.completion=null;return next;
+}
+
 export function restoreAnnotation(data,text,id,by,at=stamp()) {
   const next=prepare(data,text),a=next.passages.find(a=>a.id===id&&a.status==='removed');
   if(!a) throw new Error('没有可恢复的标注。');

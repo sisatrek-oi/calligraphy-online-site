@@ -1,0 +1,11 @@
+.workspace-ui .proof-workspace #theoryLayer mark.theory-suggested{background:rgba(42,110,92,.18);color:transparent;border-bottom:1px dotted #2a6e5c}
+.annotation-suggestions{border-bottom:1px solid var(--line,#d8ddd3);padding-bottom:16px;margin-bottom:16px}
+.annotation-suggestions h3,.annotation-drawer h3{font-size:15px;margin:12px 0}
+.annotation-suggestions .annotation-item{border-left:3px solid #5c8674;padding-left:10px}
+.annotation-suggestions .annotation-item blockquote{max-height:220px;overflow:auto;white-space:pre-wrap}
+.annotation-part-links{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.annotation-source-issues{max-height:260px;overflow:auto;font-size:13px}
+.annotation-source-issues li{margin:8px 0;overflow-wrap:anywhere}
+.source-task-board a[aria-disabled=true]{opacity:.65;pointer-events:none}
+.annotation-material-switch{display:flex;align-items:center;gap:6px;font-size:12px}
+.annotation-material-switch select{max-width:220px;padding:6px;border:1px solid #d8ddd3;border-radius:5px;background:#fffef9;color:inherit}
