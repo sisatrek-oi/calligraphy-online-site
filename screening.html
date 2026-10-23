@@ -24,7 +24,7 @@
       }
     }, 12000);
     document.getElementById('startupRetry').onclick = () => location.reload();
-    import('./src/screening.js?v=release-20261022').then(() => clearTimeout(timer)).catch(() => {
+    import('./src/screening.js?v=member5-mark45-20261023').then(() => clearTimeout(timer)).catch(() => {
       clearTimeout(timer);
       document.getElementById('startupStatus').textContent = '页面程序未能载入，请检查网络后重试。本机进度保留。';
       document.getElementById('startupRetry').hidden = false;

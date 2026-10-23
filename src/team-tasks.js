@@ -1,11 +1,11 @@
-import {loadChapterIndex,chapterDirectoryHtml,attachChapterSearch} from './annotation-chapters.js?v=release-20261022';
+import {loadChapterIndex,chapterDirectoryHtml,attachChapterSearch} from './annotation-chapters.js?v=member5-mark45-20261023';
 import {assignmentContext} from './assignment-context.js?v=release-20261022';
-import {readJson} from './screening-loader.js?v=release-20261022';
+import {readJson} from './screening-loader.js?v=member5-mark45-20261023';
 import { isVerified } from './collation-core.js?v=20261013-typo-only';
 import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { assignments, assignmentCount, assignmentHref } from './team-assignments.js?v=release-20261022';
 import {unifiedAnnotationContext} from './annotation-task-context.js?v=release-20261022';
-import {loadReviewedIndex} from './reviewed-annotation.js?v=release-20261022';
+import {loadReviewedIndex} from './reviewed-annotation.js?v=member5-mark45-20261023';
 
 (() => {
   const app = document.querySelector('#teamTasksApp');
@@ -15,7 +15,7 @@ import {loadReviewedIndex} from './reviewed-annotation.js?v=release-20261022';
     const request=++indexRequest;
     try {
       indexProblem='';
-      const entries=await Promise.all([1,2,3,4].map(async part=>[part,await readJson(`./screening-data/part-${part}-index.json?v=release-20261022`)]));
+      const entries=await Promise.all([1,2,3,4].map(async part=>[part,await readJson(`./screening-data/part-${part}-index.json?v=member5-mark45-20261023`)]));
       const indexes=Object.fromEntries(entries);
       const summary=annotationTask?await loadReviewedIndex(indexes,{storage:localStorage}):null;
       if(request!==indexRequest)return;

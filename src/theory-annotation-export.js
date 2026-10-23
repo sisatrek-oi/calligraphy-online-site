@@ -1,10 +1,10 @@
-import {validateChapterProgress,effectiveChapterProgress,chapterIsConfirmed,chapterBackupState} from './chapter-annotation-core.js?v=release-20261022';
-import {chapterAnnotationFiles} from './annotation-chapters.js?v=release-20261022';
+import {validateChapterProgress,effectiveChapterProgress,chapterIsConfirmed,chapterBackupState} from './chapter-annotation-core.js?v=member5-mark45-20261023';
+import {chapterAnnotationFiles} from './annotation-chapters.js?v=member5-mark45-20261023';
 import { annotationView } from './theory-annotations.js?v=release-20261022';
 import { draftForPage } from './ocr-source-policy.js?v=fulltext-20261019';
 import { highlightHtml } from './theory-highlight.js?v=20261003-theory';
 import { annotationSource, sourceStamp } from './annotation-source.js?v=release-20261022';
-import {candidateView,annotationDisplayRanges,reviewedBatch} from './reviewed-annotation.js?v=release-20261022';
+import {candidateView,annotationDisplayRanges,reviewedBatch} from './reviewed-annotation.js?v=member5-mark45-20261023';
 import { assignmentFor, assignmentPages } from './team-assignments.js?v=release-20261022';
 import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
 import { zipStore } from './zip-store.js?v=20261018-bundle';

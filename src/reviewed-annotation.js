@@ -1,4 +1,4 @@
-import {readJson} from './screening-loader.js?v=release-20261022';
+import {readJson} from './screening-loader.js?v=member5-mark45-20261023';
 import {addAnnotation,validateAnnotations,removeAnnotationSelection,completeAnnotations,annotationView} from './theory-annotations.js?v=release-20261022';
 
 export const reviewedBatch = 'human-txt-20261020';

@@ -12,7 +12,7 @@ test('all four parts contain 851 complete image-reviewed working pages and no sy
   total+=source.pages.length;
  }assert.equal(total,851);
 });
-test('all 1041 task pages have a working source; only the 552 returned human pages count as marked',async()=>{
+test('all 1041 task pages have a working source; only the 591 explicitly confirmed human pages count as marked',async()=>{
  let total=0,marked=0;
  for(let part=1;part<=4;part++){
   const index=read(`part-${part}-index.json`),loader=createMaterialLoader(index,{fetcher:async url=>({ok:true,json:async()=>read(url.replace('./screening-data/',''))})});
@@ -20,7 +20,7 @@ test('all 1041 task pages have a working source; only the 552 returned human pag
   for(const p of index.pages.filter(p=>isTaskPage(p.page))){
    assert.ok(p.collated || p.modelReviewed);assert.equal(humanMarked(p),Boolean(p.collated));total++;marked+=Number(humanMarked(p));
   }
- }assert.equal(total,1041);assert.equal(marked,552);
+ }assert.equal(total,1041);assert.equal(marked,591);
 });
 test('known numerical, geometry and historical-uncertainty evidence survives publication without marking the page',()=>{
  const sources=[1,3,4].flatMap(part=>read(`part-${part}-model-reviewed.json`).pages);

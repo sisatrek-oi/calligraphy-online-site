@@ -1,17 +1,17 @@
-import {loadChapterIndex,chapterHref} from './annotation-chapters.js?v=release-20261022';
+import {loadChapterIndex,chapterHref} from './annotation-chapters.js?v=member5-mark45-20261023';
 import { annotationSource, annotationHref, sourceStamp } from './annotation-source.js?v=release-20261022';
-import {loadReviewedPart,loadReviewedIndex,candidateView,deleteDefaultAnnotation,confirmDefaultAnnotations,annotationDisplayRanges} from './reviewed-annotation.js?v=release-20261022';
+import {loadReviewedPart,loadReviewedIndex,candidateView,deleteDefaultAnnotation,confirmDefaultAnnotations,annotationDisplayRanges} from './reviewed-annotation.js?v=member5-mark45-20261023';
 import {unifiedAnnotationContext} from './annotation-task-context.js?v=release-20261022';
-import { buildAnnotationBundle,buildUnifiedAnnotationBundle } from './theory-annotation-export.js?v=release-20261022';
+import { buildAnnotationBundle,buildUnifiedAnnotationBundle } from './theory-annotation-export.js?v=member5-mark45-20261023';
 import { humanMarked, humanMarkLabel, nextUnmarkedIndex } from './human-mark.js?v=human-mark-20261019';
 import { draftForPage, defaultDraftText } from './ocr-source-policy.js?v=fulltext-20261019';
-import { publicationLabel, teamRelease } from './team-collation.js?v=release-20261022';
+import { publicationLabel, teamRelease } from './team-collation.js?v=member5-mark45-20261023';
 import { targetedLabel, targetedRelease } from './targeted-ocr.js?v=20261018-part3';
 import { copyText } from './clipboard.js?v=20261012-copy';
 import { buildCollationBundle, createBundleExporter } from './collation-export.js?v=release-20261022';
 import { captureMemberTask, buildMemberTaskBundle, mergeMemberBackup } from './member-task-export.js?v=release-20261022';
 import { assignmentFor, assignmentSegment, assignmentPages, assignmentHref } from './team-assignments.js?v=release-20261022';
-import { readJson, createMaterialLoader } from './screening-loader.js?v=release-20261022';
+import { readJson, createMaterialLoader } from './screening-loader.js?v=member5-mark45-20261023';
 import { CHECKS, makeDraft, numberLines, moveLine, validateDraft } from './collation-core.js?v=human-mark-20261019';
 import { excludedPages, isTaskPage, taskOcrHref } from './screening-page-policy.js?v=20261003-trim';
 import { createProgressStore, initialPageIndex } from './screening-workflow.js?v=20261013-typo-only';
@@ -712,13 +712,13 @@ import {annotationReading} from './annotation-reading.js?v=release-20261022';
       exportMaterials[part] = state.data.allPages;
       if(unifiedMode)for(const n of [1,2,3,4]) {
         if(n===part)continue;
-        const data=await readJson(`./screening-data/part-${n}-index.json?v=release-20261022`);
+        const data=await readJson(`./screening-data/part-${n}-index.json?v=member5-mark45-20261023`);
         await createMaterialLoader(data).ensureAll();await loadReviewedPart(data.pages,n);exportMaterials[n]=data.pages;
       }
       if (!annotationMode && assignment) for (const entry of snapshot.snapshots) {
         const otherPart = entry.progress.part;
         if (otherPart === part) continue;
-        const data = await readJson(`./screening-data/part-${otherPart}-index.json?v=release-20261022`);
+        const data = await readJson(`./screening-data/part-${otherPart}-index.json?v=member5-mark45-20261023`);
         if (data.part!==otherPart || !Array.isArray(data.pages) || data.pages.length!==data.end-data.start+1 || !data.materials)
           throw new Error(`原第${otherPart}份索引不完整`);
         await createMaterialLoader(data).ensureAll();
@@ -1080,7 +1080,7 @@ import {annotationReading} from './annotation-reading.js?v=release-20261022';
       assignment = assignmentFor(member);
       segment = assignmentSegment(member, part);
       app.innerHTML = '<p class="loading" role="status">正在读取页码索引…</p>';
-      state.data = await readJson(`./screening-data/part-${part}-index.json?v=release-20261022`);
+      state.data = await readJson(`./screening-data/part-${part}-index.json?v=member5-mark45-20261023`);
       if (state.data.part !== part || state.data.pages.length !== state.data.end - state.data.start + 1 || !state.data.materials) throw new Error('页码索引不完整');
       materialLoader = createMaterialLoader(state.data);
       state.data.allPages = state.data.pages;
@@ -1093,7 +1093,7 @@ import {annotationReading} from './annotation-reading.js?v=release-20261022';
         await materialLoader.ensureAll();
         await loadReviewedPart(state.data.allPages,part);
         if(unifiedMode) {
-          state.annotationIndexes=Object.fromEntries(await Promise.all([1,2,3,4].map(async n=>[n,n===part?{pages:state.data.allPages}:await readJson(`./screening-data/part-${n}-index.json?v=release-20261022`)])));
+          state.annotationIndexes=Object.fromEntries(await Promise.all([1,2,3,4].map(async n=>[n,n===part?{pages:state.data.allPages}:await readJson(`./screening-data/part-${n}-index.json?v=member5-mark45-20261023`)])));
           await loadReviewedIndex(state.annotationIndexes,{storage:localStorage});
           state.chapterIndex=await loadChapterIndex();
           if(chapterId){state.annotationChapter=state.chapterIndex.chapters.find(c=>c.id===chapterId);if(!state.annotationChapter)throw new Error('未找到这一章节，请返回统一入口选择');}

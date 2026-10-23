@@ -1,0 +1,295 @@
+{
+  "version": 1,
+  "kind": "user-confirmed-human-mark",
+  "member": 5,
+  "assignedMemberName": "尹正荣",
+  "confirmedBy": "项目负责人（本次对话确认）",
+  "confirmedAt": "2026-10-23T04:40:32.693Z",
+  "instruction": "更新完了，直接把这45页直接标记成标过",
+  "rangeClarification": "从任务起点累计45页：159—203页",
+  "part": 1,
+  "pageNumbers": [
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    172,
+    173,
+    174,
+    175,
+    176,
+    177,
+    178,
+    179,
+    180,
+    181,
+    182,
+    183,
+    184,
+    185,
+    186,
+    187,
+    188,
+    189,
+    190,
+    191,
+    192,
+    193,
+    194,
+    195,
+    196,
+    197,
+    198,
+    199,
+    200,
+    201,
+    202,
+    203
+  ],
+  "newlyMarkedPages": [
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    172,
+    173,
+    174,
+    175,
+    176,
+    177,
+    178,
+    179,
+    180,
+    181,
+    182,
+    183,
+    184,
+    185,
+    186,
+    187,
+    188,
+    189,
+    190,
+    191,
+    192,
+    193,
+    194,
+    195,
+    196,
+    197,
+    198,
+    199,
+    200,
+    201,
+    202,
+    203
+  ],
+  "previouslyMarkedPages": [
+    159,
+    160,
+    161,
+    162,
+    163,
+    164
+  ],
+  "textSource": {
+    "path": "tasks/2026-10-21-review-package-update/batch-03/extracted/member-5-part-1/第1份-逐页校勘.txt",
+    "fileSha256": "f6af617862bb735a21a4a7c7e24df11e2e449d02ecc20a2b042661c2dffe8373",
+    "zipSha256": "53c5733de7e81319ed4d7de21031ddf14d4aacdf07e97e69432fec8b31372fd9"
+  },
+  "pages": [
+    {
+      "page": 159,
+      "textSha256": "4106350bea73007afef1f47e78036adc5120d3f6c763558642f4a119c5c692ce"
+    },
+    {
+      "page": 160,
+      "textSha256": "72a6fe7648bc4544adb2b1119c53ac77e23ec4c2e596d55378ed970073606e2c"
+    },
+    {
+      "page": 161,
+      "textSha256": "3922487d7dbf9769cc55809b1b7bff42141478f43bb937cd1bb1b7f758f71a2c"
+    },
+    {
+      "page": 162,
+      "textSha256": "a711e5e1bb88b20b2f716227aeaeb28a353958da545b3f8d4e7821668a92579f"
+    },
+    {
+      "page": 163,
+      "textSha256": "51707d3789415b1b454058dbf4cfce62b6cc5366628915ae9af6fe21fec69f28"
+    },
+    {
+      "page": 164,
+      "textSha256": "81b1f160d404be0efbc4e1b4c418cc661fcef3ac43281cb3e1c01f7536bb29df"
+    },
+    {
+      "page": 165,
+      "textSha256": "88678c36d84ae7cb36c2f8a8ddd72e7ff70b56d56016fc5539efd0cdcac900b0"
+    },
+    {
+      "page": 166,
+      "textSha256": "08ae23c29e7f2f60f4a5fced56e11c4dfcf6d363e60f18e67155a3b49c32d72e"
+    },
+    {
+      "page": 167,
+      "textSha256": "b13b966e535b2fc91ece9cc227b6953b75990a02ab8ad2906bb9bb31b3e928b1"
+    },
+    {
+      "page": 168,
+      "textSha256": "729fba863438c2824da6a6d6d53f9bff95523a9eb43cad13a49accf5eb34873b"
+    },
+    {
+      "page": 169,
+      "textSha256": "a6273df83b98520708859707d2d3ca54cea20ca48a13a940325ced0672ae6048"
+    },
+    {
+      "page": 170,
+      "textSha256": "42c2b708ab0aafac802b39690ba0446203425acb4078de839242a9c34de8ad54"
+    },
+    {
+      "page": 171,
+      "textSha256": "8f34bc184e3faa06774945253dd51d9a4abdb73737e89a25f6e9f0b95a061e98"
+    },
+    {
+      "page": 172,
+      "textSha256": "2d89b56325e14ee0f74e485ca1fa055ad9b992e4bdf51a74550aa50422ff00d2"
+    },
+    {
+      "page": 173,
+      "textSha256": "7412380e512cc1abaaf0686414db28dc8ef773c4452cba081d3a773e2fc433b7"
+    },
+    {
+      "page": 174,
+      "textSha256": "1275bff71a7565e0da6858726e1b38f5b94e89e0cbb9197b8cccdd1ce8a37650"
+    },
+    {
+      "page": 175,
+      "textSha256": "d2bb46bdb97cb2aa3b55b2153c5392314d70d7190c6c0ac5f3a23ad69eadacb2"
+    },
+    {
+      "page": 176,
+      "textSha256": "d7dbe9a6c7872c6e69eb58ea508f14b438dc9b41b1a7b8b71497d32efcd8fcbc"
+    },
+    {
+      "page": 177,
+      "textSha256": "e9db61c063f57e40129114af87d752dcdc98d2d623da1f8f72fbad6902b05e86"
+    },
+    {
+      "page": 178,
+      "textSha256": "262a63d5e717a9f53975e4a3f3195795f68beee9b1602b59c0d360f6a8cbb370"
+    },
+    {
+      "page": 179,
+      "textSha256": "7ad6cd26271bc62e0d54b7d8a53fdbe60e3340af91dc7e33e85403ea3380de3c"
+    },
+    {
+      "page": 180,
+      "textSha256": "9ea0f360385647f776bbd96b269fa709cd586d01578fe72ca79092488ed31a7b"
+    },
+    {
+      "page": 181,
+      "textSha256": "cac3ef89e567c510a895e3df55eae506d5904060c2f140ef556b58c5ab50d70e"
+    },
+    {
+      "page": 182,
+      "textSha256": "40791693c94296c7b16df8c11a1d370d3a5f36aac5678af10f011fa24fb11e4f"
+    },
+    {
+      "page": 183,
+      "textSha256": "68e1ad03261d14f9929e204dfb485fe7cc6bd0ed5cc9368070a96641a968b496"
+    },
+    {
+      "page": 184,
+      "textSha256": "717afcf917b8879d5bab5df810250ca8da2f1737037fd5f1288aed5496fbae32"
+    },
+    {
+      "page": 185,
+      "textSha256": "d52b2eb85cb2d91ac2df470d5e2f71b0e566e67ab3dbeda693342cf9a89d2e3b"
+    },
+    {
+      "page": 186,
+      "textSha256": "f5a4b4bfedf5f799103c74d787f1f660a316ad062400d5babbe7cf271941b815"
+    },
+    {
+      "page": 187,
+      "textSha256": "27ab4ee213cd12732eb47d8b851ff8d90484423a932f1afc6a7e83028158effb"
+    },
+    {
+      "page": 188,
+      "textSha256": "26928dd45d83f16921fadb2d5e79f051754b3a7129f8a41c74a45296926c820d"
+    },
+    {
+      "page": 189,
+      "textSha256": "1f66fa937e239862a6d5c2d42b9318fd9265202555c97dace6b38ed8420ac96e"
+    },
+    {
+      "page": 190,
+      "textSha256": "b5cf09286e4a6c7227be3aa7b27b3d4825ea315cc0522e56815c839b309a0368"
+    },
+    {
+      "page": 191,
+      "textSha256": "dca7c60d8c8e8cdd95ed5461ba772d7f0ea6f593ecdc9fe2fce79237ffcfeac1"
+    },
+    {
+      "page": 192,
+      "textSha256": "ab33d34cc8dae33f6fb23060e920652b00134cbd83240b004221d999cfc9e803"
+    },
+    {
+      "page": 193,
+      "textSha256": "6bcf9ee94b2aa7c0fe234fb2393ab1dfd919ce9f3bf1743dd0d262b5fb114589"
+    },
+    {
+      "page": 194,
+      "textSha256": "60b089888297eed06e91324ad514b84572dd5f59dd2815ce2bd1be70f477172a"
+    },
+    {
+      "page": 195,
+      "textSha256": "fe3dcd1afeab3ac06c64c9cb2c25a68d69ba785158e35d4e67c5776bbfd54bb7"
+    },
+    {
+      "page": 196,
+      "textSha256": "1d9ca3ff9ef18b40b277506556b75fcb72033ad557fd0f904ad6b9af19e1ee54"
+    },
+    {
+      "page": 197,
+      "textSha256": "22418cf7795ac43b7f5f9089f0d7c29a73e75c3eed365627d0d35b91c34f7290"
+    },
+    {
+      "page": 198,
+      "textSha256": "b0e66cc1e9aceb3d815830f6d768cee9f4077635054fe2a5fdc18e0bcb359904"
+    },
+    {
+      "page": 199,
+      "textSha256": "c3ff0588415b210ea64d930f713ddbfd3fd47f83d86fc85dc7caf1f1e9feaf47"
+    },
+    {
+      "page": 200,
+      "textSha256": "85d7d486087c839415120f023ef43e77a0d644c94b2cba90c3e513b731ef8214"
+    },
+    {
+      "page": 201,
+      "textSha256": "483f294b53aa845dcd57b6efd0cb4a3f7233ef2b9dcf2f5a349b113b6d91a79b"
+    },
+    {
+      "page": 202,
+      "textSha256": "5395bd2af732143092d73456e908319eb940f558418b2583d425fa64951cecfb"
+    },
+    {
+      "page": 203,
+      "textSha256": "81b267e28a1b207bc270c1bd6542245c1a7769de8a87eb60b2b972d4f13ef121"
+    }
+  ],
+  "note": "本次用户确认绑定当前返回TXT版本；不是成员原ZIP中的历史勾选，不回填原包，不新增书论标注确认。"
+}

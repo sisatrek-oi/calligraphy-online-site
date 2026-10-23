@@ -68,7 +68,7 @@ async function load() {
     } else {
       if (!state.returned) {
         state.records=null;render();
-        const response=await fetch('./review-metrics-data.json?v=20261020');
+        const response=await fetch('./review-metrics-data.json?v=member5-mark45-20261023');
         if(!response.ok)throw Error('已回收人工记录读取失败');
         const data=await response.json();
         if(data.version!==1 || !Array.isArray(data.records) || data.records.some(r=>!recordLabels[r.kind] || !Number.isInteger(r.page) || ![1,2,3,4].includes(r.part)))throw Error('已回收人工记录格式无效');

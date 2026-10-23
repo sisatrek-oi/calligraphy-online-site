@@ -1,9 +1,9 @@
-import {loadChapterIndex,validateChapterIndex,esc} from './annotation-chapters.js?v=release-20261022';
+import {loadChapterIndex,validateChapterIndex,esc} from './annotation-chapters.js?v=member5-mark45-20261023';
 import {chapterTaskUnits} from './annotation-chapter-units.js?v=release-20261022';
-import {readJson} from './screening-loader.js?v=release-20261022';
-import {validateReviewedPart} from './reviewed-annotation.js?v=release-20261022';
+import {readJson} from './screening-loader.js?v=member5-mark45-20261023';
+import {validateReviewedPart} from './reviewed-annotation.js?v=member5-mark45-20261023';
 import {readProgress} from './delivery-core.js?v=release-20261022';
-import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=release-20261022';
+import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=member5-mark45-20261023';
 import {assignmentKey,bookFoldKey,readAssignments,saveAssignments,assignedName,changeAssignments,validateAssignments,mergeAssignments,memberTasks} from './annotation-assignments.js?v=release-20261022';
 
 const app=document.querySelector('#annotationTaskApp');

@@ -1,4 +1,4 @@
-import { validCollation, publicationSummary } from './team-collation.js?v=release-20261022';
+import { validCollation, publicationSummary } from './team-collation.js?v=member5-mark45-20261023';
 import { validTargeted, targetedSummary } from './targeted-ocr.js?v=20261018-part3';
 import { validModelReview, modelReviewSummary } from './model-reviewed.js?v=fulltext-20261019';
 // Keep the deadline active through body parsing, not just response headers.

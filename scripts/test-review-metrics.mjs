@@ -5,9 +5,9 @@ import { readLocalTraces, filterRecords, summarize, replacementKind } from '../s
 const returned=JSON.parse(fs.readFileSync(new URL('../review-metrics-data.json',import.meta.url),'utf8'));
 const storage=value=>({getItem:key=>key.endsWith('-3')?JSON.stringify(value):null,setItem(){throw Error('must remain read-only');}});
 test('returned source snapshot retains exact evidence counts',()=>{
-  assert.deepEqual(summarize(returned.records),{confirmations:552,notes:70,replacements:22,detailedPages:85});
-  assert.deepEqual([1,2,3,4].map(part=>summarize(filterRecords(returned.records,{part})).confirmations),[96,215,155,86]);
-  assert.equal(Object.keys(returned.sources).length,78);
+  assert.deepEqual(summarize(returned.records),{confirmations:591,notes:70,replacements:22,detailedPages:85});
+  assert.deepEqual([1,2,3,4].map(part=>summarize(filterRecords(returned.records,{part})).confirmations),[135,215,155,86]);
+  assert.equal(Object.keys(returned.sources).length,79);
 });
 test('returned replacements and categories retain originals',()=>{
   const records=filterRecords(returned.records,{kind:'replacement'});

@@ -1,9 +1,9 @@
 import {captureMemberTask,buildMemberTaskBundle} from './member-task-export.js?v=release-20261022';
 import {annotationSource} from './annotation-source.js?v=release-20261022';
-import {loadReviewedPart} from './reviewed-annotation.js?v=release-20261022';
-import {buildAnnotationBundle} from './theory-annotation-export.js?v=release-20261022';
+import {loadReviewedPart} from './reviewed-annotation.js?v=member5-mark45-20261023';
+import {buildAnnotationBundle} from './theory-annotation-export.js?v=member5-mark45-20261023';
 import {assignments,assignmentFor,assignmentHref,assignmentPages} from './team-assignments.js?v=release-20261022';
-import {readJson,createMaterialLoader} from './screening-loader.js?v=release-20261022';
+import {readJson,createMaterialLoader} from './screening-loader.js?v=member5-mark45-20261023';
 import {buildCollationBundle} from './collation-export.js?v=release-20261022';
 import {zipStore} from './zip-store.js?v=20261018-bundle';
 import {readProgress,validateProgress,restoreProgress,compareProgress} from './delivery-core.js?v=release-20261022';
@@ -17,7 +17,7 @@ let mode=['export','restore','receive'].includes(params.get('mode'))?params.get(
 const cache=new Map();
 function notify(message,error=false){const slot=document.querySelector('#deliveryNotice');slot.textContent=message;slot.classList.toggle('error',error);}
 function download(name,bytes,type='application/json'){const url=URL.createObjectURL(new Blob([bytes],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);}
-async function materials(part){if(!cache.has(part))cache.set(part,readJson(`./screening-data/part-${part}-index.json?v=release-20261022`).then(async data=>{await createMaterialLoader(data).ensureAll();return data.pages;}).catch(error=>{cache.delete(part);throw error;}));return cache.get(part);}
+async function materials(part){if(!cache.has(part))cache.set(part,readJson(`./screening-data/part-${part}-index.json?v=member5-mark45-20261023`).then(async data=>{await createMaterialLoader(data).ensureAll();return data.pages;}).catch(error=>{cache.delete(part);throw error;}));return cache.get(part);}
 function render(){
  previewRequest++;pending=null;const a=assignmentFor(member);
  let name='';try{name=readProgress(localStorage,a.segments[0].part).value.person;}catch{}
