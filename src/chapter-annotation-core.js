@@ -25,6 +25,7 @@ export function resolvedChapterLegacy(legacy,state){
 export function chapterBackupState(state,legacy){return {...structuredClone(state),legacyArchive:structuredClone(resolvedChapterLegacy(legacy,state))};}
 export function validateChapterProgress(value,byPage){
  if(value?.format!=='shulun-chapter-progress'||value.version!==1||typeof value.person!=='string'||typeof value.lastChapterId!=='string'||typeof value.savedAt!=='string'||!object(value.pages)||!object(value.confirmations)||!Array.isArray(value.events))throw new Error('请选择整章标注进度JSON，原记录未改变。');
+ if(value.legacyChapterArchives){if(!Array.isArray(value.legacyChapterArchives)||value.legacyChapterArchives.some(raw=>typeof raw!=='string'))throw new Error('旧整章记录归档无效。');for(const raw of value.legacyChapterArchives)validateChapterProgress(JSON.parse(raw));}
  if(value.legacyArchive){if(!object(value.legacyArchive))throw new Error('原记录归档无效。');for(const n of [1,2,3,4]){validateProgress(value.legacyArchive[n]);if(value.legacyArchive[n].part!==n)throw new Error('原记录归档分份不匹配。');}}
  for(const [key,s] of Object.entries(value.pages)){
   if(!/^\d+$/.test(key)||String(s?.page)!==key||![1,2,3,4].includes(s.part)||!/^([a-f0-9]{64})$/.test(s.textSha256)||typeof s.legacyAnnotations!=='string')throw new Error('整章标注的来源记录无效。');
@@ -35,8 +36,8 @@ export function validateChapterProgress(value,byPage){
  for(const [key,c] of Object.entries(value.confirmations))if(!key||!c||!/^([a-f0-9]{64})$/.test(c.signature)||!c.by?.trim()||!Number.isFinite(Date.parse(c.at))||c.scope!=='available-chapter')throw new Error('章节确认记录无效。');
  return value;
 }
-export function readChapterProgress(storage,byPage){const raw=storage.getItem(chapterProgressKey);return {raw,value:raw===null?emptyChapterProgress():validateChapterProgress(JSON.parse(raw),byPage)};}
-export function saveChapterProgress(storage,value,expectedRaw,byPage){validateChapterProgress(value,byPage);if(storage.getItem(chapterProgressKey)!==expectedRaw)throw new Error('另一标签页已更新整章标注，请重新读取后重选；本次未覆盖。');const raw=JSON.stringify(value);storage.setItem(chapterProgressKey,raw);return raw;}
+export function readChapterProgress(storage,byPage,key=chapterProgressKey){const raw=storage.getItem(key);return {raw,value:raw===null?emptyChapterProgress():validateChapterProgress(JSON.parse(raw),byPage)};}
+export function saveChapterProgress(storage,value,expectedRaw,byPage,key=chapterProgressKey){validateChapterProgress(value,byPage);if(storage.getItem(key)!==expectedRaw)throw new Error('另一标签页已更新整章标注，请重新读取后重选；本次未覆盖。');const raw=JSON.stringify(value);storage.setItem(key,raw);return raw;}
 export function effectiveChapterProgress(legacy,chapterState,byPage){
  legacy=resolvedChapterLegacy(legacy,chapterState);
  const effective=Object.fromEntries([1,2,3,4].map(n=>[n,{...(legacy[n]||{version:1,part:n,person:'',reviews:{}}),reviews:{...(legacy[n]?.reviews||{})}}]));
@@ -89,6 +90,7 @@ export async function confirmChapter(state,chapter,by,legacy,byPage,at=new Date(
 export async function chapterIsConfirmed(chapter,byPage,legacy,state){const c=state.confirmations[chapter.id];return Boolean(c&&c.signature===await chapterSignature(chapter,byPage,legacy,state));}
 export function mergeChapterBackup(current,incoming,byPage){
  validateChapterProgress(incoming,byPage);const next=structuredClone(current);
+ if(incoming.legacyChapterArchives)next.legacyChapterArchives=[...new Set([...(next.legacyChapterArchives||[]),...incoming.legacyChapterArchives])];
  if(incoming.legacyArchive)next.legacyArchive=resolvedChapterLegacy(current.legacyArchive||{},incoming);
  for(const [key,value] of Object.entries(incoming.pages)){if(next.pages[key]&&JSON.stringify(next.pages[key])!==JSON.stringify(value))throw new Error('本机与备份在同一来源上有不同章内标注，未自动覆盖；请保留两个备份后核对。');next.pages[key]=value;}
  const events=new Map(next.events.map(e=>[e.id,e]));for(const e of incoming.events){if(events.has(e.id)&&JSON.stringify(events.get(e.id))!==JSON.stringify(e))throw new Error('同编号历史内容不同，未恢复。');events.set(e.id,e);}next.events=[...events.values()];

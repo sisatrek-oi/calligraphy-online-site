@@ -1,17 +1,16 @@
-import {loadChapterIndex,validateChapterIndex,esc} from './annotation-chapters.js?v=member5-mark45-20261023';
-import {chapterTaskUnits} from './annotation-chapter-units.js?v=release-20261022';
-import {readJson} from './screening-loader.js?v=member5-mark45-20261023';
-import {validateReviewedPart} from './reviewed-annotation.js?v=member5-mark45-20261023';
+import {loadAnnotationCorpus,corpusMode,corpusQuery,bindCorpusProgress} from './annotation-corpus.js?v=annotation-release-20261024';
+import {esc} from './annotation-chapters.js?v=member5-mark45-20261023';
 import {readProgress} from './delivery-core.js?v=release-20261022';
-import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=member5-mark45-20261023';
-import {assignmentKey,bookFoldKey,readAssignments,saveAssignments,assignedName,changeAssignments,validateAssignments,mergeAssignments,memberTasks} from './annotation-assignments.js?v=release-20261022';
+import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=annotation-release-20261024';
+import {assignmentKey,standardAssignmentKey,bookFoldKey,readCorpusAssignments,assignmentsUnchanged,saveAssignments,assignedName,changeAssignments,validateAssignments,mergeAssignments,memberTasks} from './annotation-assignments.js?v=annotation-release-20261024';
 
 const app=document.querySelector('#annotationTaskApp');
 window.WorkspaceUI.mount('annotation');
 document.body.classList.add('annotation-task-overview');
-const href=id=>'./annotation.html?chapter='+encodeURIComponent(id);
+let corpus,progressKey=chapterProgressKey;
+const href=id=>'./annotation.html?chapter='+encodeURIComponent(id)+corpusQuery(corpus?.mode);
 const title=c=>(c.volumeTitle&&c.volumeTitle!==c.title?c.volumeTitle+' · ':'')+c.title;
-let index,statuses,available,resume,plan,planRaw,lastChapterId='',filter='all';
+let index,statuses,available,resume,plan,planRaw,planStore,lastChapterId='',filter='all';
 const params=new URLSearchParams(location.search);
 // Existing chapter/page bookmarks continue to open the complete chapter editor.
 if(params.has('chapter')||params.has('page'))location.replace('./annotation.html'+location.search+location.hash);
@@ -22,23 +21,21 @@ function download(name,content){const url=URL.createObjectURL(new Blob([content]
 async function init(){
  try{
   const legacy=Object.fromEntries([1,2,3,4].map(n=>[n,readProgress(localStorage,n).value]));
-  const [source,...parts]=await Promise.all([loadChapterIndex(),...[1,2,3,4].map(async n=>validateReviewedPart(await readJson(`./annotation-data/part-${n}.json?v=chapter-native-final-20261022`),n))]);
-  const pages=parts.flatMap(p=>p.pages),byPage=new Map(pages.map(p=>[p.page,p]));
-  validateChapterIndex(source,byPage);index=chapterTaskUnits(source,byPage);validateChapterIndex(index,byPage);
-  ({raw:planRaw,value:plan}=readAssignments(localStorage,index));
-  const {value:state}=readChapterProgress(localStorage,byPage);effectiveChapterProgress(legacy,state,byPage);
+  corpus=await loadAnnotationCorpus(location.search);progressKey=corpus.key;index=corpus.index;const {pages,byPage}=corpus;
+  planStore=readCorpusAssignments(localStorage,index,corpus.mode);({raw:planRaw,value:plan}=planStore);
+  const stored=readChapterProgress(localStorage,byPage,progressKey),state=bindCorpusProgress(stored.value,corpus);effectiveChapterProgress(legacy,state,byPage);
   statuses=new Map(await Promise.all(index.chapters.map(async c=>[c.id,await chapterIsConfirmed(c,byPage,legacy,state)])));
   available=index.chapters.filter(c=>c.fragments.length);
   const last=index.chapterAliases[state.lastChapterId]||state.lastChapterId;lastChapterId=last;
   resume=available.find(c=>c.id===last)||available.find(c=>!statuses.get(c.id)&&c.candidateCount)||available.find(c=>!statuses.get(c.id))||available[0];
   const confirmed=available.filter(c=>statuses.get(c.id)).length,pending=available.length-confirmed,blocked=pages.filter(p=>!p.eligible),eligible=pages.filter(p=>p.eligible),ai=eligible.reduce((n,p)=>n+p.candidates.length,0),waiting=index.chapters.filter(c=>!c.fragments.length);
-  app.innerHTML=`<header class="task-heading"><div><p>团队任务 / 书论标注</p><h1>书论标注</h1></div><p class="task-heading-note">按章通读 · 按章分工 · 整章确认</p></header>
+  app.innerHTML=`<header class="task-heading"><div><p>团队任务 / 书论标注 · ${esc(corpus.label)}</p><h1>书论标注</h1></div><p class="task-heading-note">按章通读 · 按章分工 · 整章确认<br><a id="openStructureFeedback" href="./annotation-structure.html?chapter=${encodeURIComponent(resume.id)}${corpusQuery(corpus.mode)}">核查分段与章节／提交反馈 →</a></p></header>
    <nav class="task-view-tabs" role="tablist" aria-label="分工与目录"><button type="button" role="tab" id="memberViewTab" data-task-view="assignments" aria-controls="memberTaskPanel" aria-selected="true">成员分工</button><button type="button" role="tab" id="directoryViewTab" data-task-view="directory" aria-controls="directoryTaskPanel" aria-selected="false">书籍目录</button></nav>
    <section id="memberTaskPanel" class="member-task-panel" role="tabpanel" aria-labelledby="memberViewTab"><header class="member-board-heading"><div><h2>《历代书法论文选》书论标注</h2><p id="memberAllocationSummary"></p></div><button type="button" id="openAssignment" class="action-button">安排分工</button></header><div class="member-board-tools"><span>选择自己的成员入口，按负责篇章进行标注。</span><button type="button" id="exportAssignments">导出分工</button><button type="button" id="importAssignments">导入分工</button><input type="file" id="assignmentImportFile" accept=".json,application/json" hidden></div><div id="memberTaskList" class="member-task-list" tabindex="0" aria-label="成员与明确负责范围"></div><footer class="member-board-note"><span>分工方案保存在本机，可导出给成员使用。</span><button type="button" id="assignUnallocated">安排未分工章节</button></footer></section>
    <section id="directoryTaskPanel" class="directory-task-panel" role="tabpanel" aria-labelledby="directoryViewTab" hidden><section class="task-resume" aria-label="继续整章标注"><div class="task-resume-copy"><p class="task-eyebrow">${state.lastChapterId?'上次阅读位置':'从这里开始'}</p><h2>${esc(resume.author)} · ${esc(resume.workTitle)}</h2><p class="task-resume-title">${esc(title(resume))}${resume.gaps.length?' <span class="task-gap-label">含审核缺口</span>':''}</p><a id="resumeChapter" class="action-button" href="${href(resume.id)}">${state.lastChapterId?'继续整章标注':'开始整章标注'} <span aria-hidden="true">→</span></a></div><div class="task-progress"><p><strong>${confirmed}</strong><span> / ${available.length} 章已确认</span></p><progress value="${confirmed}" max="${available.length}" aria-label="整章确认进度"></progress><small>${pending?`还有 ${pending} 章待确认`:'全部开放章节已确认'} · 本机记录</small></div></section>
    <div class="task-body"><details id="taskBook" class="task-book" ${localStorage.getItem(bookFoldKey)==='open'?'open':''}><summary><span class="task-book-title"><span aria-hidden="true" class="task-book-symbol">▤</span><span><strong>《历代书法论文选》</strong><small>${index.works.length} 篇／附录 · ${available.length} 个开放章节</small></span></span><span class="task-book-toggle"><span class="when-closed">展开目录</span><span class="when-open">收起目录</span><span aria-hidden="true">⌄</span></span></summary>
     <section class="task-catalog" aria-labelledby="taskCatalogTitle"><div class="task-catalog-head"><div><h2 id="taskCatalogTitle">章节目录</h2><span>按作者与篇目查阅</span></div><label class="task-search"><span class="sr-only">查找作者、篇名或章节</span><input id="taskChapterSearch" type="search" placeholder="查找作者、篇名或章节" autocomplete="off"></label><div class="task-filter-row"><div class="task-filters" role="group" aria-label="章节状态"><button type="button" data-filter="all" aria-pressed="true">全部</button><button type="button" data-filter="pending" aria-pressed="false">待确认 ${pending}</button><button type="button" data-filter="confirmed" aria-pressed="false">已确认 ${confirmed}</button></div><span id="taskResultCount" role="status"></span></div></div><div id="taskChapterList" class="task-chapter-list" tabindex="0" aria-label="按作者与篇目排列的章节目录"></div></section></details>
-   <aside class="task-aside"><section class="task-guide"><h2>标注方法</h2><ol><li>展开书籍，按作者、篇目选择章节。</li><li>打开整章，通读正文与对应原图；AI初标默认保留，漏标补标，标错删除。</li><li>完成后，确认本章。</li></ol><p>含审核缺口的章节，只确认已开放内容。</p></section><details class="task-resources"><summary>资料与备份</summary><div><p>人工审核正文 ${eligible.length} 页已接入；${blocked.length} 页来源待核，未接入标注。当前保留 ${ai} 处AI初标。</p><p>分工只记录章节负责人，不改变原文、标注或确认状态。原审核TXT、旧标注与历史记录保留。</p><a href="${href(resume.id)}&panel=backup">进入工作区备份、导出或恢复 →</a>${waiting.length?`<details class="task-waiting"><summary>${waiting.length} 个章节尚无合格正文</summary>${waiting.map(c=>`<a href="${href(c.id)}">${esc(c.author)} · ${esc(c.workTitle)} · ${esc(title(c))}</a>`).join('')}</details>`:''}</div></details></aside></div></section>
+   <aside class="task-aside"><section class="task-guide"><h2>标注方法</h2><p><a id="openStructureFeedbackGuide" href="./annotation-structure.html?chapter=${encodeURIComponent(resume.id)}${corpusQuery(corpus.mode)}">核查AI分段与章节／提交反馈 →</a></p><ol><li>展开书籍，按作者、篇目选择章节。</li><li>打开整章，通读正文与对应原图；AI初标默认保留，漏标补标，标错删除。</li><li>完成后，确认本章。</li></ol><p>${corpus.mode==='legacy'?'含审核缺口的章节，只确认已开放内容。':'标准任务只确认已开放正文，不表示全书或来源缺文已补齐。'}</p></section><details class="task-resources"><summary>资料与备份</summary><div><p>${esc(corpus.label)} ${eligible.length} 份来源已接入；${blocked.length} 页来源待核，未接入标注。当前保留 ${ai} 处AI初标。</p><p>分工只记录章节负责人，不改变原文、标注或确认状态。原审核TXT、旧标注与历史记录保留。</p>${corpus.mode==='legacy'?'':'<a href="./annotation-data/wolai-standard.txt" download="wolai标准整合全文.txt">下载标准全文TXT →</a>'}<a href="./annotation-tasks.html?view=directory${corpus.mode==='legacy'?'':'&corpus=legacy'}">${corpus.mode==='legacy'?'返回wolai标准任务':'打开旧审核语料任务'} →</a><a href="${href(resume.id)}&panel=backup">进入工作区备份、导出或恢复 →</a>${waiting.length?`<details class="task-waiting"><summary>${waiting.length} 个章节尚无合格正文</summary>${waiting.map(c=>`<a href="${href(c.id)}">${esc(c.author)} · ${esc(c.workTitle)} · ${esc(title(c))}</a>`).join('')}</details>`:''}</div></details></aside></div></section>
    <footer class="task-footnote"><span>分工与目录独立查看；原审核TXT和标注保留。</span><span id="taskUpdateNotice" role="status"></span></footer><dialog id="taskAssignmentDialog" class="task-assignment-dialog" aria-labelledby="assignmentHeading"></dialog><dialog id="taskAssignmentImportDialog" class="task-assignment-dialog" aria-labelledby="assignmentImportHeading"></dialog>`;
   const update=()=>renderList();
   app.querySelector('#taskChapterSearch').addEventListener('input',update);
@@ -55,7 +52,7 @@ async function init(){
   for(const tab of app.querySelectorAll('[data-task-view]')){tab.onclick=()=>setView(tab.dataset.taskView);tab.onkeydown=e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();const tabs=[...app.querySelectorAll('[data-task-view]')],target=e.key==='Home'?tabs[0]:e.key==='End'?tabs.at(-1):tabs[(tabs.indexOf(tab)+1)%tabs.length];setView(target.dataset.taskView);target.focus();}};}
   app.querySelector('#assignUnallocated').onclick=()=>openAssignment('all',{unassigned:true});
   app.setAttribute('aria-busy','false');
- }catch(e){app.setAttribute('aria-busy','false');app.innerHTML=`<section class="task-load-error"><h1>书论标注任务暂未载入</h1><p role="alert">${esc(e.message)}</p><p>原审核TXT、已有标注和分工记录保留。</p><button id="retryTask">重新读取</button><button id="backupRawAssignments">导出原分工记录</button></section>`;app.querySelector('#retryTask').onclick=()=>location.reload();app.querySelector('#backupRawAssignments').onclick=()=>download('分工原记录.json',localStorage.getItem(assignmentKey)||'null');}
+ }catch(e){app.setAttribute('aria-busy','false');app.innerHTML=`<section class="task-load-error"><h1>书论标注任务暂未载入</h1><p role="alert">${esc(e.message)}</p><p>原审核TXT、已有标注和分工记录保留。</p><button id="retryTask">重新读取</button><button id="backupRawAssignments">导出原分工记录</button></section>`;app.querySelector('#retryTask').onclick=()=>location.reload();app.querySelector('#backupRawAssignments').onclick=()=>download('分工原记录.json',localStorage.getItem(corpusMode(location.search)==='legacy'?assignmentKey:standardAssignmentKey)||'null');}
 }
 function setView(view,changeUrl=true){
  const directory=view==='directory';app.querySelector('#directoryTaskPanel').hidden=!directory;app.querySelector('#memberTaskPanel').hidden=directory;
@@ -84,8 +81,8 @@ function renderList(){
  }).join('')||'<p class="task-no-results">没有符合条件的章节，请调整关键词或切换状态。</p>';
  app.querySelector('#taskResultCount').textContent=count+' 章';list.scrollTop=0;
 }
-function readCurrentPlan(){if(localStorage.getItem(assignmentKey)!==planRaw)throw new Error('其他窗口更新了分工，请刷新任务页后再操作。');}
-function persistPlan(next){const nextRaw=saveAssignments(localStorage,next,planRaw,index);plan=next;planRaw=nextRaw;renderMemberBoard();renderList();}
+function readCurrentPlan(){if(!assignmentsUnchanged(localStorage,planStore))throw new Error('其他窗口更新了分工，请刷新任务页后再操作。');}
+function persistPlan(next){readCurrentPlan();const nextRaw=saveAssignments(localStorage,next,planRaw,index,planStore.key);plan=next;planRaw=nextRaw;planStore={...planStore,raw:nextRaw,inheritedKey:null,inheritedRaw:null};renderMemberBoard();renderList();}
 function openAssignment(workId='all',{memberId='',unassigned=false}={}){
  const dialog=app.querySelector('#taskAssignmentDialog'),selected=new Set(available.filter(c=>unassigned?!plan.assignments[c.id]:memberId&&plan.assignments[c.id]===memberId).map(c=>c.id));
  dialog.innerHTML=`<form id="assignmentForm"><header><div><p>《历代书法论文选》</p><h2 id="assignmentHeading">安排章节分工</h2></div><button type="button" id="closeAssignment" aria-label="关闭分工窗口">✕</button></header><p class="assignment-hint">按整章分配；更换负责人只调整分工，正文和标注记录保留。</p><div class="assignment-fields"><label>负责人<input id="assignmentPerson" list="assignmentMembers" maxlength="80" placeholder="填写姓名或选择已有成员" autocomplete="off"><datalist id="assignmentMembers">${plan.members.map(m=>`<option value="${esc(m.name)}"></option>`).join('')}</datalist></label><label>选择篇目<select id="assignmentWork"><option value="all">整本书 · 全部开放章节</option>${index.works.filter(w=>available.some(c=>c.workId===w.id)).map(w=>`<option value="${esc(w.id)}">${esc(w.author)} · ${esc(w.title)}</option>`).join('')}</select></label></div><div class="assignment-select-tools"><button type="button" id="selectAssignmentScope">选中当前范围</button><button type="button" id="clearAssignmentSelection">清空所选</button><span id="assignmentSelectionCount" role="status">已选 0 章</span></div><div id="assignmentChapterChoices" class="assignment-choices"></div><p id="assignmentPreview" class="assignment-hint"></p><p id="assignmentError" role="alert"></p><footer><button type="button" id="unassignChapters">撤销所选分工</button><button type="submit" class="action-button" id="saveAssignment">保存分工</button></footer></form>`;
@@ -111,4 +108,4 @@ async function previewAssignments(e){
   dialog.querySelector('#cancelAssignmentImport').onclick=()=>dialog.close();dialog.querySelector('#applyAssignmentImport').onclick=()=>{try{persistPlan(next);dialog.close();message('分工已合并，成员任务卡已更新。');}catch(error){dialog.querySelector('#assignmentImportError').textContent=error.message;}};dialog.showModal();
  }catch(error){message(error.message);}
 }
-window.addEventListener('storage',e=>{if(e.key===null||e.key===assignmentKey||e.key===chapterProgressKey||e.key?.startsWith('shulun-screening-v1-part-')){const notice=app.querySelector('#taskUpdateNotice');if(notice){notice.innerHTML='其他窗口有新记录，<button type="button" id="refreshTaskProgress">更新任务</button>';notice.querySelector('button').onclick=()=>location.reload();}}});
+window.addEventListener('storage',e=>{if(e.key===null||(e.key===planStore?.key||e.key===planStore?.inheritedKey)||e.key===progressKey||e.key?.startsWith('shulun-screening-v1-part-')){const notice=app.querySelector('#taskUpdateNotice');if(notice){notice.innerHTML='其他窗口有新记录，<button type="button" id="refreshTaskProgress">更新任务</button>';notice.querySelector('button').onclick=()=>location.reload();}}});

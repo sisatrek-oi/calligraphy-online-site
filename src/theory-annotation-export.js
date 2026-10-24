@@ -1,4 +1,4 @@
-import {validateChapterProgress,effectiveChapterProgress,chapterIsConfirmed,chapterBackupState} from './chapter-annotation-core.js?v=member5-mark45-20261023';
+import {validateChapterProgress,effectiveChapterProgress,chapterIsConfirmed,chapterBackupState} from './chapter-annotation-core.js?v=annotation-release-20261024';
 import {chapterAnnotationFiles} from './annotation-chapters.js?v=member5-mark45-20261023';
 import { annotationView } from './theory-annotations.js?v=release-20261022';
 import { draftForPage } from './ocr-source-policy.js?v=fulltext-20261019';
