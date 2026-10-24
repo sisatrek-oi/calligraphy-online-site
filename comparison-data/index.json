@@ -1,0 +1,1 @@
+{"version":1,"file":"./comparison-data/wolai-human.json","sha256":"d01ce1610ec269e74447cf2d8c82b86d8afe00d02514a88b7f3bed92e697a085","summary":{"humanPages":591,"references":104,"items":{"unaligned":1742,"han":2040,"punctuation":4975,"reference-only":1062},"segments":{"unaligned":1742,"difference":885,"same":122},"alignedPages":323,"note":"差异候选不是错误；未对齐和wolai未对应范围不等于漏文或已核定。"}}

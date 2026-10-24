@@ -12,8 +12,8 @@
   const items = [
     ['home','任务首页','./index.html#home',''],
     ['proof','原文校对','./team-tasks.html','对照原图校对全文，确认人工校验完成。'],
-    ['annotation','书论标注','./annotation-tasks.html?view=batches','使用人工已校验正文，在原文中圈选书论。'],
-    ['source-review','PDF与TXT审核','./annotation-tasks.html?view=batches&task=review','按四份任务核对PDF上下文与TXT，选文右键记录疑点。'],
+    ['annotation','书论标注','./annotation-tasks.html','使用人工已校验正文，在原文中圈选书论。'],
+    ['source-review','文本差异复核','./annotation-compare.html','对照wolai与人工稿，回看原图后重新核定差异。'],
     ['entries','条目整理','./index.html#detail','整理书论条目、核对证据与独立审核。'],
     ['materials','材料管理','./materials.html','查看原始材料、工作正文与历史版本。'],
     ['delivery','成果交付','./delivery.html','导出成果、恢复进度与检查回收文件。'],
