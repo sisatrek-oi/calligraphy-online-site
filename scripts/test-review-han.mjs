@@ -34,7 +34,7 @@ test('directions, repetition and page coverage count observed Han positions only
   assert.equal(rows[3].han,undefined);
 });
 test('all observed Han classifications partition each comparison and retain exact pair counts',()=>{
-  for(const [mode,total,unique,dayCount]of [['baseline', 23735, 13059, 226], ['ocr', 61785, 27826, 481]]){
+  for(const [mode,total,unique,dayCount]of [['baseline', 23746, 13067, 226], ['ocr', 62843, 28079, 505]]){
     const data=JSON.parse(fs.readFileSync(new URL(`../review-txt-${mode}.json`,import.meta.url),'utf8'));
     const rows=txtRows(data),a=analyzeHan(rows,metadata.characters);
     assert.equal(a.total,total);assert.equal(a.uniquePairs,unique);

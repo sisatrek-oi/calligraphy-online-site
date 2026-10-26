@@ -19,5 +19,5 @@ export const teamRelease = { date: '2026-10-26', parts: {
   1: { pages: 248, complete: 212, pending: 36 },
   2: { pages: 236, complete: 197, pending: 39 },
   3: { pages: 249, complete: 227, pending: 22 },
-  4: { pages: 195, complete: 180, pending: 15 },
+  4: { pages: 216, complete: 192, pending: 24 },
 } };

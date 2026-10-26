@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {txtRows,filterTxtRows,txtPage} from '../src/review-txt-core.js';
 import {editDistance} from '../src/task-metrics.js';
 
-for(const [mode,pages,changes,beforeChars]of [['baseline',723,59279,318756],['ocr',897,141980,383639]]){
+for(const [mode,pages,changes,beforeChars]of [['baseline',744,59548,326178],['ocr',918,144607,390750]]){
   const data=JSON.parse(fs.readFileSync(new URL(`../review-txt-${mode}.json`,import.meta.url),'utf8'));
   test(mode+' TXT total categories and edits independently match website distance',()=>{
     const rows=txtRows(data);
