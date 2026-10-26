@@ -1,0 +1,38 @@
+.review-entry-dialog{width:min(360px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;padding:24px;background:var(--ws-surface,#fffef8);color:var(--ws-ink,#244843);border:1px solid var(--ws-line,#d9dfd4);border-radius:8px;box-shadow:0 16px 60px #15372b25}
+.review-entry-dialog::backdrop{background:#15372b55}
+.review-entry-dialog form{display:grid;gap:10px;margin:0}
+.review-entry-dialog h2{font:600 22px 'Songti SC',serif;margin:0 0 8px}
+.review-entry-dialog label{font-size:12px}
+.review-entry-dialog input,.review-entry-dialog button{font:inherit;color:inherit;border:1px solid var(--ws-line,#d9dfd4);border-radius:5px;padding:9px 12px;background:var(--ws-surface,#fffef8);min-width:0}
+.review-entry-dialog input{width:100%;box-sizing:border-box;font-size:16px}
+.review-entry-dialog p{font-size:12px;min-height:1.4em;line-height:1.4;margin:0;color:#8b613b}
+.review-entry-dialog form>div{display:flex;justify-content:flex-end;gap:8px}
+.review-entry-dialog button{cursor:pointer;font-size:12px}
+.review-entry-dialog .review-entry-primary{background:var(--ws-accent,#285e4c);color:#fff}
+.review-entry-dialog :focus-visible{outline:2px solid #74927f;outline-offset:2px}
+.review-actions>div{display:grid!important;gap:0!important;padding:5px!important;min-width:180px!important;max-height:min(60dvh,calc(100dvh - 150px));overflow:auto;font-size:12px}
+.review-toolbar>.review-actions{margin-left:auto}
+.review-actions>div>button,.review-actions>div>a{display:block;width:100%;box-sizing:border-box;text-align:left;text-decoration:none;border:0!important;border-radius:3px!important;background:transparent!important;padding:9px 12px!important;cursor:pointer}
+.review-actions>div>button:hover,.review-actions>div>a:hover{background:var(--ws-active,#e7ede7)!important}
+.review-actions [data-reviewer-switch]{border-bottom:1px solid var(--ws-line)!important;border-radius:0!important}
+.review-actions [data-reviewer-name]{float:right;max-width:calc(100% - 50px);overflow-wrap:anywhere;text-align:right;color:var(--ws-muted)}
+.review-actions>div>details{padding:8px 12px;font-size:11px}
+.review-actions>div>details p{margin:8px 0;line-height:1.7}
+.review-choice-list{border:1px solid var(--ws-line);border-radius:5px;background:var(--ws-surface);padding:6px 9px;font:inherit;color:inherit;max-width:100%}
+.task-action-menu{position:relative;font-size:12px}
+.task-action-menu>summary{cursor:pointer;list-style:none;padding:8px 10px;border:1px solid var(--ws-line);border-radius:5px;background:var(--ws-surface)}
+.task-action-menu>div{position:absolute;right:0;top:100%;z-index:35;max-width:280px;max-height:65dvh;overflow:auto;background:var(--ws-surface);border:1px solid var(--ws-line);border-radius:5px;box-shadow:0 4px 20px #15372b25}
+.review-actions>summary{white-space:nowrap}
+.page-source-controls>select:last-child{margin-left:auto}
+#gapTasksApp .task-filter-row{justify-content:space-between}
+#gapTasksApp .task-catalog-head .review-choice-list{font-size:12px;padding:6px 9px}
+.gap-texts{grid-template-rows:auto auto minmax(110px,1fr)}
+.gap-evidence{max-height:25dvh}
+.gap-evidence>p{margin-bottom:4px}
+.gap-evidence summary{cursor:pointer}
+.compare-item-heading>select{font-size:11px!important;padding:4px 7px!important}
+.review-feedback-heading>select{font-size:12px!important;padding:4px 8px!important}
+.compare-toolbar>select{max-width:160px!important}
+@media(max-width:760px){.compare-toolbar>select{max-width:110px!important}.gap-texts{grid-template-rows:auto auto minmax(90px,1fr)}}
+@media(max-height:560px){.gap-texts{grid-template-rows:auto auto minmax(80px,1fr)}.gap-evidence{max-height:18dvh}}
+@media(max-height:560px){.review-entry-dialog{padding:15px}.review-entry-dialog h2{font-size:19px;margin:0}.review-entry-dialog form{gap:6px}}

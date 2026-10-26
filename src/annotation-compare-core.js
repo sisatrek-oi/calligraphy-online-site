@@ -52,3 +52,6 @@ export const decisionResolved=r=>Boolean(r&&r.choice!=='defer');
 export function comparisonTextParts(text,start,end,context=240){
  if(!range(text,start,end))fail('显示差异位置无效。');let a=Math.max(0,start-context),z=Math.min(text.length,end+context);if(!validBoundary(text,a))a--;if(!validBoundary(text,z))z++;return {before:text.slice(a,start),value:text.slice(start,end),after:text.slice(end,z),leading:a>0,trailing:z<text.length};
 }
+
+// Punctuation records remain valid for historical import/export, outside the active task queue.
+export const comparisonNeedsReview=item=>Boolean(item&&item.kind!=='punctuation');

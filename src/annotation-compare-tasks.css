@@ -1,0 +1,15 @@
+/* Reuse the existing book directory; this route has no working editor. */
+#compareApp.review-task-directory{grid-template-rows:auto auto minmax(0,1fr) auto;gap:16px;padding:24px clamp(18px,3vw,44px) 12px;font-size:14px;line-height:1.6}
+#compareApp.review-task-directory>.task-heading{grid-row:1}
+#compareApp.review-task-directory>.task-resume{grid-row:2;padding:15px 20px}
+#compareApp.review-task-directory>.task-body{grid-row:3;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+#compareApp.review-task-directory>footer{grid-row:4}
+#compareApp.review-task-directory .action-button{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:5px;background:var(--ws-accent);color:white;text-decoration:none;font-size:12px}
+#compareApp.review-task-directory .task-resume-title{font-size:11px}
+#reviewTaskTotals{color:var(--ws-muted);font-size:12px;white-space:nowrap}
+#compareApp.review-task-directory .task-search input{width:100%;font-size:13px;padding:9px 12px}
+#compareApp.review-task-directory .task-filter-row{padding-bottom:8px;justify-content:flex-start}
+#reviewDirectoryFiltered{margin-left:auto}
+#compareApp.review-task-directory .task-filter-row select{font-size:12px}
+@media(max-width:760px){#compareApp.review-task-directory{gap:9px;padding:10px;max-height:calc(100dvh - 42px)}#compareApp.review-task-directory .task-resume{padding:10px;gap:8px;align-items:start}#compareApp.review-task-directory .task-resume-copy{display:flex;flex-direction:column;gap:4px}#compareApp.review-task-directory .task-resume-copy .action-button{align-self:start}#compareApp.review-task-directory h2{font-size:15px}#reviewTaskTotals{font-size:10px;white-space:normal;max-width:85px}#compareApp.review-task-directory .task-work>summary>small{font-size:9px}}
+@media(max-height:560px){#compareApp.review-task-directory{gap:6px;padding-block:6px}#compareApp.review-task-directory .task-heading h1{font-size:18px;margin:0}#compareApp.review-task-directory .task-resume{padding:7px 12px}#compareApp.review-task-directory .task-resume-title{display:none}#compareApp.review-task-directory .task-book>summary{height:58px;padding:8px 14px}#compareApp.review-task-directory .task-book>.task-catalog{height:calc(100% - 58px)}#compareApp.review-task-directory .task-catalog-head{padding:5px 12px 0}#compareApp.review-task-directory .task-search{margin:0}#compareApp.review-task-directory .task-search input{padding:4px 8px}#compareApp.review-task-directory .task-filter-row{padding-bottom:4px;margin-top:4px}}

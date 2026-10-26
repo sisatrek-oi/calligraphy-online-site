@@ -7,3 +7,17 @@
 @media(max-height:560px){#compareApp{padding-top:4px;gap:4px}.compare-heading p,.compare-heading>span{display:none}.compare-heading h1{font-size:16px}.compare-toolbar{padding:3px 0}.compare-toolbar #compareSearch{width:90px}.compare-pdf>p,.compare-texts>p,.compare-source header span{display:none}.compare-texts{grid-template-rows:auto minmax(0,1fr) minmax(0,1fr)}.compare-pdf>header,.compare-source>header{padding:4px}.compare-scan-controls{max-height:26px;overflow:auto;padding-block:3px}.compare-source h3,.compare-pdf h2{font-size:12px}.compare-source-text{font-size:15px;padding:5px}.compare-decision{padding:5px;max-height:27dvh}.compare-decision>p{display:none}.compare-decision textarea{min-height:35px;max-height:55px}.compare-decision label{gap:3px}#compareApp>footer{min-height:16px}.compare-item-heading button{padding:3px!important}}
 .compare-heading{grid-row:1}.compare-toolbar{grid-row:2}.compare-workspace{grid-row:3}.compare-decision{grid-row:4}#compareApp>footer{grid-row:5}#compareRecovery{grid-row:6}
 @media(max-height:560px){.compare-heading{display:none}}
+
+/* Direct version selection belongs to each source, leaving the full workspace for PDF/text. */
+#compareApp.compare-direct-choice{grid-template-rows:auto auto minmax(0,1fr) auto auto}
+#compareApp.compare-direct-choice>footer{grid-row:4;justify-content:flex-start;flex-wrap:wrap;gap:6px 12px}
+#compareApp.compare-direct-choice #compareRecovery{grid-row:5}
+.compare-direct-choice #compareJudgmentStatus{margin-left:auto;color:var(--ws-muted)}
+.compare-direct-choice .compare-source>header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px}
+.compare-direct-choice .compare-source>header>span{grid-column:1/-1;max-width:100%;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.compare-direct-choice .compare-source>header>a{grid-column:1/-1;justify-self:start}
+#compareApp .compare-adopt{font-size:12px;white-space:nowrap;border-color:var(--ws-accent);color:var(--ws-accent)}
+#compareApp .compare-adopt[aria-pressed=true]{color:white;background:var(--ws-accent)}
+.compare-direct-choice #compareSavedDetail{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:40dvh;overflow:auto}
+@media(max-width:760px){#compareApp .compare-adopt{font-size:10px;padding:4px 5px}.compare-direct-choice .compare-source>header{gap:4px}.compare-direct-choice .compare-source h3{font-size:11px}.compare-direct-choice #compareJudgmentStatus{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media(max-width:480px){.compare-direct-choice .compare-source>header{grid-template-columns:minmax(0,1fr)}.compare-direct-choice .compare-source>header>button{justify-self:stretch}}

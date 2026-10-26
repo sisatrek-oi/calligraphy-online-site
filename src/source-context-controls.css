@@ -1,0 +1,31 @@
+/* Keep the source anchor independent of the scan being inspected. */
+.page-source-controls{display:flex;align-items:center;flex-wrap:wrap;gap:5px 8px;padding:8px 10px;font-size:11px;flex-shrink:0;background:var(--ws-active,#e7ede7);border-bottom:1px solid var(--ws-line)}
+.page-source-controls strong{font-weight:600;white-space:nowrap}
+.page-source-controls>span{font-variant-numeric:tabular-nums}
+.page-source-controls button,.page-source-controls select{font-size:11px!important;padding:4px 7px!important}
+.page-source-controls button[aria-pressed=true]{border-color:var(--ws-accent)!important}
+.page-source-controls>button:last-child{margin-left:auto}
+.page-context-controls{flex-shrink:0;min-width:0;border-bottom:1px solid var(--ws-line);font-size:11px}
+.page-context-controls>summary{cursor:pointer;padding:7px 10px;line-height:1.5}
+.page-context-controls>summary span{margin-left:8px;color:var(--ws-muted);font-size:10px;font-variant-numeric:tabular-nums}
+.page-context-controls>summary:focus-visible{outline:2px solid #74927f;outline-offset:-2px}
+.page-context-controls[open]>summary{padding-bottom:3px}
+.page-context-controls .compare-scan-controls,.page-context-controls .review-pdf-controls{max-height:80px;overflow:auto;padding:4px 10px 8px}
+@media(max-width:760px){
+ .review-pdf>.review-panel-heading{padding:5px;gap:5px}
+ .review-pdf>.review-panel-heading h2{font-size:13px}
+ .page-source-controls{padding:5px;gap:4px;font-size:10px}
+ .page-source-controls strong{flex-basis:100%}
+ .page-source-controls button,.page-source-controls select{font-size:10px!important;padding:3px 4px!important}
+ .page-context-controls>summary{padding:5px;font-size:10px}
+ .page-context-controls>summary span{display:block;margin-left:12px;font-size:9px}
+ .page-context-controls .compare-scan-controls,.page-context-controls .review-pdf-controls{padding:3px 5px 5px;max-height:64px}
+}
+@media(max-height:560px){
+ .review-feedback-open .review-workspace{grid-template-rows:minmax(80px,1.25fr) minmax(100px,.8fr)}
+ .page-source-controls{padding:3px 5px;gap:3px 5px;font-size:10px}
+ .page-source-controls strong{flex-basis:auto}
+ .page-source-controls button,.page-source-controls select{font-size:10px!important;padding:2px 4px!important}
+ .page-context-controls>summary{padding:3px 5px;font-size:10px}
+ .page-context-controls .compare-scan-controls,.page-context-controls .review-pdf-controls{max-height:36px;padding:2px 5px}
+}
