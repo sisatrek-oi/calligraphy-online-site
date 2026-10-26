@@ -10,7 +10,7 @@ const read = name => fs.readFileSync(new URL(`../screening-data/${name}`, import
 const releases = [1, 2].map(part => JSON.parse(read(`part-${part}-collated.json`)));
 const sha = text => crypto.createHash('sha256').update(text).digest('hex');
 
-test('350 reviewed pages retain source hashes and honest completion labels including newly reviewed 329', () => {
+test('484 reviewed pages retain source hashes and honest completion labels including newly reviewed 329', () => {
   let completed = 0, changes = 0;
   for (const release of releases) {
     const summary = teamRelease.parts[release.part];
@@ -34,8 +34,8 @@ test('350 reviewed pages retain source hashes and honest completion labels inclu
       assert.ok(csv.includes(`${page.page},${page.status},${page.corrections.length},${page.pending.length},${page.reviewedAt}`));
     }
   }
-  assert.equal(completed, 310); assert.equal(changes, 83);
-  assert.deepEqual(releases[1].pages.map(p=>p.page), [...Array.from({length:169},(_,i)=>259+i),...Array.from({length:46},(_,i)=>461+i)]);
+  assert.equal(completed, 409); assert.equal(changes, 83);
+  assert.deepEqual(releases[1].pages.map(p=>p.page), [...Array.from({length:169},(_,i)=>259+i),...Array.from({length:67},(_,i)=>461+i)]);
 });
 
 test('published corrections are default only for pages without a personal draft; metrics stay unchanged', () => {

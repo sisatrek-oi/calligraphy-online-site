@@ -15,9 +15,9 @@ export function publicationLabel(item) {
   return info ? info.pending ? `已修订·待核${info.pending}处` : '已修改完毕' : '';
 }
 // Counts are verified against the versioned per-page sources by regression tests.
-export const teamRelease = { date: '2026-10-23', parts: {
-  1: { pages: 135, complete: 127, pending: 8 },
-  2: { pages: 215, complete: 183, pending: 32 },
-  3: { pages: 155, complete: 142, pending: 13 },
-  4: { pages: 86, complete: 75, pending: 11 },
+export const teamRelease = { date: '2026-10-26', parts: {
+  1: { pages: 248, complete: 212, pending: 36 },
+  2: { pages: 236, complete: 197, pending: 39 },
+  3: { pages: 249, complete: 227, pending: 22 },
+  4: { pages: 195, complete: 180, pending: 15 },
 } };

@@ -5,21 +5,21 @@ import { readLocalTraces, filterRecords, summarize, replacementKind } from '../s
 const returned=JSON.parse(fs.readFileSync(new URL('../review-metrics-data.json',import.meta.url),'utf8'));
 const storage=value=>({getItem:key=>key.endsWith('-3')?JSON.stringify(value):null,setItem(){throw Error('must remain read-only');}});
 test('returned source snapshot retains exact evidence counts',()=>{
-  assert.deepEqual(summarize(returned.records),{confirmations:591,notes:70,replacements:22,detailedPages:85});
-  assert.deepEqual([1,2,3,4].map(part=>summarize(filterRecords(returned.records,{part})).confirmations),[135,215,155,86]);
-  assert.equal(Object.keys(returned.sources).length,79);
+  assert.deepEqual(summarize(returned.records),{confirmations:928,notes:117,replacements:89,detailedPages:152});
+  assert.deepEqual([1,2,3,4].map(part=>summarize(filterRecords(returned.records,{part})).confirmations),[248,236,249,195]);
+  assert.equal(Object.keys(returned.sources).length,142);
 });
 test('returned replacements and categories retain originals',()=>{
   const records=filterRecords(returned.records,{kind:'replacement'});
   assert.deepEqual(records.slice(0,2).map(r=>[r.page,r.before,r.after]),[[548,'沓','骫'],[580,'软','欤']]);
   assert.ok(records.slice(0,2).every(r=>r.timeKind==='page'));
-  assert.equal(filterRecords(returned.records,{kind:'note',category:'看不清／打不出／缺字占位'}).length,28);
+  assert.equal(filterRecords(returned.records,{kind:'note',category:'看不清／打不出／缺字占位'}).length,42);
 });
 test('filters intersect and do not mutate input',()=>{
   const original=JSON.stringify(returned);
   assert.equal(filterRecords(returned.records,{part:3,kind:'replacement',query:'沓'}).length,1);
-  assert.equal(filterRecords(returned.records,{part:1,kind:'replacement'}).length,20);
-  assert.equal(filterRecords(returned.records,{kind:'details'}).length,92);
+  assert.equal(filterRecords(returned.records,{part:1,kind:'replacement'}).length,87);
+  assert.equal(filterRecords(returned.records,{kind:'details'}).length,206);
   assert.equal(JSON.stringify(returned),original);
 });
 test('local records preserve source, unknown authors, Unicode, stale history and time meaning',()=>{

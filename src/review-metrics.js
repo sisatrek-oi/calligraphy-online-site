@@ -4,7 +4,7 @@ import { createTxtView } from './review-txt.js?v=release-20261022';
 const ui = window.WorkspaceUI, esc = ui.esc, host = document.querySelector('#metricsContent');
 ui.mount('proof');
 const txtView = createTxtView(host);
-const state = { source: 'txt', returned: null, records: [], problems: [], kind: 'details', category: '', query: '', error: '' };
+const state = { source: 'txt', returned: null, returnedDate: '', records: [], problems: [], kind: 'details', category: '', query: '', error: '' };
 let request = 0;
 function timeLabel(record) {
   if (!record.at) return '时间未记录';
@@ -36,7 +36,7 @@ function render() {
   const editCategories=['替换','增补','删除'];
   const editCounts=editCategories.map(category=>scope.filter(r=>r.kind==='replacement'&&replacementKind(r)===category).length);
   const filterCategories=returned ? [...categories,...editCategories] : categories;
-  host.innerHTML = `<p class="metrics-intro">${returned ? '已回收快照 · 截至 2026-10-21 · 原成员 TXT／CSV／JSON。重复页去重，仅统计明确保留的人工痕迹。' : '本浏览器保存的确认、备注与直接替换记录。'} 仅展示当前来源的总数据。两种来源分别查看，不相加；记录不完整，人工总修改次数未知。</p>
+  host.innerHTML = `<p class="metrics-intro">${returned ? `已回收快照 · 截至 ${esc(state.returnedDate)} · 原成员 TXT／CSV／JSON。重复页去重，仅统计明确保留的人工痕迹。` : '本浏览器保存的确认、备注与直接替换记录。'} 仅展示当前来源的总数据。两种来源分别查看，不相加；记录不完整，人工总修改次数未知。</p>
     ${state.problems.length ? `<div class="metrics-error" role="alert">${state.problems.map(esc).join('；')}。以下仅展示可读取部分，不能视为完整统计。</div>` : ''}
     <div class="metrics-stats" aria-label="当前来源总数据">${[['逐页确认',summary.confirmations,'页'],['人工备注',summary.notes,'页'],['直接替换记录',summary.replacements,'条'],['有备注或替换细节',summary.detailedPages,'页']].map(([label,value,unit])=>`<div class="metrics-stat"><span>${label}</span><strong>${value}</strong><small>${unit}</small></div>`).join('')}</div>
     <div class="metrics-charts">
@@ -68,11 +68,12 @@ async function load() {
     } else {
       if (!state.returned) {
         state.records=null;render();
-        const response=await fetch('./review-metrics-data.json?v=member5-mark45-20261023');
+        const response=await fetch('./review-metrics-data.json?v=member5-return-20261026');
         if(!response.ok)throw Error('已回收人工记录读取失败');
         const data=await response.json();
         if(data.version!==1 || !Array.isArray(data.records) || data.records.some(r=>!recordLabels[r.kind] || !Number.isInteger(r.page) || ![1,2,3,4].includes(r.part)))throw Error('已回收人工记录格式无效');
         state.returned=data.records;
+        state.returnedDate=typeof data.date==='string' ? data.date : '日期未记录';
       }
       if(id!==request)return;
       state.records=state.returned;

@@ -12,9 +12,9 @@ const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 const release=json('part-3-collated.json');
 const pages=new Map(release.pages.map(p=>[p.page,p]));
 
-test('third return includes exactly 75 checked pages with original text, scans and explicit unresolved glyphs',()=>{
- assert.deepEqual([...pages.keys()],[...Array.from({length:121},(_,i)=>528+i),...Array.from({length:34},(_,i)=>743+i)]);
- assert.deepEqual(teamRelease.parts[3],{pages:155,complete:142,pending:13});
+test('third-part cumulative return includes 249 checked pages with original text, scans and explicit unresolved glyphs',()=>{
+ assert.deepEqual([...pages.keys()],Array.from({length:249},(_,i)=>528+i));
+ assert.deepEqual(teamRelease.parts[3],{pages:249,complete:227,pending:22});
  assert.deepEqual(release.pages.filter(p=>p.page<=602&&p.pending.length).map(p=>p.page),[537,555,566,586]);
  assert.equal(release.pages.filter(p=>p.page<=602).reduce((sum,p)=>sum+p.pending.length,0),6);
  for(const p of release.pages){
@@ -42,7 +42,7 @@ test('member questions are resolved from visible glyphs, while historical glyphs
  assert.match(pages.get(593).text,/开宝前/);
 });
 
-test('published third-part materials exclude the 25 draft pages and all later untouched pages',async()=>{
+test('published third-part materials match cumulative checked pages and retain source priorities',async()=>{
  const index=json('part-3-index.json');
  const loader=createMaterialLoader(index,{fetcher:async path=>({ok:true,json:async()=>json(path.replace('./screening-data/',''))})});
  await loader.ensureAll();

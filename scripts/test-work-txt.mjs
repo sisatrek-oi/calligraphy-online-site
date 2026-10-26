@@ -13,7 +13,7 @@ test('four public working TXT files cover all 1041 task pages exactly once and o
   assert.doesNotMatch(text,/待人工全文检查|大模型已复核/);
   total+=ids.length;marked+=states.filter(s=>s==='已标过').length;
  }
- assert.equal(total,1041);assert.equal(marked,591);
+ assert.equal(total,1041);assert.equal(marked,928);
 });
 test('working TXT retains human team text and the known split-glyph repair without inventing marks',()=>{
  const text=read('part-1-work.txt'),human=JSON.parse(read('part-1-collated.json')).pages.find(p=>p.page===5);
