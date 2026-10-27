@@ -2,6 +2,8 @@
 export const excludedPages = Object.freeze({
   1: '封面', 2: '扉页', 3: '版权页', 4: '编印信息',
   7: '目录', 8: '目录', 9: '目录', 10: '目录', 11: '目录', 12: '目录',
+  // 2026-10-27: user-approved reference archive; retain scans and saved history.
+  ...Object.fromEntries(Array.from({length:50},(_,i)=>[902+i,'索引参考资料（已归档）'])),
   1052: '封底',
 });
 export const isTaskPage = number => !Object.hasOwn(excludedPages, number);

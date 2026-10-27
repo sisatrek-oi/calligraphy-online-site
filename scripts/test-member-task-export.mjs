@@ -47,7 +47,7 @@ test('all seven members export only their assigned text, tables and JSON, with a
     const snapshot=captureMemberTask({...f,member:a.id});
     const result=unzip(await buildMemberTaskBundle({...snapshot,pagesByPart:f.pagesByPart}));
     assert.equal(result.parts.length,a.segments.length);
-    assert.equal(result.manifest.pageNumbers.length,[148,169,149,175,133,133,134][a.id-1]);
+    assert.equal(result.manifest.pageNumbers.length,[148,169,149,125,133,133,134][a.id-1]);
     for(const part of result.parts){
       const s=a.segments.find(s=>s.part===part.backup.part);
       assert.equal(part.manifest.assignment.backupScope,'member-segment');

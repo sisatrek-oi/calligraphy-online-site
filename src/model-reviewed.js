@@ -1,4 +1,4 @@
-import { isVerified } from './collation-core.js?v=fulltext-20261019';
+import { isVerified } from './collation-core.js?v=index-archive-20261027';
 // A machine working text is never a human decision. Keep raw OCR immutable.
 const hash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 export function validModelReview(value, page) {

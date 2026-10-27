@@ -1,5 +1,5 @@
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
-import {proposeStructure,deriveStructure} from './annotation-structure-core.js?v=annotation-release-20261024';
+import {proposeStructure,deriveStructure} from './annotation-structure-core.js?v=index-archive-20261027';
 
 export const reviewIssueTypes={missing:'漏页／漏文',text:'文字有误',context:'上下文不衔接',source:'原图定位不对应',other:'其他疑点'};
 export function reviewPdfPages(chapter,byPage){

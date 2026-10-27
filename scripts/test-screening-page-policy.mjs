@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { excludedPages, isTaskPage, taskPageCount, taskOcrHref } from '../src/screening-page-policy.js';
 import { exportText } from '../src/collation-core.js';
 
-const excluded = [1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 1052];
+const excluded = [1, 2, 3, 4, 7, 8, 9, 10, 11, 12, ...Array.from({length:50},(_,i)=>902+i), 1052];
 const ranges = [[1, 258], [259, 527], [528, 776], [777, 1052]];
 const read = name => fs.readFileSync(new URL(`../screening-data/${name}`, import.meta.url), 'utf8');
 const blocks = text => {
@@ -12,10 +12,10 @@ const blocks = text => {
   return new Map(headings.map((h, i) => [Number(h[1]), text.slice(h.index, headings[i + 1]?.index ?? text.length)]));
 };
 
-test('only the 11 inspected pages are excluded; original page labels stay intact', () => {
+test('only the 11 front/back matter pages and 50 archived index pages are excluded; original page labels stay intact', () => {
   assert.deepEqual(Object.keys(excludedPages).map(Number), excluded);
-  assert.deepEqual(ranges.map(range => taskPageCount(...range)), [248, 269, 249, 275]);
-  assert.equal(taskPageCount(1, 1052), 1041);
+  assert.deepEqual(ranges.map(range => taskPageCount(...range)), [248, 269, 249, 225]);
+  assert.equal(taskPageCount(1, 1052), 991);
   const pages = JSON.parse(read('part-1.json')).pages.filter(p => isTaskPage(p.page));
   assert.deepEqual(pages.slice(0, 3).map(p => [p.page, p.local]), [[5, 5], [6, 6], [13, 13]]);
   for (const page of [5, 6, 13, 16, 1046, 1051]) assert.ok(isTaskPage(page));
@@ -40,5 +40,5 @@ test('all task downloads retain complete source blocks without removed pages', (
     assert.deepEqual(actual, expected);
     count += actual.size;
   }
-  assert.equal(count, 1041);
+  assert.equal(count, 991);
 });

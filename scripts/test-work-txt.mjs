@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
 import { isTaskPage } from '../src/screening-page-policy.js';
 const read=name=>fs.readFileSync(new URL('../screening-data/'+name,import.meta.url),'utf8');
-test('four public working TXT files cover all 1041 task pages exactly once and only contain human statuses',()=>{
+test('four public working TXT files cover all 991 task pages exactly once and only contain human statuses',()=>{
  let total=0,marked=0;
  for(let part=1;part<=4;part++){
   const index=JSON.parse(read(`part-${part}-index.json`)),text=read(`part-${part}-work.txt`);
@@ -13,7 +13,7 @@ test('four public working TXT files cover all 1041 task pages exactly once and o
   assert.doesNotMatch(text,/待人工全文检查|大模型已复核/);
   total+=ids.length;marked+=states.filter(s=>s==='已标过').length;
  }
- assert.equal(total,1041);assert.equal(marked,949);
+ assert.equal(total,991);assert.equal(marked,949);
 });
 test('working TXT retains human team text and the known split-glyph repair without inventing marks',()=>{
  const text=read('part-1-work.txt'),human=JSON.parse(read('part-1-collated.json')).pages.find(p=>p.page===5);

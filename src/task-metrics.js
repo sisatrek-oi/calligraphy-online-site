@@ -1,6 +1,6 @@
-import { isVerified } from './collation-core.js?v=20261013-typo-only';
-import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
-import { humanMarkLabel } from './human-mark.js?v=human-mark-20261019';
+import { isVerified } from './collation-core.js?v=index-archive-20261027';
+import { isTaskPage } from './screening-page-policy.js?v=index-archive-20261027';
+import { humanMarkLabel } from './human-mark.js?v=index-archive-20261027';
 
 export const METRICS_VERSION = 'collation-v1';
 export const rate = (n, d) => d ? Math.round(n / d * 10000) / 100 : null;

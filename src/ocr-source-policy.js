@@ -1,5 +1,5 @@
-import { makeDraft } from './collation-core.js?v=fulltext-20261019';
-import { validModelReview } from './model-reviewed.js?v=fulltext-20261019';
+import { makeDraft } from './collation-core.js?v=index-archive-20261027';
+import { validModelReview } from './model-reviewed.js?v=index-archive-20261027';
 const compact = text => String(text ?? '').replace(/\s/gu, '');
 // Layout may only change whitespace. It must never introduce or omit glyphs.
 export function originalDraftText(item) {

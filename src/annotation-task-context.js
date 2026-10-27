@@ -1,6 +1,6 @@
-import { annotationSource, annotationHref } from './annotation-source.js?v=release-20261022';
-import { segmentHasPage } from './team-assignments.js?v=release-20261022';
-import { readProgress } from './delivery-core.js?v=release-20261022';
+import { annotationSource, annotationHref } from './annotation-source.js?v=index-archive-20261027';
+import { segmentHasPage } from './team-assignments.js?v=index-archive-20261027';
+import { readProgress } from './delivery-core.js?v=index-archive-20261027';
 import { annotationView } from './theory-annotations.js?v=release-20261022';
 
 export function annotationTaskContext(storage,assignment,indexes,{includePages=false}={}) {

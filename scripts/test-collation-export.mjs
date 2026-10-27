@@ -1,3 +1,4 @@
+import { isTaskPage } from '../src/screening-page-policy.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -8,7 +9,7 @@ import { pageMetrics } from '../src/task-metrics.js';
 function fixture(part = 1) {
   const [start,end] = [[1,258],[259,527],[528,776],[777,1052]][part-1];
   const pages = Array.from({length:end-start+1},(_,i)=>({page:start+i,local:i+1,ocr:'甲乙。'}));
-  const active = pages.filter(p=>![1,2,3,4,7,8,9,10,11,12,1052].includes(p.page));
+  const active = pages.filter(p=>isTaskPage(p.page));
   const first = active[0].page, second = active[1].page;
   const progress = { version:1, part, person:'校验人,甲',lastPage:first,savedAt:'2026-10-17T01:02:03.000Z',
     reviews:{[first]:{seen:true,question:'第一行\n=待核,"引号"',candidates:[{author:'某书家',style:'篆书',quote:'甲乙',basis:'形态',uncertainty:'待核'}],
@@ -47,8 +48,8 @@ test('one standard ZIP contains all eight files and a verifiable manifest for ea
     const input=fixture(part),before=JSON.stringify(input);
     const bundle=await buildCollationBundle(input), out=unzip(bundle);
     assert.match(bundle.name,new RegExp(`^第${part}份-校勘交付包-.*\\.zip$`));
-    assert.equal(bundle.manifest.pageNumbers.length,[248,269,249,275][part-1]);
-    assert.deepEqual(bundle.manifest.counts,{verified:1,draft:1,unstarted:[246,267,247,273][part-1]});
+    assert.equal(bundle.manifest.pageNumbers.length,[248,269,249,225][part-1]);
+    assert.deepEqual(bundle.manifest.counts,{verified:1,draft:1,unstarted:[246,267,247,223][part-1]});
     assert.equal(out.checks.length,bundle.manifest.pageNumbers.length);
     assert.match(out[`第${part}份-逐页校勘.txt`],/□【待核：𠮷】/u);
     assert.deepEqual(JSON.parse(out[`第${part}份-初筛进度备份.json`]),input.progress);
@@ -107,7 +108,7 @@ test('one click freezes progress before loading; concurrent clicks skip, failure
 });
 
 test('all ten member segments export only assigned text/tables while retaining the full original-part JSON',async()=>{
-  const cases=[[1,1,148,5,158],[2,2,169,259,427],[3,3,149,528,676],[4,4,175,777,951],
+  const cases=[[1,1,148,5,158],[2,2,169,259,427],[3,3,149,528,676],[4,4,125,777,901],
     [5,1,100,159,258],[5,2,33,428,460],[6,2,67,461,527],[6,3,66,677,742],[7,3,34,743,776],[7,4,100,952,1051]];
   for(const [member,part,count,start,end]of cases){
     const input=fixture(part),before=JSON.stringify(input);

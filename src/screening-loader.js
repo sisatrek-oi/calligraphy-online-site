@@ -1,6 +1,6 @@
 import { validCollation, publicationSummary } from './team-collation.js?v=member5-mark45-20261023';
 import { validTargeted, targetedSummary } from './targeted-ocr.js?v=20261018-part3';
-import { validModelReview, modelReviewSummary } from './model-reviewed.js?v=fulltext-20261019';
+import { validModelReview, modelReviewSummary } from './model-reviewed.js?v=index-archive-20261027';
 // Keep the deadline active through body parsing, not just response headers.
 export async function readJson(url, { fetcher = fetch, timeoutMs = 15000 } = {}) {
   const controller = new AbortController();

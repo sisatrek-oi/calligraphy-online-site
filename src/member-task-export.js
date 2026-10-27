@@ -1,5 +1,5 @@
-import { assignmentFor, assignmentSegment, segmentHasPage } from './team-assignments.js?v=release-20261022';
-import { buildCollationBundle } from './collation-export.js?v=release-20261022';
+import { assignmentFor, assignmentSegment, segmentHasPage } from './team-assignments.js?v=index-archive-20261027';
+import { buildCollationBundle } from './collation-export.js?v=index-archive-20261027';
 import { zipStore } from './zip-store.js?v=20261018-bundle';
 
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -70,8 +70,12 @@ export function mergeMemberBackup(saved, current, member = null) {
   if (!scope || scope.type!=='member-segment' || scope.part!==current.part) throw new Error('本人范围备份无效。');
   if (member !== null && scope.member !== member) throw new Error('备份不属于当前成员，请从对应成员任务恢复。');
   const segment=assignmentSegment(scope.member,current.part);
-  if (!segment || scope.start!==segment.start || scope.end!==segment.end ||
-      Object.entries(saved.reviews).some(([page,review])=>String(Number(page))!==page || !segmentHasPage(segment,Number(page)) ||
+  // Before the index archive, member 4 backups covered 777–951. Restore those
+  // historical records without making the archived pages active tasks again.
+  const legacyIndexScope=scope.member===4 && current.part===4 && scope.start===777 && scope.end===951;
+  const allowedPage=n=>segmentHasPage(segment,n) || (legacyIndexScope && n>=902 && n<=951);
+  if (!segment || scope.start!==segment.start || (scope.end!==segment.end && !legacyIndexScope) ||
+      Object.entries(saved.reviews).some(([page,review])=>String(Number(page))!==page || !allowedPage(Number(page)) ||
         !review || typeof review!=='object' || Array.isArray(review))) throw new Error('本人范围备份包含越界页码或无效记录，原进度未改变。');
   return clone({ ...current, person:saved.person || current.person, lastPage:saved.lastPage ?? current.lastPage,
     reviews:{...current.reviews,...saved.reviews} });

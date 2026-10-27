@@ -1,10 +1,10 @@
 import {reviewerName,reviewerMenu,bindReviewerMenu} from './review-entry.js?v=directory-entry-20261026';
-import {readJson} from './screening-loader.js?v=member5-mark45-20261023';
-import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest} from './annotation-corpus.js?v=annotation-release-20261024';
-import {esc} from './annotation-chapters.js?v=member5-mark45-20261023';
+import {readJson} from './screening-loader.js?v=index-archive-20261027';
+import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest} from './annotation-corpus.js?v=index-archive-20261027';
+import {esc} from './annotation-chapters.js?v=index-archive-20261027';
 import {readCorpusAssignments,assignmentScope,assignmentsUnchanged} from './annotation-assignments.js?v=annotation-release-20261024';
-import {structureKey,emptyStructureFeedback,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=annotation-release-20261024';
-import {reviewIssueTypes,reviewRuns,reviewDomSelection,reviewPdfPages,pageRanges,proposeReviewNote,reviewIssues,reviewDecorations} from './annotation-review-core.js?v=review-quick-20261024';
+import {structureKey,emptyStructureFeedback,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=index-archive-20261027';
+import {reviewIssueTypes,reviewRuns,reviewDomSelection,reviewPdfPages,pageRanges,proposeReviewNote,reviewIssues,reviewDecorations} from './annotation-review-core.js?v=index-archive-20261027';
 
 const app=document.querySelector('#sourceReviewApp'),params=new URLSearchParams(location.search),mode=corpusMode(location.search),memberId=params.get('assignee')||'',key=structureKey(mode),initialHash=location.hash,$=id=>app.querySelector('#'+id);
 window.WorkspaceUI.mount('source-review');

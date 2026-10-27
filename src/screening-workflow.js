@@ -1,4 +1,4 @@
-import { isVerified } from './collation-core.js?v=20261013-typo-only';
+import { isVerified } from './collation-core.js?v=index-archive-20261027';
 
 export function pageStatus(item, reviews) {
   const review = reviews[item.page] || {};

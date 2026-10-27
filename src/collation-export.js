@@ -1,10 +1,10 @@
-import { CHECKS, exportText, isVerified, validateDraft } from './collation-core.js?v=human-mark-20261019';
-import { metricsCsv, pageMetrics } from './task-metrics.js?v=human-mark-20261019';
-import { progressSummary } from './screening-workflow.js?v=20261013-typo-only';
-import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
+import { CHECKS, exportText, isVerified, validateDraft } from './collation-core.js?v=index-archive-20261027';
+import { metricsCsv, pageMetrics } from './task-metrics.js?v=index-archive-20261027';
+import { progressSummary } from './screening-workflow.js?v=index-archive-20261027';
+import { isTaskPage } from './screening-page-policy.js?v=index-archive-20261027';
 import { zipStore } from './zip-store.js?v=20261018-bundle';
-import { assignmentFor, assignmentSegment, assignmentPages, assignmentRevision } from './team-assignments.js?v=release-20261022';
-import { humanMarkLabel } from './human-mark.js?v=human-mark-20261019';
+import { assignmentFor, assignmentSegment, assignmentPages, assignmentRevision } from './team-assignments.js?v=index-archive-20261027';
+import { humanMarkLabel } from './human-mark.js?v=index-archive-20261027';
 
 const encoder = new TextEncoder();
 const clone = value => JSON.parse(JSON.stringify(value));

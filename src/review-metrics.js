@@ -1,5 +1,6 @@
-import { readLocalTraces, filterRecords, summarize, replacementKind, recordLabels } from './review-metrics-core.js?v=release-20261022';
-import { createTxtView } from './review-txt.js?v=release-20261022';
+import { taskPageCount } from './screening-page-policy.js?v=index-archive-20261027';
+import { readLocalTraces, filterRecords, summarize, replacementKind, recordLabels } from './review-metrics-core.js?v=index-archive-20261027';
+import { createTxtView } from './review-txt.js?v=index-archive-20261027';
 
 const ui = window.WorkspaceUI, esc = ui.esc, host = document.querySelector('#metricsContent');
 ui.mount('proof');
@@ -38,6 +39,7 @@ function render() {
   const filterCategories=returned ? [...categories,...editCategories] : categories;
   host.innerHTML = `<p class="metrics-intro">${returned ? `已回收快照 · 截至 ${esc(state.returnedDate)} · 原成员 TXT／CSV／JSON。重复页去重，仅统计明确保留的人工痕迹。` : '本浏览器保存的确认、备注与直接替换记录。'} 仅展示当前来源的总数据。两种来源分别查看，不相加；记录不完整，人工总修改次数未知。</p>
     ${state.problems.length ? `<div class="metrics-error" role="alert">${state.problems.map(esc).join('；')}。以下仅展示可读取部分，不能视为完整统计。</div>` : ''}
+    ${returned ? `<p class="metrics-intro" data-proofreading-scope>原文校对已确认 ${summary.confirmations} / ${taskPageCount(1,1052)} 页（${(summary.confirmations/taskPageCount(1,1052)*100).toFixed(2)}%），剩余 ${taskPageCount(1,1052)-summary.confirmations} 页；902—951页50页索引已归档。</p>` : ''}
     <div class="metrics-stats" aria-label="当前来源总数据">${[['逐页确认',summary.confirmations,'页'],['人工备注',summary.notes,'页'],['直接替换记录',summary.replacements,'条'],['有备注或替换细节',summary.detailedPages,'页']].map(([label,value,unit])=>`<div class="metrics-stat"><span>${label}</span><strong>${value}</strong><small>${unit}</small></div>`).join('')}</div>
     <div class="metrics-charts">
     <section class="workspace-panel"><h2>${returned ? '人工备注说了什么' : '直接替换做了什么'}</h2><p>${returned ? '按备注原话分类 · 单位：有该类备注的页数' : '按保留的替换记录分类 · 单位：条'} · 点击查看明细</p><div class="metrics-bars">${counts.some(Boolean) ? categories.map((label,i)=>bar(label,counts[i],Math.max(...counts),`data-chart-category="${esc(label)}"`,state.category===label,true)).join('') : '<div class="metrics-chart-empty">当前范围暂无此类留痕；不能据此认定未做修改。</div>'}</div></section>

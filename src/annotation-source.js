@@ -1,4 +1,4 @@
-import { isVerified } from './collation-core.js?v=human-mark-20261019';
+import { isVerified } from './collation-core.js?v=index-archive-20261027';
 
 // Annotation has a stricter source gate than the historical two-state page label.
 // A returned page with unresolved readings is not finished annotation material.

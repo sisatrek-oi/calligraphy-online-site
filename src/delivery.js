@@ -1,12 +1,12 @@
-import {captureMemberTask,buildMemberTaskBundle} from './member-task-export.js?v=release-20261022';
-import {annotationSource} from './annotation-source.js?v=release-20261022';
-import {loadReviewedPart} from './reviewed-annotation.js?v=member5-mark45-20261023';
-import {buildAnnotationBundle} from './theory-annotation-export.js?v=annotation-release-20261024';
-import {assignments,assignmentFor,assignmentHref,assignmentPages} from './team-assignments.js?v=release-20261022';
-import {readJson,createMaterialLoader} from './screening-loader.js?v=member5-mark45-20261023';
-import {buildCollationBundle} from './collation-export.js?v=release-20261022';
+import {captureMemberTask,buildMemberTaskBundle} from './member-task-export.js?v=index-archive-20261027';
+import {annotationSource} from './annotation-source.js?v=index-archive-20261027';
+import {loadReviewedPart} from './reviewed-annotation.js?v=index-archive-20261027';
+import {buildAnnotationBundle} from './theory-annotation-export.js?v=index-archive-20261027';
+import {assignments,assignmentFor,assignmentHref,assignmentPages} from './team-assignments.js?v=index-archive-20261027';
+import {readJson,createMaterialLoader} from './screening-loader.js?v=index-archive-20261027';
+import {buildCollationBundle} from './collation-export.js?v=index-archive-20261027';
 import {zipStore} from './zip-store.js?v=20261018-bundle';
-import {readProgress,validateProgress,restoreProgress,compareProgress} from './delivery-core.js?v=release-20261022';
+import {readProgress,validateProgress,restoreProgress,compareProgress} from './delivery-core.js?v=index-archive-20261027';
 const ui=window.WorkspaceUI,host=document.querySelector('#workspacePage');ui.mount('delivery');
 let remembered;try{remembered=localStorage.getItem('shulun-active-member-v1');}catch{}
 const params=new URLSearchParams(location.search);

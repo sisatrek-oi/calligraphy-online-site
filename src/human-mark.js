@@ -1,4 +1,4 @@
-import { isVerified } from './collation-core.js?v=human-mark-20261019';
+import { isVerified } from './collation-core.js?v=index-archive-20261027';
 // Only human records count. Never inspect model, OCR or risk flags here.
 export function humanMarked(item, review = {}) {
   return typeof review?.collation?.text === 'string'

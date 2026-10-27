@@ -1,3 +1,4 @@
+import { taskPageCount } from './screening-page-policy.js?v=index-archive-20261027';
 import {txtRows,filterTxtRows,txtPage} from './review-txt-core.js?v=release-20261022';
 import {analyzeHan,shapeLabels,soundLabels} from './review-han-core.js?v=release-20261022';
 import {hanMarkup,hanEvidence} from './review-han.js?v=release-20261022';
@@ -33,6 +34,7 @@ export function createTxtView(host) {
     if(state.error){host.innerHTML=`<div class="metrics-error" role="alert">${esc(state.error)}。可点击“刷新记录”重试，或切换其他视图。</div>`;return;}
     const data=state.data,s=data.summary,baseline=state.mode==='baseline';
     host.innerHTML=`<div class="txt-scope"><label>TXT对照范围<select id="txtComparison"><option value="baseline" ${baseline?'selected':''}>可还原的已保存底稿 → 回收TXT（${baseline?s.pages:data.returnedPages-data.blankPages-data.missingBaselines}页）</option><option value="ocr" ${!baseline?'selected':''}>原始OCR → 全部回收TXT正文（${baseline?data.returnedPages-data.blankPages:s.pages}页）</option></select></label></div>
+      <p class="metrics-intro" data-proofreading-scope>原文校对已确认 ${data.returnedPages} / ${taskPageCount(1,1052)} 页（${percent(data.returnedPages,taskPageCount(1,1052))}），剩余 ${taskPageCount(1,1052)-data.returnedPages} 页。902—951页索引共50页已归档，不计入校对分母。</p>
       <p class="metrics-intro">${data.returnedPages}页回收件中，${baseline?`${s.pages}页可还原已保存底稿；另外${data.missingBaselines}页非空白页缺少可核对的历史底稿，${data.blankPages}页空白标记不计正文。`:`${s.pages}页为非空白文本（含索引），${data.blankPages}页空白状态标记不计正文修改；统一使用原始OCR作对照，不代表每页实际开始编辑时的底稿。`} 只展示总数据；后续AI回图稿不纳入。</p>
       <div class="metrics-stats" aria-label="TXT整体差异统计">${[['参与对照',s.pages,'页'],['对照底稿字符',s.beforeChars,'字'],['回收TXT字符',s.afterChars,'字'],['差异字符',s.changes,'字']].map(([label,value,unit])=>`<div class="metrics-stat"><span>${label}</span><strong>${number(value)}</strong><small>${unit}</small></div>`).join('')}</div>
       <p class="txt-method">TXT修改量按两个版本之间的最小字符编辑差异统计，<strong>不等于人工操作次数或已裁定错字数</strong>。只忽略行首栏号和空白，保留标点及原字；不计算准确率。与“审核留痕”中的直接替换记录不相加。</p>

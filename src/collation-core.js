@@ -1,5 +1,5 @@
-import { humanMarked, humanMarkLabel } from './human-mark.js?v=human-mark-20261019';
-import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
+import { humanMarked, humanMarkLabel } from './human-mark.js?v=index-archive-20261027';
+import { isTaskPage } from './screening-page-policy.js?v=index-archive-20261027';
 // Raw OCR remains immutable. These helpers format a draft, never certify its reading order.
 export const CHECKS = {
   wording: '已对照原页核对本页错字',

@@ -1,5 +1,5 @@
-import {assignmentCount,assignmentHref,assignmentProgress,segmentHasPage} from './team-assignments.js?v=release-20261022';
-import {humanMarked} from './human-mark.js?v=human-mark-20261019';
+import {assignmentCount,assignmentHref,assignmentProgress,segmentHasPage} from './team-assignments.js?v=index-archive-20261027';
+import {humanMarked} from './human-mark.js?v=index-archive-20261027';
 // Combine public human records with local overrides by page, never by adding counts.
 export function assignmentContext(storage,assignment,indexes){
  const local=assignmentProgress(storage,assignment);

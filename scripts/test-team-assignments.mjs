@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 import { assignments, assignmentCount, assignmentPages, assignmentFor, assignmentSegment, assignmentHref, assignmentProgress, assignmentEntry } from '../src/team-assignments.js';
 import { createProgressStore } from '../src/screening-workflow.js';
 
-test('seven assignments cover every effective page exactly once with four equal 100-page handoffs',()=>{
+test('seven assignments cover every active page once after archiving the 50 index pages',()=>{
   const pages=Array.from({length:1052},(_,i)=>({page:i+1}));
   const all=[];
   for(const a of assignments)for(const s of a.segments)all.push(...assignmentPages(pages,a.id,s.part).map(p=>p.page));
-  assert.equal(all.length,1041);assert.equal(new Set(all).size,1041);
-  assert.deepEqual(assignments.map(assignmentCount),[148,169,149,175,133,133,134]);
-  assert.deepEqual(assignments.map(a=>a.remaining),[58,0,28,105,127,87,84]);
-  assert.deepEqual(assignments.slice(0,4).map(a=>[248,269,249,275][a.id-1]-assignmentCount(a)),[100,100,100,100]);
-  assert.equal(assignments.reduce((sum,a)=>sum+a.remaining,0),489);
+  assert.equal(all.length,991);assert.equal(new Set(all).size,991);
+  assert.deepEqual(assignments.map(assignmentCount),[148,169,149,125,133,133,134]);
+  assert.deepEqual(assignments.map(a=>a.remaining),[0,0,0,9,33,0,0]);
+  assert.deepEqual(assignments.slice(0,4).map(a=>[248,269,249,225][a.id-1]-assignmentCount(a)),[100,100,100,100]);
+  assert.equal(assignments.reduce((sum,a)=>sum+a.remaining,0),42);
 });
 
 test('strict assignment validation, original-part links, and legacy views',()=>{

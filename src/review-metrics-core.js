@@ -1,5 +1,5 @@
-import { isVerified } from './collation-core.js?v=20261013-typo-only';
-import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
+import { isVerified } from './collation-core.js?v=index-archive-20261027';
+import { isTaskPage } from './screening-page-policy.js?v=index-archive-20261027';
 
 export const recordLabels = { confirmation: '逐页确认', note: '人工备注', replacement: '直接替换' };
 export function replacementKind(record) {
@@ -17,7 +17,8 @@ export function readLocalTraces(storage) {
       if (value?.version !== 1 || value.part !== part || !value.reviews || typeof value.reviews !== 'object' || Array.isArray(value.reviews)) throw Error();
       for (const [number, review] of Object.entries(value.reviews)) {
         const page = Number(number), ranges = [[1,258],[259,527],[528,776],[777,1052]];
-        if (!Number.isInteger(page) || !isTaskPage(page) || page < ranges[part-1][0] || page > ranges[part-1][1] || !review || typeof review !== 'object' || Array.isArray(review)) { problems.push(`原第${part}份有无效页记录，已跳过`); continue; }
+        if (!Number.isInteger(page) || page < ranges[part-1][0] || page > ranges[part-1][1] || !review || typeof review !== 'object' || Array.isArray(review)) { problems.push(`原第${part}份有无效页记录，已跳过`); continue; }
+        if (!isTaskPage(page)) continue;
         const draft = review.collation || {};
         const base = { part, page, person: '逐条署名未知', source: `本机 · 原第${part}份`, at: '', timeKind: 'unknown' };
         if (isVerified(draft)) records.push({ ...base, kind: 'confirmation', person: draft.verifiedBy || '未署名', at: draft.verifiedAt || '', timeKind: 'page' });

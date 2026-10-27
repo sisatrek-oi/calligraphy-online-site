@@ -1,15 +1,16 @@
-import { isTaskPage } from './screening-page-policy.js?v=20261003-trim';
-import { isVerified } from './collation-core.js?v=20261013-typo-only';
+import { isTaskPage } from './screening-page-policy.js?v=index-archive-20261027';
+import { isVerified } from './collation-core.js?v=index-archive-20261027';
 
-export const assignmentRevision = 'seven-20261018';
+export const assignmentRevision = 'seven-20261027-index-archive';
+// Published receipt snapshot; live progress is still derived from exact page records.
 export const assignments = Object.freeze([
-  { id: 1, name: '肖源', received: 90, remaining: 58, segments: [{part:1,start:1,end:158}] },
+  { id: 1, name: '肖源', received: 148, remaining: 0, segments: [{part:1,start:1,end:158}] },
   { id: 2, name: '郑雨荻', received: 169, remaining: 0, segments: [{part:2,start:259,end:427}] },
-  { id: 3, name: '宋品宣', received: 121, remaining: 28, segments: [{part:3,start:528,end:676}] },
-  { id: 4, name: '帅睿', received: 70, remaining: 105, segments: [{part:4,start:777,end:951}] },
-  { id: 5, name: '尹正荣', received: 6, remaining: 127, segments: [{part:1,start:159,end:258},{part:2,start:428,end:460}] },
-  { id: 6, name: '姜淼', received: 46, remaining: 87, segments: [{part:2,start:461,end:527},{part:3,start:677,end:742}] },
-  { id: 7, name: '彭鹏', received: 50, remaining: 84, segments: [{part:3,start:743,end:776},{part:4,start:952,end:1051}] },
+  { id: 3, name: '宋品宣', received: 149, remaining: 0, segments: [{part:3,start:528,end:676}] },
+  { id: 4, name: '帅睿', received: 116, remaining: 9, segments: [{part:4,start:777,end:901}] },
+  { id: 5, name: '尹正荣', received: 100, remaining: 33, segments: [{part:1,start:159,end:258},{part:2,start:428,end:460}] },
+  { id: 6, name: '姜淼', received: 133, remaining: 0, segments: [{part:2,start:461,end:527},{part:3,start:677,end:742}] },
+  { id: 7, name: '彭鹏', received: 134, remaining: 0, segments: [{part:3,start:743,end:776},{part:4,start:952,end:1051}] },
 ].map(a => Object.freeze({...a, segments:Object.freeze(a.segments.map(s=>Object.freeze(s)))})));
 
 export function assignmentFor(id) {

@@ -1,7 +1,7 @@
-import {readJson} from './screening-loader.js?v=member5-mark45-20261023';
+import {readJson} from './screening-loader.js?v=index-archive-20261027';
 import {teamRelease} from './team-collation.js?v=member5-mark45-20261023';
 import {targetedRelease} from './targeted-ocr.js?v=20261018-part4';
-import {taskOcrHref} from './screening-page-policy.js?v=20261003-trim';
+import {taskOcrHref} from './screening-page-policy.js?v=index-archive-20261027';
 const ui=window.WorkspaceUI,host=document.querySelector('#workspacePage');ui.mount('materials');
 let part=Number(new URLSearchParams(location.search).get('part'))||1;
 if(![1,2,3,4].includes(part))part=1;

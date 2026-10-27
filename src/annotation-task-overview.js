@@ -1,7 +1,7 @@
-import {loadAnnotationCorpus,corpusMode,corpusQuery,bindCorpusProgress} from './annotation-corpus.js?v=annotation-release-20261024';
-import {esc} from './annotation-chapters.js?v=member5-mark45-20261023';
-import {readProgress} from './delivery-core.js?v=release-20261022';
-import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=annotation-release-20261024';
+import {loadAnnotationCorpus,corpusMode,corpusQuery,bindCorpusProgress} from './annotation-corpus.js?v=index-archive-20261027';
+import {esc} from './annotation-chapters.js?v=index-archive-20261027';
+import {readProgress} from './delivery-core.js?v=index-archive-20261027';
+import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=index-archive-20261027';
 import {assignmentKey,standardAssignmentKey,bookFoldKey,readCorpusAssignments,assignmentsUnchanged,saveAssignments,assignedName,changeAssignments,validateAssignments,mergeAssignments,memberTasks} from './annotation-assignments.js?v=annotation-release-20261024';
 
 const app=document.querySelector('#annotationTaskApp');

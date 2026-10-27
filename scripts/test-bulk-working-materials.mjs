@@ -8,11 +8,13 @@ test('all four parts contain 851 complete image-reviewed working pages and no sy
  let total=0;for(let part=1;part<=4;part++){
   const source=read(`part-${part}-model-reviewed.json`);assert.equal(source.pages.length,[218,199,174,260][part-1]);
   assert.equal(new Set(source.pages.map(p=>p.page)).size,source.pages.length);
-  for(const p of source.pages){assert.equal(validModelReview(p,p.page),true);assert.equal(p.humanConfirmed,false);assert.ok(isTaskPage(p.page));}
+  for(const p of source.pages){assert.equal(validModelReview(p,p.page),true);assert.equal(p.humanConfirmed,false);assert.ok(isTaskPage(p.page) || (part===4 && p.page>=902 && p.page<=951));}
   total+=source.pages.length;
  }assert.equal(total,851);
+ const archived=read(`part-4-model-reviewed.json`).pages.filter(p=>!isTaskPage(p.page));
+ assert.deepEqual(archived.map(p=>p.page),Array.from({length:50},(_,i)=>902+i));
 });
-test('all 1041 task pages have a working source; only the 949 explicitly confirmed human pages count as marked',async()=>{
+test('all 991 task pages have a working source; only the 949 explicitly confirmed human pages count as marked',async()=>{
  let total=0,marked=0;
  for(let part=1;part<=4;part++){
   const index=read(`part-${part}-index.json`),loader=createMaterialLoader(index,{fetcher:async url=>({ok:true,json:async()=>read(url.replace('./screening-data/',''))})});
@@ -20,7 +22,7 @@ test('all 1041 task pages have a working source; only the 949 explicitly confirm
   for(const p of index.pages.filter(p=>isTaskPage(p.page))){
    assert.ok(p.collated || p.modelReviewed);assert.equal(humanMarked(p),Boolean(p.collated));total++;marked+=Number(humanMarked(p));
   }
- }assert.equal(total,1041);assert.equal(marked,949);
+ }assert.equal(total,991);assert.equal(marked,949);
 });
 test('known numerical, geometry and historical-uncertainty evidence survives publication without marking the page',()=>{
  const sources=[1,3,4].flatMap(part=>read(`part-${part}-model-reviewed.json`).pages);

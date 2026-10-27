@@ -1,8 +1,8 @@
-import {readJson} from './screening-loader.js?v=member5-mark45-20261023';
-import {validateReviewedPart} from './reviewed-annotation.js?v=member5-mark45-20261023';
-import {loadChapterIndex,validateChapterIndex,chapterAnnotationFiles,chapterFragmentView} from './annotation-chapters.js?v=member5-mark45-20261023';
+import {readJson} from './screening-loader.js?v=index-archive-20261027';
+import {validateReviewedPart} from './reviewed-annotation.js?v=index-archive-20261027';
+import {loadChapterIndex,validateChapterIndex,chapterAnnotationFiles,chapterFragmentView} from './annotation-chapters.js?v=index-archive-20261027';
 import {chapterTaskUnits} from './annotation-chapter-units.js?v=release-20261022';
-import {chapterProgressKey,chapterBackupState,effectiveChapterProgress,chapterIsConfirmed,validateChapterProgress} from './chapter-annotation-core.js?v=annotation-release-20261024';
+import {chapterProgressKey,chapterBackupState,effectiveChapterProgress,chapterIsConfirmed,validateChapterProgress} from './chapter-annotation-core.js?v=index-archive-20261027';
 import {zipStore} from './zip-store.js?v=release-20261022';
 export const standardProgressKey='shulun-wolai-standard-chapter-annotation-v1';
 export const corpusMode=search=>new URLSearchParams(search).get('corpus')==='legacy'?'legacy':'wolai-standard';
