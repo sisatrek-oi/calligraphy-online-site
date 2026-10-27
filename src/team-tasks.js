@@ -137,7 +137,7 @@ import {loadReviewedIndex} from './reviewed-annotation.js?v=index-archive-202610
       <header class="entry-task-heading"><p class="workspace-kicker">团队任务 / ${title}</p><h1 id="sourceTaskHeading">${title}</h1><p>${annotationTask ? '人工审核原TXT已初标，请按原页段逐条复核。' : '选择自己的成员入口，继续原有页段的校对。'}</p>${annotationTask ? '<p data-annotation-summary role="status">正在读取来源…</p><button type="button" id="retryAnnotationTask" hidden>重试读取材料</button><div class="annotation-part-links" data-annotation-parts></div>' : '<a class="quiet-button" href="./review-metrics.html">量化检测 · 查看人工修改 →</a>'}</header>
       <div class="entry-task-list"><article class="entry-task-card" data-entry-task="${taskId}" aria-labelledby="sourceBookTitle">
         <div class="entry-task-card-head"><span class="entry-task-icon" aria-hidden="true">${window.WorkspaceUI.icon(annotationTask ? 'annotation' : 'proof')}</span><div class="entry-task-title"><h2 id="sourceBookTitle">《历代书法论文选》${title}</h2><p>${annotationTask ? '本地初标已准备 · 待人工复核' : `${taskPageCount(1,1052)} 个有效页 · 沿用现有校对分工`}</p></div><span class="source-task-state">${annotationTask ? '待复核' : '进行中'}</span></div>
-        <p class="source-task-description">${annotationTask ? '正文仅取审核记录对应的原TXT，淡绿为AI初标、黄色为人工标注。采纳或不采用后，通读确认本页；原文只读，旧标注保留。' : '902—951页索引已归档并移出校对；帅睿保留777—901页，未标过的是777—785页9页。已做正文和草稿保留。新添加成员仅登记，页段待后续安排。'}</p>
+        ${annotationTask ? '<p class="source-task-description">正文仅取审核记录对应的原TXT，淡绿为AI初标、黄色为人工标注。采纳或不采用后，通读确认本页；原文只读，旧标注保留。</p>' : ''}
         <div class="entry-task-roster" data-roster-host></div>
       </article></div>
       <p class="entry-task-footnote">${annotationTask ? '按原校对页段开放已审核部分；原分工不变。AI初标不是人工完成量，未回收的新稿不计入本批。' : '按原PDF物理页定位。点击“导出我的任务”，本人跨段也合成一个ZIP；本机标记不代表已交回负责人。'} 成员名单保存在本机，添加姓名不会创建账号或改派页段。</p>
