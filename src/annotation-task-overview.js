@@ -1,5 +1,5 @@
-import {loadAnnotationTaskCorpus} from './annotation-task-corpus.js?v=loading-20261028';
-import {corpusMode,corpusQuery,bindCorpusProgress} from './annotation-corpus.js?v=loading-20261028';
+import {loadAnnotationTaskCorpus} from './annotation-task-corpus.js?v=loading-20261028b';
+import {corpusMode,corpusQuery,bindCorpusProgress} from './annotation-corpus.js?v=loading-20261028b';
 import {esc} from './annotation-chapters.js?v=loading-20261028';
 import {readProgress} from './delivery-core.js?v=index-archive-20261027';
 import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=loading-20261028';

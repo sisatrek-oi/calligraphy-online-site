@@ -1,3 +1,4 @@
-// Generated from the unchanged approved corpus by build-loading-assets.mjs.
-export const catalogueSha256='96a413069d9c169907920dd91093cb9f4471ff79df72e31bd5ad82ab87f2ca91';
+// Generated from unchanged verified sources by build-loading-assets.mjs.
+export const catalogueSha256='e4602b1ed3a89435c23804040a9661fc3487ab036bd89318bc7f5411bbb41f83';
 export const catalogueSourceSha256='d41c7f35b16094d039acb28393e7f1a02a405506567fcbcf3466c16e46a715b5';
+export const reviewCatalogueSha256='402e509e199e8f74cc73d531a95c623bad7829526f68863227d6d7ce736498b9';

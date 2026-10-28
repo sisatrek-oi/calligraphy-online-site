@@ -1,5 +1,10 @@
+import {readJson} from './screening-loader.js?v=loading-20261028';
+import {corpusDigest} from './annotation-corpus.js?v=loading-20261028b';
+import {reviewCatalogueSha256} from './task-catalogue-revision.js?v=loading-20261028b';
+import {gapsKey} from './annotation-gaps-core.js?v=gap-prefill-20261028';
+import {reviewerName} from './review-entry.js?v=directory-entry-20261026';
 import {reviewerMenu,bindReviewerMenu,gateReviewLinks} from './review-entry.js?v=directory-entry-20261026';
-import {validateRecheck,decisionResolved,comparisonNeedsReview} from './annotation-compare-core.js?v=page-review-20261028';
+import {validateRecheck,decisionResolved,comparisonNeedsReview,compareKey} from './annotation-compare-core.js?v=page-review-20261028';
 import {reviewPagePairs,pairStatus} from './annotation-page-pairs.js?v=page-pairs-20261027';
 import {pageCompareKey,pageHasKind,initialPageState} from './annotation-compare-pages.js?v=page-review-20261028';
 import {loadReviewBatches,selectedBatch,reviewBatchItems,requireBatchTarget,validateBatchCoverage,batchSuffix,batchHref,chapterBatchScope} from './task-allocation.js?v=task-allocation-20261028';
@@ -42,10 +47,26 @@ export async function mountComparisonDirectory(app,corpus,revision,params){
  mountDirectory({app,params,batchGroups,batch,batchRecords,gapRecords,readAllocationProgress,extraRefreshKey:gapsKey(gapIndex.sha256),readItems,refreshKey:key,taskHref:(item,kind)=>{const q=new URLSearchParams({work:item.workId,item:item.id,kind,status:'all'});return './annotation-compare.html?'+q+batchSuffix(params);}});
 }
 export async function mountPdfDirectory(app,params){
- const [{loadAnnotationCorpus,corpusDigest,corpusQuery},{readCorpusAssignments,assignmentScope},{structureKey,emptyStructureFeedback,validateStructureFeedback}]=await Promise.all([import('./annotation-corpus.js?v=loading-20261028'),import('./annotation-assignments.js?v=annotation-release-20261024'),import('./annotation-structure-core.js?v=loading-20261028')]);
+ const [{loadAnnotationCorpus,corpusDigest,corpusQuery},{readCorpusAssignments,assignmentScope},{structureKey,emptyStructureFeedback,validateStructureFeedback}]=await Promise.all([import('./annotation-corpus.js?v=loading-20261028b'),import('./annotation-assignments.js?v=annotation-release-20261024'),import('./annotation-structure-core.js?v=loading-20261028')]);
  const corpus=await loadAnnotationCorpus(location.search),revision=await corpusDigest({mode:corpus.mode,index:corpus.index,sources:corpus.pages.filter(p=>p.eligible).map(p=>[p.page,p.source.textSha256])}),key=structureKey(corpus.mode),member=params.get('assignee');let chapters=corpus.index.chapters;if(member)chapters=assignmentScope(readCorpusAssignments(localStorage,corpus.index,corpus.mode).value,corpus.index,member).chapters;
  chapters=chapterBatchScope(corpus,params,chapters);
  const requested=corpus.index.chapterAliases[params.get('chapter')]||params.get('chapter');if(requested)params.set('chapter',requested);if(params.has('batch'))requireBatchTarget(chapters,requested);
  const readItems=()=>{const raw=localStorage.getItem(key),state=raw===null?emptyStructureFeedback(revision,corpus.mode):validateStructureFeedback(JSON.parse(raw),corpus,revision);return chapters.map(c=>{const feedbacks=state.items.filter(i=>c.fragments.some(f=>f.page===i.anchor.page&&i.anchor.start>=f.start&&i.anchor.start<f.end)).length;return {id:c.id,workId:c.workId,work:c.author+' · '+c.workTitle,title:c.title,pairs:reviewPagePairs(c,corpus.byPage),feedbacks,status:feedbacks?'noted':'none'};});};
  mountDirectory({app,params,pdf:true,readItems,refreshKey:key,taskHref:c=>'./annotation-review.html?chapter='+encodeURIComponent(c.id)+corpusQuery(corpus.mode)+(member?'&assignee='+encodeURIComponent(member):'')+batchSuffix(params)+(c.pair?'&page='+encodeURIComponent(c.pair):c.id===requested&&params.has('page')?'&page='+encodeURIComponent(params.get('page')):'')+(c.id===requested?location.hash:'')});
+}
+
+// A verified read-only directory never substitutes for source validation when records exist.
+export async function tryMountFastComparisonDirectory(app,params){
+ if(params.get('view')!=='directory'&&['item','work','page'].some(k=>params.has(k))&&reviewerName())return false;
+ const value=await readJson('./comparison-data/task-catalogue.json?v=loading-20261028b',{preferGzip:true});
+ if(await corpusDigest(value)!==reviewCatalogueSha256)throw Error('复核目录与来源版本不匹配，原记录保留。');
+ const keys=[compareKey(value.reviewRevision),pageCompareKey(value.reviewRevision),gapsKey(value.gapRevision)],hasRecords=()=>keys.some(key=>localStorage.getItem(key)!==null);
+ if(hasRecords())return false;
+ const groups=await loadReviewBatches({reviewRevision:value.reviewRevision,gapRevision:value.gapRevision});validateBatchCoverage(groups,value.items,'comparison');validateBatchCoverage(groups,value.gapIds,'gaps');
+ const batch=selectedBatch(groups,params,'review'),aliases=new Map(value.aliases);if(aliases.has(params.get('item')))params.set('item',aliases.get(params.get('item')));
+ const items=reviewBatchItems(value.items,batch);if(batch)requireBatchTarget(items,params.get('item'));
+ const readItems=()=>{if(hasRecords())throw Error('本机记录已更新，正在重新校验来源。');return items;};
+ mountDirectory({app,params,batchGroups:groups,batch,readItems,refreshKey:keys[1],extraRefreshKey:keys[2],taskHref:(item,kind)=>'./annotation-compare.html?'+new URLSearchParams({work:item.workId,item:item.id,kind,status:'all'})+batchSuffix(params)});
+ window.addEventListener('storage',event=>{if(event.key===null||keys.includes(event.key))location.reload();});
+ return true;
 }

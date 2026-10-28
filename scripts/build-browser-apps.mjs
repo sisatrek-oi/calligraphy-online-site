@@ -11,10 +11,12 @@ for(const [route,source]of Object.entries(routes)){
  function visit(path){for(const i of outputs[path].imports)if(i.kind==='import-statement'&&!preloads.has(i.path)){preloads.add(i.path);visit(i.path);}}
  visit(entry);
  const path=route+'.html',original=await fs.readFile(path,'utf8'),html=original.replace(/<!-- loading-preloads:start -->[\s\S]*?<!-- loading-preloads:end -->\n?/,'').replace(/(<script type="module" src=")[^"]+("[^>]*>)/,'$1./'+entry+'$2');
- const links=[entry,...preloads].map(p=>'<link rel="modulepreload" href="./'+p+'">');if(route==='annotation-tasks')links.unshift('<link rel="preload" as="fetch" crossorigin href="./annotation-data/task-catalogue.json.gz?v=loading-20261028">');
+ const links=[entry,...preloads].map(p=>'<link rel="modulepreload" href="./'+p+'">');if(route==='annotation-tasks')links.unshift('<link rel="preload" as="fetch" crossorigin href="./annotation-data/chapter-catalogue.json.gz?v=loading-20261028b">');
+ if(route==='annotation-compare')links.unshift('<link rel="preload" as="fetch" crossorigin href="./comparison-data/task-catalogue.json.gz?v=loading-20261028b">');
  await output(path,html.replace('</head>','<!-- loading-preloads:start -->\n'+links.join('\n')+'\n<!-- loading-preloads:end -->\n</head>'));
 }
 const manifest='src/browser-apps/manifest.json',current=Object.keys(outputs);
-if(!check){let old=[];try{old=JSON.parse(await fs.readFile(manifest,'utf8'));}catch{}for(const path of old)if(!current.includes(path)&&/^src\/browser-apps\/[a-zA-Z0-9-]+\.js$/.test(path))await fs.unlink(path).catch(()=>{});}
+// Keep previous content hashes available to pages already cached by clients.
+
 await output(manifest,JSON.stringify(current,null,2)+'\n');
 console.log(check?'Browser apps and preloads match source modules.':'Browser apps built.');

@@ -43,6 +43,7 @@ export function corpusSourceView(page,byPage){
 }
 export async function buildStandardBundle({corpus,state,legacy,legacyChapterRaw,person,unsaved=false,assignmentRecords={}}){
  if(corpus.mode==='legacy')throw new Error('此导出入口只用于wolai标准任务。');
+ if(corpus.partial)throw new Error('请先读取完整审核语料再导出，未生成不完整成果。');
  bindCorpusProgress(state,corpus);if(!person.trim())throw new Error('请先填写真实姓名，再导出。');
  const effective=effectiveChapterProgress(legacy,state,corpus.byPage),statuses={};
  for(const c of corpus.index.chapters)statuses[c.id]={confirmed:await chapterIsConfirmed(c,corpus.byPage,legacy,state),...(state.confirmations[c.id]||{})};
