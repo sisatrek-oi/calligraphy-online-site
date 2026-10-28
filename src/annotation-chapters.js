@@ -3,6 +3,7 @@ import {annotationReading} from './annotation-reading.js?v=release-20261022';
 import {annotationView} from './theory-annotations.js?v=release-20261022';
 import {candidateView,annotationDisplayRanges} from './reviewed-annotation.js?v=loading-20261028';
 import {highlightHtml} from './theory-highlight.js?v=20261003-theory';
+import {readingOrders} from './annotation-reading-orders.js';
 export const chapterHref=id=>`./annotation-chapters.html?chapter=${encodeURIComponent(id)}`;
 export const chapterPageHref=(id,part,page)=>`./annotation.html?scope=all&part=${part}&page=${page}&chapter=${encodeURIComponent(id)}`;
 export const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
@@ -43,7 +44,15 @@ export function chapterFragmentView(fragment,byPage,progressByPart={}) {
   const wrapped=item.humanReviewed?item:{page:p.page,humanReviewed:{...p,revision:p.annotationRevision,batch:'human-txt-20261020',integrityChecked:true}};
   const source={...p.source,text},manual=annotationView(review.theoryAnnotations,text),suggestions=candidateView(wrapped,review,source);
   const ranges=annotationDisplayRanges(manual.ranges,suggestions.pending),reading=annotationReading(text);
-  const blocks=[...fragment.blocks].sort((a,b)=>a.start-b.start||a.end-b.end).filter(b=>!b.decoration).map(b=>{
+  let orderedBlocks=[...fragment.blocks].sort((a,b)=>a.start-b.start||a.end-b.end);
+  const order=readingOrders[fragment.page];
+  if(order&&order.sha256===fragment.textSha256){
+    // Presentation is a permutation of source blocks; annotation ranges never move.
+    const ranks=new Map(order.starts.map((start,i)=>[start,i]));
+    if(orderedBlocks.some(b=>!ranks.has(b.start)))fail();
+    orderedBlocks.sort((a,b)=>ranks.get(a.start)-ranks.get(b.start));
+  }
+  const blocks=orderedBlocks.filter(b=>!b.decoration).map(b=>{
     const a=reading.visibleOffset(b.start),z=reading.visibleOffset(b.end),body=reading.text.slice(a,z);
     const marks=reading.ranges(ranges).filter(r=>r.start<z&&r.end>a).map(r=>({...r,start:Math.max(a,r.start)-a,end:Math.min(z,r.end)-a}));
     return {...b,text:body,html:highlightHtml(body,marks)};
