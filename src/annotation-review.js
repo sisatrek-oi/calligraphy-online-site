@@ -73,12 +73,12 @@ function updatePosition(){
  const url=new URL(location.href);url.search='?chapter='+encodeURIComponent(current.id)+suffix()+'&page='+encodeURIComponent(pairKey);url.hash='';history.replaceState(null,'',url);
  $('reviewTaskList').href='./annotation-compare.html?view=pdf&chapter='+encodeURIComponent(current.id)+suffix()+'&page='+encodeURIComponent(pairKey);
 }
-function choosePair(value){
+function choosePair(value,syncScan=true){
  if(!ready()){$('reviewTxtSources').value=pairKey;$('reviewOriginalPage').value=sourcePage??'';return;}
  const pair=pairs.find(r=>r.key===value);if(value!=='all'&&!pair)return;
  closeContextMenu();if(feedbackScan===undefined&&(spans.length||$('reviewComment').value.trim())){feedbackScan=scan;feedbackSource=currentSource();}
  pairKey=value;sourcePage=pair?pair.page:pairs.find(r=>r.page!==null)?.page??null;
- renderText();$('reviewTextBody').scrollTop=0;updatePosition();showScan(sourcePage);renderCatalog();
+ renderText();$('reviewTextBody').scrollTop=0;updatePosition();if(syncScan)showScan(sourcePage);renderCatalog();
 }
 function downloadTxt(){
  if(composing)return;const pair=activePair(),text=pair?pairText(pair,corpus.byPage):current.fragments.map(f=>corpus.byPage.get(f.page).text.slice(f.start,f.end)).join('');
@@ -161,7 +161,7 @@ function mount(){
  for(const [id,delta] of [['reviewPreviousPage',-1],['reviewNextPage',1]])$(id).onclick=()=>{if(composing)return;const n=scanPages[scanPages.indexOf(scan)+delta];if(n)showScan(n);};
  $('reviewPageForm').onsubmit=e=>{e.preventDefault();jump();};$('reviewPage').onkeydown=e=>{if(e.key==='Enter'&&(composing||e.isComposing||e.keyCode===229))e.preventDefault();};$('reviewOriginalPage').onchange=e=>choosePair(e.target.value);$('reviewReturn').onclick=()=>{if(!composing)showScan(sourcePage);};$('reviewFit').onchange=e=>{$('reviewScanScroll').classList.toggle('is-width',e.target.value==='width');};
  $('reviewContext').ontoggle=()=>{if($('reviewContext').open&&innerHeight<=560&&app.classList.contains('review-feedback-open'))closeFeedback();};
- $('reviewTxtSources').onchange=e=>choosePair(e.target.value);$('reviewTxtDownload').onclick=downloadTxt;
+ $('reviewTxtSources').onchange=e=>choosePair(e.target.value,false);$('reviewTxtDownload').onclick=downloadTxt;
  for(const [id,delta] of [['reviewPreviousPair',-1],['reviewNextPair',1]])$(id).onclick=()=>{const next=pairs[pairs.findIndex(r=>r.key===pairKey)+delta];if(next)choosePair(next.key);};
  $('reviewContextRecord').onclick=()=>useContext();$('reviewContextQuick').onclick=()=>useContext(true);
  $('reviewTextBody').onpointerdown=e=>{lastPointer={type:e.pointerType||'mouse',at:performance.now()};closeContextMenu();};$('reviewTextBody').oncontextmenu=showContextMenu;
