@@ -1,6 +1,6 @@
 import {reviewerName,reviewerMenu,bindReviewerMenu} from './review-entry.js?v=directory-entry-20261026';
 import {readJson} from './screening-loader.js?v=index-archive-20261027';
-import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest} from './annotation-corpus.js?v=index-archive-20261027';
+import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest} from './annotation-corpus.js?v=standard-compressed-20261028';
 import {esc} from './annotation-chapters.js?v=index-archive-20261027';
 import {readCorpusAssignments,assignmentScope,assignmentsUnchanged} from './annotation-assignments.js?v=annotation-release-20261024';
 import {structureKey,emptyStructureFeedback,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=index-archive-20261027';

@@ -1,4 +1,4 @@
-import {loadAnnotationCorpus,corpusMode,standardProgressKey,corpusQuery,bindCorpusProgress,corpusBackup,corpusSourceView,buildStandardBundle} from './annotation-corpus.js?v=source-order-20261028';
+import {loadAnnotationCorpus,corpusMode,standardProgressKey,corpusQuery,bindCorpusProgress,corpusBackup,corpusSourceView,buildStandardBundle} from './annotation-corpus.js?v=standard-compressed-20261028';
 import {esc,chapterFragmentView,orderedChapterFragments} from './annotation-chapters.js?v=source-order-20261028';
 import {readJson,createMaterialLoader} from './screening-loader.js?v=index-archive-20261027';
 import {attachReviewedPart} from './reviewed-annotation.js?v=index-archive-20261027';

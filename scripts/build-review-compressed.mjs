@@ -10,4 +10,7 @@ for(const name of ['index','pdf-gaps-index']){
  if(check){if(!gunzipSync(await fs.readFile(target)).equals(raw))throw Error('Rebuild compressed review assets: '+name);}
  else await fs.writeFile(target,gzipSync(raw,{level:9}));
 }
-console.log(check?'Compressed review assets match both frozen sources.':'Compressed review assets built.');
+const standard=new URL('../annotation-data/wolai-standard.json',import.meta.url),standardRaw=await fs.readFile(standard),standardTarget=new URL(standard.href+'.gz');
+if(check){if(!gunzipSync(await fs.readFile(standardTarget)).equals(standardRaw))throw Error('Rebuild compressed standard corpus asset.');}
+else await fs.writeFile(standardTarget,gzipSync(standardRaw,{level:9}));
+console.log(check?'Compressed review and standard corpus assets match frozen sources.':'Compressed review and standard corpus assets built.');

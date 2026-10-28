@@ -1,4 +1,4 @@
-import {readJson} from './screening-loader.js?v=index-archive-20261027';
+import {readJson} from './screening-loader.js?v=standard-compressed-20261028';
 import {validateReviewedPart} from './reviewed-annotation.js?v=index-archive-20261027';
 import {loadChapterIndex,validateChapterIndex,chapterAnnotationFiles,chapterFragmentView,orderedChapterFragments} from './annotation-chapters.js?v=source-order-20261028';
 import {chapterTaskUnits} from './annotation-chapter-units.js?v=release-20261022';
@@ -19,7 +19,7 @@ export async function validateStandardCorpus(value){
  const byPage=new Map(value.pages.map(p=>[p.page,p]));validateChapterIndex(value.index,byPage);return {mode:'wolai-standard',label:'wolai标准正文',key:standardProgressKey,index:value.index,pages:value.pages,byPage,data:value};
 }
 export async function loadAnnotationCorpus(search='',options){
- if(corpusMode(search)!=='legacy')return validateStandardCorpus(await readJson('./annotation-data/wolai-standard.json?v=wolai-standard-20261022',options));
+ if(corpusMode(search)!=='legacy')return validateStandardCorpus(await readJson('./annotation-data/wolai-standard.json?v=wolai-standard-20261022',{...options,preferGzip:true}));
  const [source,...parts]=await Promise.all([loadChapterIndex(options),...[1,2,3,4].map(async n=>validateReviewedPart(await readJson(`./annotation-data/part-${n}.json?v=chapter-native-final-20261022`,options),n))]);
  const pages=parts.flatMap(p=>p.pages),byPage=new Map(pages.map(p=>[p.page,p]));validateChapterIndex(source,byPage);const index=chapterTaskUnits(source,byPage);validateChapterIndex(index,byPage);
  return {mode:'legacy',label:'旧人工审核正文',key:chapterProgressKey,index,pages,byPage};

@@ -2,14 +2,24 @@ import { validCollation, publicationSummary } from './team-collation.js?v=member
 import { validTargeted, targetedSummary } from './targeted-ocr.js?v=20261018-part3';
 import { validModelReview, modelReviewSummary } from './model-reviewed.js?v=index-archive-20261027';
 // Keep the deadline active through body parsing, not just response headers.
-export async function readJson(url, { fetcher = fetch, timeoutMs = 15000 } = {}) {
+export async function readJson(url, { fetcher = fetch, timeoutMs = 15000, preferGzip = false, Inflate = globalThis.DecompressionStream } = {}) {
   const controller = new AbortController();
   let timer;
   try {
     return await Promise.race([
       (async () => {
-        const response = await fetcher(url, { signal: controller.signal, cache: 'default' });
+        let compressed = preferGzip && typeof Inflate === 'function' && typeof url === 'string' && /\.json(?:\?|$)/.test(url);
+        const requestOptions = { signal: controller.signal, cache: 'default' };
+        let response = await fetcher(compressed ? url.replace(/\.json(?=\?|$)/, '.json.gz') : url, requestOptions);
+        if (compressed && response.status === 404) { compressed = false; response = await fetcher(url, requestOptions); }
         if (!response.ok) throw new Error(`材料读取失败（HTTP ${response.status}）`);
+        if (compressed) {
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          const body = bytes[0] === 0x1f && bytes[1] === 0x8b
+            ? new Response(new Blob([bytes]).stream().pipeThrough(new Inflate('gzip')))
+            : new Response(bytes);
+          return body.json();
+        }
         return response.json();
       })(),
       new Promise((_, reject) => {

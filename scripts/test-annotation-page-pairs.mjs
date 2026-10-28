@@ -16,7 +16,7 @@ test('explicit legacy provenance pairs only known UTF16 spans and leaves all oth
  assert.equal(rows[0].status,'partial');assert.equal(pairText(rows[0],by),'甲𠮷');const fragments=rows.flatMap(r=>r.fragments).sort((a,b)=>a.start-b.start);assert.equal(fragments.map(f=>p.text.slice(f.start,f.end)).join(''),p.text);assert.deepEqual(rows.map(r=>r.key),['10','12','unlocated']);
 });
 test('blocked pages do not enter the pair text',()=>{const p=page('未审核');p.eligible=false;assert.deepEqual(reviewPagePairs({fragments:[{page:1,start:0,end:3}],gaps:[]},new Map([[1,p]])),[]);});
-const fetcher=async path=>({ok:true,json:async()=>JSON.parse(await fs.readFile(new URL('../'+path.replace(/^\.\//,'').split('?')[0],import.meta.url),'utf8'))});
+const fetcher=async path=>new Response(await fs.readFile(new URL('../'+path.replace(/^\.\//,'').split('?')[0],import.meta.url)));
 for(const mode of ['legacy','wolai-standard'])test(mode+' every approved chapter UTF16 unit is covered exactly once by the page pairs',async()=>{
  const corpus=await loadAnnotationCorpus('?corpus='+mode,{fetcher});let count=0;
  for(const c of corpus.index.chapters){const rows=reviewPagePairs(c,corpus.byPage),actual=rows.flatMap(r=>r.fragments).sort((a,b)=>a.page-b.page||a.start-b.start),expected=c.fragments.filter(f=>corpus.byPage.get(f.page).eligible).slice().sort((a,b)=>a.page-b.page||a.start-b.start);

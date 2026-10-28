@@ -1,5 +1,5 @@
 import {readJson} from './screening-loader.js?v=index-archive-20261027';
-import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest,corpusSourceView} from './annotation-corpus.js?v=index-archive-20261027';
+import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest,corpusSourceView} from './annotation-corpus.js?v=standard-compressed-20261028';
 import {esc} from './annotation-chapters.js?v=index-archive-20261027';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
 import {readCorpusAssignments,assignmentScope,assignmentsUnchanged} from './annotation-assignments.js?v=annotation-release-20261024';
