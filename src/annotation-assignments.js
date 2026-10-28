@@ -1,3 +1,5 @@
+import {annotationBatches} from './task-allocation.js?v=task-allocation-20261028';
+import {batchOwner} from './task-batch-owners.js?v=owners-20261028';
 // Chapter responsibility is independent of proofreading and annotation content.
 export const assignmentKey='shulun-annotation-assignments-v1';
 export const standardAssignmentKey='shulun-wolai-standard-annotation-assignments-v1';
@@ -49,10 +51,18 @@ export function memberTasks(plan,index,statuses=new Map()){
  return plan.members.map(member=>{const {chapters}=assignmentScope(plan,index,member.id);return {member,chapters,confirmed:chapters.filter(c=>statuses.get(c.id)).length,works:index.works.map(w=>({work:w,chapters:chapters.filter(c=>c.workId===w.id)})).filter(w=>w.chapters.length)};});
 }
 
-// Standard assignments inherit the original plan read-only until the first save.
+// Retain custom plans; otherwise expose the published chapter owners without writing local storage.
+function withPublishedAssignments(snapshot,index){
+ const {value}=snapshot;
+ if(value.members.length||Object.keys(value.assignments).length||value.events.length||index.chapters.filter(c=>c.fragments.length).length<3)return snapshot;
+ const plan=empty(index);for(const group of annotationBatches({index})){const owner=batchOwner(group.id),id='member-batch-'+group.id;plan.members.push({id,name:owner.name});for(const chapter of group.chapterIds)plan.assignments[chapter]=id;}
+ return {...snapshot,value:validateAssignments(plan,index),published:true};
+}
 export function readCorpusAssignments(storage,index,mode){
  const key=mode==='legacy'?assignmentKey:standardAssignmentKey,raw=storage.getItem(key);
- if(raw!==null||key===assignmentKey)return {...readAssignments(storage,index,key),key,inheritedKey:null,inheritedRaw:null};
- const inherited=readAssignments(storage,index,assignmentKey);return {raw:null,value:inherited.value,key,inheritedKey:assignmentKey,inheritedRaw:inherited.raw};
+ if(key===assignmentKey)return {...readAssignments(storage,index,key),key,inheritedKey:null,inheritedRaw:null};
+ if(raw!==null)return {...withPublishedAssignments(readAssignments(storage,index,key),index),key,inheritedKey:null,inheritedRaw:null};
+ const inherited=readAssignments(storage,index,assignmentKey),snapshot=withPublishedAssignments(inherited,index);
+ return {...snapshot,raw:null,key,inheritedKey:assignmentKey,inheritedRaw:inherited.raw};
 }
 export function assignmentsUnchanged(storage,snapshot){return storage.getItem(snapshot.key)===snapshot.raw&&(!snapshot.inheritedKey||storage.getItem(snapshot.inheritedKey)===snapshot.inheritedRaw);}

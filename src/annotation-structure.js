@@ -2,7 +2,7 @@ import {readJson} from './screening-loader.js?v=loading-20261028';
 import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest,corpusSourceView} from './annotation-corpus.js?v=loading-20261028b';
 import {esc} from './annotation-chapters.js?v=loading-20261028';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
-import {readCorpusAssignments,assignmentScope,assignmentsUnchanged} from './annotation-assignments.js?v=annotation-release-20261024';
+import {readCorpusAssignments,assignmentScope,assignmentsUnchanged} from './annotation-assignments.js?v=owners-20261028';
 import {zipStore} from './zip-store.js?v=release-20261022';
 import {structureActions,structureRoles,structureKey,emptyStructureFeedback,structureParagraphs,deriveStructure,proposeStructure,previewStructure,decideStructure,undoStructure,confirmStructure,structureChecks,structureAudit,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=loading-20261028';
 

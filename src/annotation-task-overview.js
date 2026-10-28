@@ -3,10 +3,10 @@ import {corpusMode,corpusQuery,bindCorpusProgress} from './annotation-corpus.js?
 import {esc} from './annotation-chapters.js?v=loading-20261028';
 import {readProgress} from './delivery-core.js?v=index-archive-20261027';
 import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=loading-20261028';
-import {assignmentKey,standardAssignmentKey,bookFoldKey,readCorpusAssignments,assignmentsUnchanged,saveAssignments,assignedName,changeAssignments,validateAssignments,mergeAssignments,memberTasks} from './annotation-assignments.js?v=annotation-release-20261024';
+import {assignmentKey,standardAssignmentKey,bookFoldKey,readCorpusAssignments,assignmentsUnchanged,saveAssignments,assignedName,changeAssignments,validateAssignments,mergeAssignments,memberTasks} from './annotation-assignments.js?v=owners-20261028';
 
 import {annotationBatches,selectedBatch,chapterBatchScope,batchSuffix} from './task-allocation.js?v=task-allocation-20261028';
-import {allocationCards} from './task-allocation-cards.js?v=hide-workload-20261028';
+import {allocationCards} from './task-allocation-cards.js?v=owners-20261028';
 const app=document.querySelector('#annotationTaskApp');
 window.WorkspaceUI.mount('annotation');
 document.body.classList.add('annotation-task-overview');
@@ -65,13 +65,14 @@ function setView(view,changeUrl=true){
 }
 function renderMemberBoard(){
  const assigned=available.filter(c=>plan.assignments[c.id]).length,pending=available.length-assigned;
+ app.querySelector('.member-board-note span').textContent=planStore.published?'已按现有成员顺序安排，可导出分工方案。':'分工方案保存在本机，可导出给成员使用。';
  app.querySelector('#memberAllocationSummary').textContent=`${plan.members.length} 位成员 · 已分工 ${assigned} / ${available.length} 章 · 尚未分工 ${pending} 章`;
- const list=app.querySelector('#memberTaskList');list.innerHTML=allocationCards(batchGroups,{current:batch?.id,annotation:true,corpusSuffix:corpusQuery(corpus.mode),chapterIndex:index,statuses})+(memberTasks(plan,index,statuses).filter(task=>!batch||task.chapters.some(c=>available.includes(c))).map((task,n)=>{
+ const list=app.querySelector('#memberTaskList');list.innerHTML=allocationCards(batchGroups,{current:batch?.id,annotation:true,corpusSuffix:corpusQuery(corpus.mode),chapterIndex:index,statuses})+(planStore.published?'':(memberTasks(plan,index,statuses).filter(task=>!batch||task.chapters.some(c=>available.includes(c))).map((task,n)=>{
   const {member}=task,chapters=task.chapters.filter(c=>available.includes(c)),works=task.works.map(g=>({...g,chapters:g.chapters.filter(c=>available.includes(c))})).filter(g=>g.chapters.length),confirmed=chapters.filter(c=>statuses.get(c.id)).length;
   const next=chapters.find(c=>c.id===lastChapterId)||chapters.find(c=>!statuses.get(c.id))||chapters[0];
   const scope=chapters.length===available.length?`本书全部 ${available.length} 个开放章节`:works.map(g=>`${g.work.author}《${g.work.title}》：${g.chapters.length===available.filter(c=>c.workId===g.work.id).length?'全部开放章节':g.chapters.map(title).join('、')}（${g.chapters.length}章）`).join('；');
   return `<article class="member-task-card" data-member-task="${esc(member.id)}"><div class="member-task-number">${String(n+1).padStart(2,'0')}</div><div class="member-task-copy"><h3>${esc(member.name)}</h3><p class="member-task-count">${chapters.length?`负责 ${works.length} 篇 · 共 ${chapters.length} 章`:'尚未分配章节'}</p>${chapters.length?`<details class="member-task-scope"><summary>负责范围：${esc(scope)}</summary><ol>${chapters.map(c=>`<li>${esc(c.author)} · 《${esc(c.workTitle)}》 · ${esc(title(c))}</li>`).join('')}</ol></details><p class="member-task-progress">本机已确认 ${confirmed} / ${chapters.length} 章 · 待确认 ${chapters.length-confirmed} 章</p>`:'<p class="member-task-pending">请安排整章后再进入标注。</p>'}</div><div class="member-task-actions">${next?`<a class="action-button" data-enter-member="${esc(member.id)}" href="${href(next.id)}&assignee=${encodeURIComponent(member.id)}">进入标注 →</a>`:'<button type="button" class="quiet-button" disabled>暂无任务</button>'}<button type="button" class="member-task-adjust" data-adjust-member="${esc(member.id)}">调整分工</button></div></article>`;
- }).join('')||'<div class="member-board-empty"><h3>当前尚未安排标注分工</h3><p>点击“安排分工”，明确负责人及其负责的篇目、章节。保存后每位成员都有独立任务卡与进入入口。</p></div>');
+ }).join('')||'<div class="member-board-empty"><h3>当前尚未安排标注分工</h3><p>点击“安排分工”，明确负责人及其负责的篇目、章节。保存后每位成员都有独立任务卡与进入入口。</p></div>'));
  for(const b of list.querySelectorAll('[data-adjust-member]'))b.onclick=()=>openAssignment('all',{memberId:b.dataset.adjustMember});
  app.querySelector('#assignUnallocated').disabled=pending===0;app.querySelector('#assignUnallocated').textContent=pending?`安排未分工章节 · ${pending} 章`:'全部章节已分工';
 }
@@ -86,7 +87,7 @@ function renderList(){
  app.querySelector('#taskResultCount').textContent=count+' 章';list.scrollTop=0;
 }
 function readCurrentPlan(){if(!assignmentsUnchanged(localStorage,planStore))throw new Error('其他窗口更新了分工，请刷新任务页后再操作。');}
-function persistPlan(next){readCurrentPlan();const nextRaw=saveAssignments(localStorage,next,planRaw,index,planStore.key);plan=next;planRaw=nextRaw;planStore={...planStore,raw:nextRaw,inheritedKey:null,inheritedRaw:null};renderMemberBoard();renderList();}
+function persistPlan(next){readCurrentPlan();const nextRaw=saveAssignments(localStorage,next,planRaw,index,planStore.key);plan=next;planRaw=nextRaw;planStore={...planStore,raw:nextRaw,inheritedKey:null,inheritedRaw:null,published:false};renderMemberBoard();renderList();}
 function openAssignment(workId='all',{memberId='',unassigned=false}={}){
  const dialog=app.querySelector('#taskAssignmentDialog'),selected=new Set(available.filter(c=>unassigned?!plan.assignments[c.id]:memberId&&plan.assignments[c.id]===memberId).map(c=>c.id));
  dialog.innerHTML=`<form id="assignmentForm"><header><div><p>《历代书法论文选》</p><h2 id="assignmentHeading">安排章节分工</h2></div><button type="button" id="closeAssignment" aria-label="关闭分工窗口">✕</button></header><p class="assignment-hint">按整章分配；更换负责人只调整分工，正文和标注记录保留。</p><div class="assignment-fields"><label>负责人<input id="assignmentPerson" list="assignmentMembers" maxlength="80" placeholder="填写姓名或选择已有成员" autocomplete="off"><datalist id="assignmentMembers">${plan.members.map(m=>`<option value="${esc(m.name)}"></option>`).join('')}</datalist></label><label>选择篇目<select id="assignmentWork"><option value="all">整本书 · 全部开放章节</option>${index.works.filter(w=>available.some(c=>c.workId===w.id)).map(w=>`<option value="${esc(w.id)}">${esc(w.author)} · ${esc(w.title)}</option>`).join('')}</select></label></div><div class="assignment-select-tools"><button type="button" id="selectAssignmentScope">选中当前范围</button><button type="button" id="clearAssignmentSelection">清空所选</button><span id="assignmentSelectionCount" role="status">已选 0 章</span></div><div id="assignmentChapterChoices" class="assignment-choices"></div><p id="assignmentPreview" class="assignment-hint"></p><p id="assignmentError" role="alert"></p><footer><button type="button" id="unassignChapters">撤销所选分工</button><button type="submit" class="action-button" id="saveAssignment">保存分工</button></footer></form>`;
