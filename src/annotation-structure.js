@@ -1,10 +1,10 @@
-import {readJson} from './screening-loader.js?v=index-archive-20261027';
-import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest,corpusSourceView} from './annotation-corpus.js?v=standard-compressed-20261028';
-import {esc} from './annotation-chapters.js?v=index-archive-20261027';
+import {readJson} from './screening-loader.js?v=loading-20261028';
+import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest,corpusSourceView} from './annotation-corpus.js?v=loading-20261028';
+import {esc} from './annotation-chapters.js?v=loading-20261028';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
 import {readCorpusAssignments,assignmentScope,assignmentsUnchanged} from './annotation-assignments.js?v=annotation-release-20261024';
 import {zipStore} from './zip-store.js?v=release-20261022';
-import {structureActions,structureRoles,structureKey,emptyStructureFeedback,structureParagraphs,deriveStructure,proposeStructure,previewStructure,decideStructure,undoStructure,confirmStructure,structureChecks,structureAudit,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=index-archive-20261027';
+import {structureActions,structureRoles,structureKey,emptyStructureFeedback,structureParagraphs,deriveStructure,proposeStructure,previewStructure,decideStructure,undoStructure,confirmStructure,structureChecks,structureAudit,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=loading-20261028';
 
 const app=document.querySelector('#structureApp'),params=new URLSearchParams(location.search),mode=corpusMode(location.search),key=structureKey(mode);
 window.WorkspaceUI.mount('annotation');

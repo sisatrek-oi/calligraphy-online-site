@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
   <title>原文校勘与书论标注 · 书论工作区</title>
-  <link rel="icon" type="image/png" href="./src/assets/shulun-mark.png" />
+  <link rel="icon" type="image/png" href="./src/assets/shulun-mark-96.png" />
   <link rel="stylesheet" href="./src/screening.css?v=20261017-team" />
   <link rel="stylesheet" href="./src/workspace-ui.css?v=gap-sidebar-20261026" />
   <link rel="stylesheet" href="./src/tablet-proof-input.css?v=handwriting-buffer-20261019" />
   <script src="./src/device-session.js?v=redesign-local-20261019"></script>
-  <script src="./src/workspace-ui.js?v=gap-sidebar-20261026"></script>
+  <script src="./src/workspace-ui.js?v=loading-20261028"></script>
 </head>
 <body>
   <header class="topbar"><a href="./team-tasks.html">← 团队任务</a><span>书论工作区 · 原文校勘与书论标注</span></header>
@@ -24,7 +24,7 @@
       }
     }, 12000);
     document.getElementById('startupRetry').onclick = () => location.reload();
-    import('./src/screening.js?v=index-archive-20261027').then(() => clearTimeout(timer)).catch(() => {
+    import('./src/screening.js?v=loading-20261028').then(() => clearTimeout(timer)).catch(() => {
       clearTimeout(timer);
       document.getElementById('startupStatus').textContent = '页面程序未能载入，请检查网络后重试。本机进度保留。';
       document.getElementById('startupRetry').hidden = false;

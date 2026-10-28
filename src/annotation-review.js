@@ -1,10 +1,10 @@
 import {reviewerName,reviewerMenu,bindReviewerMenu} from './review-entry.js?v=directory-entry-20261026';
-import {readJson} from './screening-loader.js?v=index-archive-20261027';
-import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest} from './annotation-corpus.js?v=standard-compressed-20261028';
-import {esc} from './annotation-chapters.js?v=index-archive-20261027';
+import {readJson} from './screening-loader.js?v=loading-20261028';
+import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest} from './annotation-corpus.js?v=loading-20261028';
+import {esc} from './annotation-chapters.js?v=loading-20261028';
 import {readCorpusAssignments,assignmentScope,assignmentsUnchanged} from './annotation-assignments.js?v=annotation-release-20261024';
-import {structureKey,emptyStructureFeedback,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=index-archive-20261027';
-import {reviewIssueTypes,reviewRuns,reviewDomSelection,pageRanges,proposeReviewNote,reviewIssues,reviewDecorations} from './annotation-review-core.js?v=page-pairs-20261027';
+import {structureKey,emptyStructureFeedback,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=loading-20261028';
+import {reviewIssueTypes,reviewRuns,reviewDomSelection,pageRanges,proposeReviewNote,reviewIssues,reviewDecorations} from './annotation-review-core.js?v=loading-20261028';
 import {reviewPagePairs,pairChapter,pairText,pairStatus} from './annotation-page-pairs.js?v=page-pairs-20261027';
 
 import {chapterBatchScope,batchSuffix} from './task-allocation.js?v=task-allocation-20261028';

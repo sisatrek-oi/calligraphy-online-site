@@ -1,4 +1,4 @@
-import {readJson} from './screening-loader.js?v=index-archive-20261027';
+import {readJson} from './screening-loader.js?v=loading-20261028';
 import {teamRelease} from './team-collation.js?v=member5-mark45-20261023';
 import {targetedRelease} from './targeted-ocr.js?v=20261018-part4';
 import {taskOcrHref} from './screening-page-policy.js?v=index-archive-20261027';

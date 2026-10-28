@@ -1,8 +1,8 @@
 import {validateProgress} from './delivery-core.js?v=index-archive-20261027';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
 import {addAnnotation,annotationView,validateAnnotations} from './theory-annotations.js?v=release-20261022';
-import {deleteDefaultAnnotation} from './reviewed-annotation.js?v=index-archive-20261027';
-import {chapterFragmentView,chapterSourceEvents} from './annotation-chapters.js?v=source-order-20261028';
+import {deleteDefaultAnnotation} from './reviewed-annotation.js?v=loading-20261028';
+import {chapterFragmentView,chapterSourceEvents} from './annotation-chapters.js?v=loading-20261028';
 export const chapterProgressKey='shulun-chapter-annotation-v1';
 export const emptyChapterProgress=()=>({format:'shulun-chapter-progress',version:1,person:'',lastChapterId:'',savedAt:'',pages:{},confirmations:{},events:[]});
 const sourcePage=item=>item?.humanReviewed||item;

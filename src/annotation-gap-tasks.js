@@ -1,5 +1,5 @@
 import {reviewerMenu,bindReviewerMenu,gateReviewLinks} from './review-entry.js?v=directory-entry-20261026';
-import {fetchReviewText} from './review-data-loader.js?v=review-compressed-20261024';
+import {fetchReviewText} from './review-data-loader.js?v=loading-20261028';
 import {digestText} from './annotation-compare-core.js?v=wolai-recheck-20261024';
 import {gapsKey,emptyGaps,validateGaps,validateGapState,gapBookWorks} from './annotation-gaps-core.js?v=gap-books-20261024';
 import {loadReviewBatches,selectedBatch,reviewBatchItems,requireBatchTarget,validateBatchCoverage,batchSuffix,batchHref,chapterBatchScope} from './task-allocation.js?v=task-allocation-20261028';

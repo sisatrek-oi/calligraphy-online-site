@@ -1,4 +1,4 @@
-import {validateChapterIndex} from './annotation-chapters.js?v=index-archive-20261027';
+import {validateChapterIndex} from './annotation-chapters.js?v=loading-20261028';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
 
 export const structureActions={

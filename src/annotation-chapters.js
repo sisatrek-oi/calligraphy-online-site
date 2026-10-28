@@ -1,7 +1,7 @@
-import {readJson} from './screening-loader.js?v=index-archive-20261027';
+import {readJson} from './screening-loader.js?v=loading-20261028';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
 import {annotationView} from './theory-annotations.js?v=release-20261022';
-import {candidateView,annotationDisplayRanges} from './reviewed-annotation.js?v=index-archive-20261027';
+import {candidateView,annotationDisplayRanges} from './reviewed-annotation.js?v=loading-20261028';
 import {highlightHtml} from './theory-highlight.js?v=20261003-theory';
 export const chapterHref=id=>`./annotation-chapters.html?chapter=${encodeURIComponent(id)}`;
 export const chapterPageHref=(id,part,page)=>`./annotation.html?scope=all&part=${part}&page=${page}&chapter=${encodeURIComponent(id)}`;

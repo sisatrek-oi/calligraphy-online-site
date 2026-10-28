@@ -1,7 +1,8 @@
-import {loadAnnotationCorpus,corpusMode,corpusQuery,bindCorpusProgress} from './annotation-corpus.js?v=standard-compressed-20261028';
-import {esc} from './annotation-chapters.js?v=index-archive-20261027';
+import {loadAnnotationTaskCorpus} from './annotation-task-corpus.js?v=loading-20261028';
+import {corpusMode,corpusQuery,bindCorpusProgress} from './annotation-corpus.js?v=loading-20261028';
+import {esc} from './annotation-chapters.js?v=loading-20261028';
 import {readProgress} from './delivery-core.js?v=index-archive-20261027';
-import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=index-archive-20261027';
+import {chapterProgressKey,readChapterProgress,effectiveChapterProgress,chapterIsConfirmed} from './chapter-annotation-core.js?v=loading-20261028';
 import {assignmentKey,standardAssignmentKey,bookFoldKey,readCorpusAssignments,assignmentsUnchanged,saveAssignments,assignedName,changeAssignments,validateAssignments,mergeAssignments,memberTasks} from './annotation-assignments.js?v=annotation-release-20261024';
 
 import {annotationBatches,selectedBatch,chapterBatchScope,batchSuffix} from './task-allocation.js?v=task-allocation-20261028';
@@ -24,14 +25,14 @@ function download(name,content){const url=URL.createObjectURL(new Blob([content]
 async function init(){
  try{
   const legacy=Object.fromEntries([1,2,3,4].map(n=>[n,readProgress(localStorage,n).value]));
-  corpus=await loadAnnotationCorpus(location.search);progressKey=corpus.key;index=corpus.index;const {pages,byPage}=corpus;
+  corpus=await loadAnnotationTaskCorpus(location.search,localStorage);progressKey=corpus.key;index=corpus.index;const {pages,byPage}=corpus;
   planStore=readCorpusAssignments(localStorage,index,corpus.mode);({raw:planRaw,value:plan}=planStore);
   const stored=readChapterProgress(localStorage,byPage,progressKey),state=bindCorpusProgress(stored.value,corpus);effectiveChapterProgress(legacy,state,byPage);
   statuses=new Map(await Promise.all(index.chapters.map(async c=>[c.id,await chapterIsConfirmed(c,byPage,legacy,state)])));
   batchGroups=annotationBatches(corpus);batch=selectedBatch(batchGroups,params,'annotation');available=chapterBatchScope(corpus,params).filter(c=>c.fragments.length);
   const last=index.chapterAliases[state.lastChapterId]||state.lastChapterId;lastChapterId=last;
   resume=available.find(c=>c.id===last)||available.find(c=>!statuses.get(c.id)&&c.candidateCount)||available.find(c=>!statuses.get(c.id))||available[0];
-  const confirmed=available.filter(c=>statuses.get(c.id)).length,pending=available.length-confirmed,blocked=pages.filter(p=>!p.eligible),eligible=pages.filter(p=>p.eligible),ai=eligible.reduce((n,p)=>n+p.candidates.length,0),waiting=index.chapters.filter(c=>!c.fragments.length);
+  const confirmed=available.filter(c=>statuses.get(c.id)).length,pending=available.length-confirmed,blocked=pages.filter(p=>!p.eligible),eligible=pages.filter(p=>p.eligible),ai=eligible.reduce((n,p)=>n+(p.candidateCount??p.candidates.length),0),waiting=index.chapters.filter(c=>!c.fragments.length);
   app.innerHTML=`<header class="task-heading"><div><p>团队任务 / 书论标注 · ${esc(corpus.label)}</p><h1>书论标注</h1></div><p class="task-heading-note">按章通读 · 按章分工 · 整章确认<br><a id="openSourceReview" href="./annotation-compare.html">wolai与人工稿差异复核 →</a><br><a id="openStructureFeedback" href="./annotation-structure.html?chapter=${encodeURIComponent(resume.id)}${corpusQuery(corpus.mode)}">核查分段与章节／提交反馈 →</a></p></header>
    <nav class="task-view-tabs" role="tablist" aria-label="分工与目录"><button type="button" role="tab" id="memberViewTab" data-task-view="assignments" aria-controls="memberTaskPanel" aria-selected="true">成员分工</button><button type="button" role="tab" id="directoryViewTab" data-task-view="directory" aria-controls="directoryTaskPanel" aria-selected="false">书籍目录</button></nav>
    <section id="memberTaskPanel" class="member-task-panel" role="tabpanel" aria-labelledby="memberViewTab"><header class="member-board-heading"><div><h2>《历代书法论文选》书论标注</h2><p id="memberAllocationSummary"></p></div><button type="button" id="openAssignment" class="action-button">安排分工</button></header><div class="member-board-tools"><span>选择自己的成员入口，按负责篇章进行标注。</span><button type="button" id="exportAssignments">导出成员分工</button><button type="button" id="importAssignments">导入成员分工</button><input type="file" id="assignmentImportFile" accept=".json,application/json" hidden></div><div id="memberTaskList" class="member-task-list" tabindex="0" aria-label="成员与明确负责范围"></div><footer class="member-board-note"><span>分工方案保存在本机，可导出给成员使用。</span><button type="button" id="assignUnallocated">安排未分工章节</button></footer></section>

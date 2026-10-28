@@ -1,11 +1,11 @@
-import {loadChapterIndex,chapterDirectoryHtml,attachChapterSearch} from './annotation-chapters.js?v=index-archive-20261027';
+import {loadChapterIndex,chapterDirectoryHtml,attachChapterSearch} from './annotation-chapters.js?v=loading-20261028';
 import {assignmentContext} from './assignment-context.js?v=index-archive-20261027';
-import {readJson} from './screening-loader.js?v=index-archive-20261027';
+import {readJson} from './screening-loader.js?v=loading-20261028';
 import { isVerified } from './collation-core.js?v=index-archive-20261027';
 import { isTaskPage, taskPageCount, taskOcrHref } from './screening-page-policy.js?v=index-archive-20261027';
 import { assignments, assignmentCount, assignmentHref } from './team-assignments.js?v=index-archive-20261027';
 import {unifiedAnnotationContext} from './annotation-task-context.js?v=index-archive-20261027';
-import {loadReviewedIndex} from './reviewed-annotation.js?v=index-archive-20261027';
+import {loadReviewedIndex} from './reviewed-annotation.js?v=loading-20261028';
 
 (() => {
   const app = document.querySelector('#teamTasksApp');
