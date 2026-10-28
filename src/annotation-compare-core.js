@@ -21,7 +21,7 @@ export async function validateComparison(data){
  }
  return {data,pages,refs,items};
 }
-export const emptyRecheck=revision=>({format:'wolai-human-recheck',version:1,revision,records:{},events:[]});
+export const emptyRecheck=(revision,corpus)=>({format:corpus?.pageModel?'pdf-page-recheck':'wolai-human-recheck',version:1,revision,records:{},events:[]});
 const binding=i=>({id:i.id,page:i.page,manualSha256:i.manualSha256,referenceSha256:i.referenceSha256,sourceStart:i.sourceStart,sourceEnd:i.sourceEnd,referenceId:i.referenceId,referenceStart:i.referenceStart,referenceEnd:i.referenceEnd});
 function checkRecord(record,corpus){
  const i=corpus.items.get(record?.id);if(!i||!object(record)||!choices.has(record.choice)||!record.by?.trim()||record.by.length>40||!Number.isFinite(Date.parse(record.at))||!object(record.binding)||Object.entries(binding(i)).some(([k,v])=>record.binding[k]!==v))fail('复核记录与本次两侧正文版本或位置不一致。');
@@ -30,16 +30,28 @@ function checkRecord(record,corpus){
  if(record.deleteText&&(record.choice!=='custom'||record.replacement!==''))fail('删除与校订内容不一致。');
  if(record.choice==='custom'&&!record.replacement&&!record.deleteText)fail('请输入校订文字，或明确勾选删除。');
  if(record.choice==='manual'&&record.replacement!==i.original||record.choice==='reference'&&record.replacement!==i.reference||record.choice==='defer'&&record.replacement!=='')fail('核定文本与所选来源不一致。');
+ if(Object.hasOwn(record,'draftText')){if(record.choice!=='defer')fail('未确认校订稿只能保存在存疑记录中。');clean(record.draftText,10000,'未确认校订稿');}
  return record;
 }
+export function comparisonEditorText(item,record){
+ return record?.choice==='custom'?record.replacement:record?.choice==='defer'&&Object.hasOwn(record,'draftText')?record.draftText:item.local;
+}
+export function comparisonEditDecision(item,draft){
+ if(!item||item.referenceId!==null||item.page===null||!draft||draft.id!==item.id||draft.manualSha256!==item.manualSha256||draft.sourceStart!==item.sourceStart||draft.sourceEnd!==item.sourceEnd)fail('TXT编辑来源或范围已变化，请重新打开本项。');
+ const replacement=clean(draft.text,10000,'校订文字');
+ if(typeof draft.deleteText!=='boolean'||draft.deleteText&&replacement!=='')fail('删除确认与校订内容不一致。');
+ if(!replacement&&replacement!==item.local&&!draft.deleteText)fail('文字已清空，请明确确认删除本段，或继续填写。');
+ return {choice:draft.deleteText||replacement!==item.local?'custom':'manual',replacement,deleteText:draft.deleteText};
+}
 export function validateRecheck(value,revision,corpus){
- if(value?.format!=='wolai-human-recheck'||value.version!==1||value.revision!==revision||!object(value.records)||!Array.isArray(value.events))fail('复核备份不属于当前比对版本。');
+ if(value?.format!==(corpus.pageModel?'pdf-page-recheck':'wolai-human-recheck')||value.version!==1||value.revision!==revision||!object(value.records)||!Array.isArray(value.events))fail('复核备份不属于当前比对版本。');
  for(const [id,r] of Object.entries(value.records)){if(id!==r?.id)fail('复核记录编号无效。');checkRecord(r,corpus);}
  for(const e of value.events)checkRecord(e,corpus);return value;
 }
-export function recordDecision(state,corpus,{id,choice,by,note='',replacement='',deleteText=false,scanPage=null,at=new Date().toISOString()}){
+export function recordDecision(state,corpus,{id,choice,by,note='',replacement='',deleteText=false,draftText,scanPage=null,at=new Date().toISOString()}){
  const item=corpus.items.get(id);if(!item||!choices.has(choice))fail('请选择有效差异和复核结论。');by=clean(by,40,'核查人').trim();if(!by)fail('请填写真实核查人姓名。');
  const record={id,choice,by,note:clean(note,3000,'核定依据'),replacement:choice==='manual'?item.original:choice==='reference'?item.reference:choice==='custom'?(deleteText?'':clean(replacement,10000,'校订文字')):'',deleteText:choice==='custom'&&Boolean(deleteText),scanPage,at,binding:binding(item)};
+ if(draftText!==undefined)record.draftText=clean(draftText,10000,'未确认校订稿');
  checkRecord(record,corpus);return {...state,records:{...state.records,[id]:record},events:[...state.events,record]};
 }
 export function saveRecheck(storage,key,next,raw,revision,corpus){validateRecheck(next,revision,corpus);if(storage.getItem(key)!==raw)fail('其他窗口更新了复核记录，本次未覆盖，请先备份再重新读取。');const encoded=JSON.stringify(next);storage.setItem(key,encoded);if(storage.getItem(key)!==encoded)fail('复核记录未能完整保存，请保留备份。');return encoded;}

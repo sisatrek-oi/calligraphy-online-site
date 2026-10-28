@@ -2,6 +2,14 @@ import {digestText,validBoundary} from './annotation-compare-core.js?v=wolai-rec
 const fail=m=>{throw Error(m);},object=v=>v&&typeof v==='object'&&!Array.isArray(v),hash=s=>typeof s==='string'&&/^[a-f0-9]{64}$/.test(s),choices=new Set(['corrected','covered','defer']);
 export const gapsKey=revision=>'shulun-wolai-pdf-gaps-v1:'+revision;
 export const emptyGaps=revision=>({format:'wolai-pdf-gap-proofread',version:1,revision,records:{},events:[]});
+export function gapEditorText(item,draft){
+ if(!draft)return item.candidate;
+ // Saved non-corrections keep their editable text in draftText; an explicit empty draft stays empty.
+ return Object.hasOwn(draft,'draftText')?(draft.choice==='corrected'?draft.text:draft.draftText):draft.text;
+}
+export function gapDraftChanged(item,draft,record){
+ return draft.choice!==(record?.choice||'')||draft.note!==(record?.note||'')||draft.text!==gapEditorText(item,record);
+}
 export async function validateGaps(data){
  if(data?.version!==1||data.purpose!=='wolai-pdf-gaps'||!Array.isArray(data.items)||!Array.isArray(data.pages)||!Array.isArray(data.references)||!Array.isArray(data.coverage)||!Array.isArray(data.unlocated))fail('缺文清单不完整。');
  const pages=new Map(),refs=new Map(),items=new Map();

@@ -59,13 +59,16 @@ export function reviewDomSelection(editor,runs,byPage,selection=window.getSelect
   return {page:run.page,start,end,quote:p.text.slice(start,end),textSha256:run.textSha256};
  }).filter(s=>s.end>s.start);
 }
-export function proposeReviewNote(state,corpus,{chapter,spans=[],scanPage,type,comment,by}){
+export function proposeReviewNote(state,corpus,{chapter,spans=[],anchorSource,scanPage,type,comment,by}){
  if(!Object.hasOwn(reviewIssueTypes,type))throw new Error('请选择问题类型。');
  if(scanPage!==null&&(!Number.isInteger(scanPage)||scanPage<1||scanPage>=20001))throw new Error('当前PDF页码无效。');
  if(!String(comment).trim()||comment.length>3500)throw new Error('请填写问题说明（不超过3500字）。');
  for(const s of spans){const p=corpus.byPage.get(s.page);if(!p||p.source.textSha256!==s.textSha256||!Number.isInteger(s.start)||!Number.isInteger(s.end)||s.start<0||s.end<=s.start||s.end>p.text.length||p.text.slice(s.start,s.end)!==s.quote||!chapter.fragments.some(f=>s.page===f.page&&s.start>=f.start&&s.end<=f.end))throw new Error('所选文字与当前TXT来源不匹配，请重新选文。');}
- const f=chapter.fragments[0];if(!f)throw new Error('本篇尚无已开放正文，请先记录在有正文的相邻篇目。');
- const first=spans[0]||{page:f.page,start:f.start,end:f.start,quote:'',textSha256:f.textSha256},index=deriveStructure(state,corpus),target=index.chapters.find(c=>c.fragments.some(f=>f.page===first.page&&first.start>=f.start&&first.start<f.end));
+ const f=anchorSource&&!spans.length?chapter.fragments.find(f=>f.page===anchorSource.page&&anchorSource.start>=f.start&&anchorSource.start<f.end):chapter.fragments[0];
+ if(anchorSource&&!spans.length&&(!Number.isInteger(anchorSource.page)||!Number.isInteger(anchorSource.start)||!f||corpus.byPage.get(f.page)?.source.textSha256!==anchorSource.textSha256))throw new Error('当前页TXT定位已失效，请重新选择对照页。');
+ if(!f)throw new Error('本篇尚无已开放正文，请先记录在有正文的相邻篇目。');
+ const start=anchorSource&&!spans.length?anchorSource.start:f.start;
+ const first=spans[0]||{page:f.page,start,end:start,quote:'',textSha256:f.textSha256},index=deriveStructure(state,corpus),target=index.chapters.find(c=>c.fragments.some(f=>f.page===first.page&&first.start>=f.start&&first.start<f.end));
  if(!target)throw new Error('反馈定位已不属于当前结构，请从分段与章节入口核对。');
  const part=target.fragments.find(f=>f.page===first.page&&first.start>=f.start&&first.start<f.end),end=Math.min(first.end,part.end),p=corpus.byPage.get(first.page),anchor={...first,end,quote:p.text.slice(first.start,end)};
  return proposeStructure(state,corpus,{action:'note',chapterId:target.id,anchor,proposal:{reviewContext:{kind:'pdf-txt',type,scanPage,chapterId:chapter.id,spans}},comment:`【PDF与TXT核对 · ${reviewIssueTypes[type]} · ${scanPage===null?'PDF位置待定位':'扫描第'+scanPage+'页'}】\n${comment.trim()}`,by});

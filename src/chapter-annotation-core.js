@@ -2,7 +2,7 @@ import {validateProgress} from './delivery-core.js?v=index-archive-20261027';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
 import {addAnnotation,annotationView,validateAnnotations} from './theory-annotations.js?v=release-20261022';
 import {deleteDefaultAnnotation} from './reviewed-annotation.js?v=index-archive-20261027';
-import {chapterFragmentView} from './annotation-chapters.js?v=index-archive-20261027';
+import {chapterFragmentView,chapterSourceEvents} from './annotation-chapters.js?v=source-order-20261028';
 export const chapterProgressKey='shulun-chapter-annotation-v1';
 export const emptyChapterProgress=()=>({format:'shulun-chapter-progress',version:1,person:'',lastChapterId:'',savedAt:'',pages:{},confirmations:{},events:[]});
 const sourcePage=item=>item?.humanReviewed||item;
@@ -49,7 +49,7 @@ export function effectiveChapterProgress(legacy,chapterState,byPage){
  return effective;
 }
 export function chapterRuns(chapter,byPage,effective){
- const events=[...chapter.fragments.map(f=>({page:f.page,f})),...chapter.gaps.map(g=>({page:g.page,g}))].sort((a,b)=>a.page-b.page),runs=[];
+ const events=chapterSourceEvents(chapter),runs=[];
  for(const event of events){if(event.g){runs.push({kind:'gap',gap:event.g});continue;}const f=event.f,p=sourcePage(byPage.get(f.page)),reading=annotationReading(p.text),view=chapterFragmentView(f,byPage,effective);
   for(const b of view.blocks){const visibleStart=reading.visibleOffset(b.start),visibleEnd=reading.visibleOffset(b.end);if(visibleEnd<=visibleStart)continue;runs.push({kind:'text',id:'run-'+f.page+'-'+b.start+'-'+b.end,page:f.page,part:f.part,start:b.start,end:b.end,role:b.role,text:b.text,html:b.html.slice(0,-1),visibleStart,visibleEnd,reading,textSha256:f.textSha256});}
  }

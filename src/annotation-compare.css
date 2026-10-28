@@ -21,3 +21,14 @@
 .compare-direct-choice #compareSavedDetail{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:40dvh;overflow:auto}
 @media(max-width:760px){#compareApp .compare-adopt{font-size:10px;padding:4px 5px}.compare-direct-choice .compare-source>header{gap:4px}.compare-direct-choice .compare-source h3{font-size:11px}.compare-direct-choice #compareJudgmentStatus{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 @media(max-width:480px){.compare-direct-choice .compare-source>header{grid-template-columns:minmax(0,1fr)}.compare-direct-choice .compare-source>header>button{justify-self:stretch}}
+
+/* Without a counterpart, the TXT fills the space beside the PDF. */
+#compareApp.compare-without-reference .compare-texts{grid-template-rows:auto auto minmax(0,1fr)}
+@media(max-height:560px){#compareApp.compare-without-reference .compare-texts{grid-template-rows:auto minmax(0,1fr)}}
+
+.compare-txt-editor{display:flex;flex:1;flex-direction:column;gap:7px;min-height:0;padding:12px}.compare-txt-editor small,.compare-txt-editor label{font-size:11px;color:var(--ws-muted)}
+#compareLegacyDetail,#compareDifferenceDetail{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:40dvh;overflow:auto}
+.compare-source-text h4{font-size:14px;margin:0 0 8px}.compare-source-text p{margin:0 0 14px}
+#compareApp #compareTxtEdit{flex:1;min-height:50px;width:100%;resize:none;font:19px/1.85 'Songti SC','Noto Serif CJK SC',serif;overflow:auto;overscroll-behavior:contain}
+@media(max-width:760px){.compare-txt-editor{padding:6px;gap:4px}#compareApp #compareTxtEdit{font-size:16px}.compare-txt-editor small,.compare-txt-editor label{font-size:10px}}
+@media(max-height:560px){.compare-txt-editor{padding:4px;gap:3px}.compare-txt-editor small{display:none}#compareApp #compareTxtEdit{font-size:15px;min-height:40px}}

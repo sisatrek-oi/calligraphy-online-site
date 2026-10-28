@@ -1,8 +1,8 @@
 import {readJson} from './screening-loader.js?v=index-archive-20261027';
 import {validateReviewedPart} from './reviewed-annotation.js?v=index-archive-20261027';
-import {loadChapterIndex,validateChapterIndex,chapterAnnotationFiles,chapterFragmentView} from './annotation-chapters.js?v=index-archive-20261027';
+import {loadChapterIndex,validateChapterIndex,chapterAnnotationFiles,chapterFragmentView,orderedChapterFragments} from './annotation-chapters.js?v=source-order-20261028';
 import {chapterTaskUnits} from './annotation-chapter-units.js?v=release-20261022';
-import {chapterProgressKey,chapterBackupState,effectiveChapterProgress,chapterIsConfirmed,validateChapterProgress} from './chapter-annotation-core.js?v=index-archive-20261027';
+import {chapterProgressKey,chapterBackupState,effectiveChapterProgress,chapterIsConfirmed,validateChapterProgress} from './chapter-annotation-core.js?v=source-order-20261028';
 import {zipStore} from './zip-store.js?v=release-20261022';
 export const standardProgressKey='shulun-wolai-standard-chapter-annotation-v1';
 export const corpusMode=search=>new URLSearchParams(search).get('corpus')==='legacy'?'legacy':'wolai-standard';
@@ -48,7 +48,7 @@ export async function buildStandardBundle({corpus,state,legacy,legacyChapterRaw,
  for(const c of corpus.index.chapters)statuses[c.id]={confirmed:await chapterIsConfirmed(c,corpus.byPage,legacy,state),...(state.confirmations[c.id]||{})};
  const files=chapterAnnotationFiles(corpus.index,corpus.byPage,effective,statuses).map(f=>({...f,content:f.content.replaceAll('原PDF页','正文来源ID').replaceAll('原PDF第','缺口来源').replaceAll('原 PDF 第','缺口来源 ').replaceAll('原图与来源 · 第','正文来源 · ID ')}));
  const backup=corpusBackup(state,legacy,corpus,legacyChapterRaw);
- const completeText='\ufeff'+corpus.index.chapters.map(c=>`${c.author} · 《${c.workTitle}》 · ${c.volumeTitle&&c.volumeTitle!==c.title?c.volumeTitle+' · ':''}${c.title}\n\n`+c.fragments.map(f=>chapterFragmentView(f,corpus.byPage,effective).readingText).join('\n')).join('\n\n');
+ const completeText='\ufeff'+corpus.index.chapters.map(c=>`${c.author} · 《${c.workTitle}》 · ${c.volumeTitle&&c.volumeTitle!==c.title?c.volumeTitle+' · ':''}${c.title}\n\n`+orderedChapterFragments(c).map(f=>chapterFragmentView(f,corpus.byPage,effective).readingText).join('\n')).join('\n\n');
  files.push({name:'wolai标准正文全集.txt',content:completeText},{name:'旧成员分工原始备份.json',content:assignmentRecords.legacy||'null'},{name:'标准成员分工原始备份.json',content:assignmentRecords.standard||'null'},{name:'wolai标准语料.json',content:JSON.stringify(corpus.data,null,2)},{name:'wolai标准标注进度.json',content:JSON.stringify(backup,null,2)},{name:'原四份记录完整备份.json',content:JSON.stringify(backup.legacyArchive,null,2)},{name:'旧整章记录完整备份.json',content:JSON.stringify(backup.legacyChapterArchives.map(raw=>JSON.parse(raw)),null,2)},{name:'标准来源映射.json',content:JSON.stringify(corpus.pages.map(p=>({sourceId:p.page,...p.source})),null,2)},{name:'使用说明.txt',content:`wolai标准任务；正文版本 ${corpus.data.revision}。\n${unsaved?'包含未保存进度，请妥善保留。\n':''}本任务仅确认已开放正文，不表示全书或来源缺文已补齐。AI初标不等于人工标注完成。标准语料／标注进度独立保存；原四份记录和旧整章记录是完整备份，未迁移或覆盖。\n恢复本任务请使用 wolai标准标注进度.json；原四份与旧整章备份分别在旧入口恢复。正文来源ID不是原PDF页码，实际原图定位见标准来源映射。`});
  return {name:'wolai标准-整章标注成果'+(unsaved?'（未保存）':'')+'.zip',bytes:zipStore(files),files};
 }

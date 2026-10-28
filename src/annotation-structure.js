@@ -11,6 +11,7 @@ window.WorkspaceUI.mount('annotation');
 let audit=new Map();
 let scanPages=[],scanPage=null,scanSource=null,scanCatalogError='';
 let corpus,revision,state,raw=null,index,current,anchor=null,view='base',unsaved=null,stale=false,composing=false,draftPreview=null,preview=null;
+import {chapterBatchScope,batchSuffix} from './task-allocation.js?v=task-allocation-20261028';
 const drafts=new Map(),memberId=params.get('assignee')||'';let assignmentSnapshot=null,memberChapters=null,scopedReviewerName='';
 const notice=text=>{const el=app.querySelector('#structureNotice');if(el)el.textContent=text;};
 const timestamp=()=>new Date().toISOString();
@@ -22,7 +23,7 @@ function download(name,content,type='application/json'){
 }
 function inScope(c){if(!c)return false;if(!memberChapters)return true;if(!c.fragments.length)return memberChapters.some(base=>base.id===c.id);return c.fragments.every(f=>{let cursor=f.start;for(const span of memberChapters.flatMap(base=>base.fragments).filter(s=>s.page===f.page).sort((a,b)=>a.start-b.start)){if(span.start>cursor)break;if(span.end>cursor)cursor=span.end;if(cursor>=f.end)return true;}return false;});}
 const visibleChapters=(idx=currentIndex())=>idx.chapters.filter(inScope);
-const memberQuery=()=>memberId?'&assignee='+encodeURIComponent(memberId):'';
+const memberQuery=()=>(memberId?'&assignee='+encodeURIComponent(memberId):'')+batchSuffix(params);
 function feedbackBackup(value=unsaved||state){download('分段章节反馈-'+timestamp().replace(/[:.]/g,'-')+'.json',JSON.stringify(value,null,2));}
 function recovery(error,next=null){app.querySelector('#structurePreviewDialog')?.close();app.querySelector('#structureImportDialog')?.close();if(next)unsaved=next;const panel=app.querySelector('#structureRecovery');panel.hidden=false;panel.querySelector('p').textContent=error.message;app.querySelector('#structureRetry').hidden=!unsaved;notice(error.message);}
 function ready(){
@@ -251,7 +252,8 @@ async function init(){
  try{
   corpus=await loadAnnotationCorpus(location.search);revision=await corpusDigest({mode,index:corpus.index,sources:corpus.pages.filter(p=>p.eligible).map(p=>[p.page,p.source.textSha256])});raw=localStorage.getItem(key);state=raw===null?emptyStructureFeedback(revision,mode):validateStructureFeedback(JSON.parse(raw),corpus,revision);index=deriveStructure(state,corpus);view=hasEdits()?'revision':'base';
   if(memberId){assignmentSnapshot=readCorpusAssignments(localStorage,corpus.index,mode);const scope=assignmentScope(assignmentSnapshot.value,corpus.index,memberId);memberChapters=scope.chapters;scopedReviewerName=scope.member.name;if(!memberChapters.length)throw new Error('该成员尚无章节分工，请返回任务页重新进入。');}
-  const id=currentIndex().chapterAliases[params.get('chapter')]||params.get('chapter');if(memberId&&id&&!visibleChapters().some(c=>c.id===id))throw new Error('该章节不在本人分工范围内，请返回成员入口。');current=visibleChapters().find(c=>c.id===id)||visibleChapters().find(c=>c.fragments.length);if(!current)throw new Error('当前没有可核查的合格正文。');mount();
+  if(params.has('batch'))memberChapters=chapterBatchScope(corpus,params,memberChapters||corpus.index.chapters);
+  const id=currentIndex().chapterAliases[params.get('chapter')]||params.get('chapter');if((memberId||params.has('batch'))&&id&&!visibleChapters().some(c=>c.id===id))throw new Error('该章节不在本人分工范围内，请返回成员入口。');current=visibleChapters().find(c=>c.id===id)||visibleChapters().find(c=>c.fragments.length);if(!current)throw new Error('当前没有可核查的合格正文。');mount();
   void loadScanCatalog();
   if(location.hash.startsWith('#selection=')){try{const value=JSON.parse(decodeURIComponent(location.hash.slice(11))),first=value[0],p=corpus.byPage.get(first?.page);if(!p||!Number.isInteger(first.start)||!Number.isInteger(first.end)||first.end<first.start||first.end>p.text.length||p.source.textSha256!==first.textSha256||!current.fragments.some(f=>f.page===first.page&&first.start>=f.start&&first.start<f.end))throw Error('从标注页传入的位置已不属于当前结构，请重新选文。');anchor={page:first.page,start:first.start,end:first.end,quote:p.text.slice(first.start,first.end),textSha256:p.source.textSha256};updateAnchor();app.classList.add('structure-feedback-open');}catch(e){notice(e.message);}}
  }catch(e){app.innerHTML=`<section class="structure-loading"><h1>分段与章节反馈暂未载入</h1><p role="alert">${esc(e.message)}</p><p>原文、分工和标注记录保留。</p><button id="downloadRawStructure" type="button">下载现有反馈原记录</button><button type="button" id="reloadStructure">重新读取</button></section>`;app.querySelector('#downloadRawStructure').onclick=()=>download('反馈原记录.json',localStorage.getItem(key)||'null');app.querySelector('#reloadStructure').onclick=()=>location.reload();}

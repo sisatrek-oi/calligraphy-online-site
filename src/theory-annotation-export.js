@@ -1,5 +1,5 @@
-import {validateChapterProgress,effectiveChapterProgress,chapterIsConfirmed,chapterBackupState} from './chapter-annotation-core.js?v=index-archive-20261027';
-import {chapterAnnotationFiles} from './annotation-chapters.js?v=index-archive-20261027';
+import {validateChapterProgress,effectiveChapterProgress,chapterIsConfirmed,chapterBackupState} from './chapter-annotation-core.js?v=source-order-20261028';
+import {chapterAnnotationFiles} from './annotation-chapters.js?v=source-order-20261028';
 import { annotationView } from './theory-annotations.js?v=release-20261022';
 import { draftForPage } from './ocr-source-policy.js?v=index-archive-20261027';
 import { highlightHtml } from './theory-highlight.js?v=20261003-theory';
@@ -38,7 +38,7 @@ export function annotationFiles(pages,reviews,part,person,{sourceForPage,always=
     sections.push(`<section><h2>原 PDF 第 ${p.page} 页</h2><p class="status">${esc(view.label)} · 人工 ${view.ranges.length} 处 · AI初标待复核 ${suggestions.pending.length} 处${source?` · ${esc(source.label)} · ${esc(source.verifiedBy)} · ${esc(source.verifiedAt)} · ${esc(source.revision)}`:''}</p><pre>${highlightHtml(text,ranges)}</pre>${suggestions.available?`<aside><h3>AI初标与语境</h3>${suggestions.contextNotes.map(n=>`<p>${esc(n)}</p>`).join('')}${suggestions.all.map(c=>`<blockquote><strong>${esc(c.category)} · ${c.contextStatus==='needs-context'?'语境待核 · ':''}${c.decision==='accepted'?'已采纳':c.decision==='rejected'?'不采用':'待复核'}</strong><br>${esc(c.quote)}<br><small>${esc(c.note)}</small></blockquote>`).join('')}</aside>`:''}${view.pending.length?`<aside><h3>待重新定位（未计入高亮）</h3>${view.pending.map(a=>`<blockquote>${esc(a.quote)}</blockquote>`).join('')}</aside>`:''}</section>`);
   }
   const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>第${part}份 · 原文书论标注</title><style>body{max-width:900px;margin:30px auto;padding:0 24px;color:#244843;background:#fffef9;font:16px/1.95 serif}h1,h2,h3,.status{font-family:system-ui,sans-serif}h1{font-size:24px}h2{font-size:18px}section{border-top:1px solid #d9d8ce;margin-top:30px;padding-top:20px}pre{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere}mark{background:#f1d586;color:inherit}aside{border-left:3px solid #a05e28;padding:0 16px}.status{font-size:13px}@media print{section{break-before:page}}</style><h1>原文中的书论标注</h1><p>第${part}份 · 导出人：${esc(person)}。黄色为人工圈选的书论；校对状态另记。未确认页面不表示没有书论；待重新定位内容未计入高亮。网页只作阅读，恢复请用进度JSON。</p>${sections.join('')}</html>`;
-  const reading=html.replace('黄色为人工圈选的书论；校对状态另记。','黄色为人工标注，淡绿为AI初标待复核；初标不计人工完成。').replace('mark{background:#f1d586;color:inherit}','mark{background:#f1d586;color:inherit}.theory-suggested{background:#d9e7de}');
+  const reading=html.replace('黄色为人工圈选的书论；校对状态另记。','黄色为人工标注，浅蓝为AI初标待复核；初标不计人工完成。').replace('mark{background:#f1d586;color:inherit}','mark{background:#f1d586;color:inherit}.theory-suggested{background:#dceaf8}');
   return [{name:`第${part}份-书论标注.csv`,content:csv(passages)},{name:`第${part}份-书论标注页状态.csv`,content:csv(status)},{name:`第${part}份-原文书论标注.html`,content:reading},
     ...(snapshots.length?[{name:`第${part}份-AI初标与复核.csv`,content:csv(initial)},{name:`第${part}份-AI书论初标.json`,content:JSON.stringify({version:1,batch:reviewedBatch,pages:snapshots},null,2)}]:[])];
 }
@@ -63,7 +63,7 @@ export async function buildAnnotationBundle({progress,pages,member=null,exported
   files.push({name:'交付说明.txt',content:'\ufeff'+[
     '书论标注任务交付包',`标注人：${person}`,`导出时间：${exportedAt}`,
     '正文只取已完成人工校验且无待核的资料；标注界面不改字。',
-    'AI标注默认保留，删除选区及整页确认分别留痕；未确认页不计人工完成。黄色为已保存标注，淡绿为待整页确认的默认AI标注。原有语境提示保留，整页确认不会自动填写逐条语境核定。',
+    'AI标注默认保留，删除选区及整页确认分别留痕；未确认页不计人工完成。黄色为已保存标注，浅蓝为待整页确认的默认AI标注。原有语境提示保留，整页确认不会自动填写逐条语境核定。',
     `当前分工段可标注 ${eligible.length} 页，未入选 ${scoped.length-eligible.length} 页。未确认不等于没有书论。`,
     'HTML/CSV仅列合格资料；旧待定位/撤销标注不计入有效高亮。',
     'JSON完整备份保留原分份所有正文、草稿、比较底稿、校对状态和标注历史，包括未入选及移交/排除页。',
