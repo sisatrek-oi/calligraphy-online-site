@@ -18,3 +18,5 @@
 #reviewContextMenu{position:fixed;z-index:45;display:grid;gap:4px;min-width:180px;max-width:calc(100vw - 12px);padding:6px;background:var(--ws-surface);border:1px solid var(--ws-line);border-radius:6px;box-shadow:0 6px 22px #193a2d22}#reviewContextMenu button{border:0;text-align:left;font-size:12px}#reviewContextMenu button:hover,#reviewContextMenu button:focus-visible{background:#e7ede7}
 /* Keep the scan readable while the feedback form and page controls share a short viewport. */
 @media(max-height:560px){#sourceReviewApp.review-feedback-open .page-source-controls{max-height:24px;overflow:auto}#sourceReviewApp.review-feedback-open #reviewTxtDownload{display:none}}
+
+.review-text-run.flow-joined{display:inline;margin:0}.review-text-run.generated-gap{display:none}

@@ -1,7 +1,8 @@
+import {pdfEventOrder} from './annotation-pdf-order.js';
 import {reviewerName,reviewerMenu,bindReviewerMenu} from './review-entry.js?v=directory-entry-20261026';
 import {readJson} from './screening-loader.js?v=loading-20261028';
 import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest} from './annotation-corpus.js?v=loading-20261028b';
-import {esc} from './annotation-chapters.js?v=loading-20261028';
+import {esc,chapterReadingText} from './annotation-chapters.js?v=loading-20261028';
 import {readCorpusAssignments,assignmentScope,assignmentsUnchanged} from './annotation-assignments.js?v=owners-20261028';
 import {structureKey,emptyStructureFeedback,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=loading-20261028';
 import {reviewIssueTypes,reviewRuns,reviewDomSelection,pageRanges,proposeReviewNote,reviewIssues,reviewDecorations} from './annotation-review-core.js?v=loading-20261028';
@@ -55,13 +56,13 @@ function renderRecords(){
 function decoratedRun(run){
  const page=corpus.byPage.get(run.page),sourceHint=knownIssues.some(i=>i.scope==='source'&&i.page===run.page&&i.start<run.end&&i.end>run.start);
  const text=reviewDecorations(run,page,knownIssues).map(part=>part.issues.length?`<mark class="review-pending" data-review-issue="${esc(part.issues[0].id)}" title="${esc([...new Set(part.issues.map(i=>i.label+'：'+i.detail))].join('；'))}">${esc(part.text)}</mark>`:esc(part.text)).join('');
- return `<p class="review-text-run${sourceHint?' has-source-hint':''}" data-review-run="${run.id}" data-page="${run.page}" data-start="${run.start}" data-end="${run.end}">${text}</p>`;
+ return `<p class="review-text-run${sourceHint?' has-source-hint':''}${run.flowJoined?' flow-joined':''}${run.hideGeneratedGap?' generated-gap':''}" data-review-run="${run.id}" data-page="${run.page}" data-start="${run.start}" data-end="${run.end}">${text}</p>`;
 }
 function renderText(){
  const body=$('reviewTextBody'),scroll=body.scrollTop,view=viewChapter(),pair=activePair();knownIssues=reviewIssues(current,corpus.byPage,state);runs=reviewRuns(view,corpus.byPage);
- const content=runs.map(r=>({page:r.page,html:decoratedRun(r)}));
- for(const g of view.gaps)content.push({page:g.page,html:`<aside class="review-gap" data-review-gap title="${esc((g.reasons||[]).join('；'))}">缺文待核 · 来源 ${g.page}（可先略过，继续核对）</aside>`});
- body.innerHTML=(pair?.status==='partial'?'<aside class="review-gap">此页仅显示有明确来源的TXT片段；其余正文保留在“未定位正文”和“整章TXT”中。</aside>':'')+(content.sort((a,b)=>a.page-b.page).map(v=>v.html).join('')||`<p>${pair?.status==='unmapped'?'本章TXT尚未精确定位到此PDF页，请从“未定位正文”或“整章TXT”核对；没有用整章文字代替本页TXT。':'此页暂缺合格TXT，已保留页位置，可先继续下一页。'}</p>`);body.scrollTop=scroll;renderAnchor();renderIssueSummary();
+ const content=runs.map(r=>({page:r.page,f:{page:r.page,start:r.start},pdf:r.pdf,parallel:r.parallel,html:decoratedRun(r)}));
+ for(const g of view.gaps)content.push({page:g.page,pdf:{page:g.page,start:0},html:`<aside class="review-gap" data-review-gap title="${esc((g.reasons||[]).join('；'))}">缺文待核 · 来源 ${g.page}（可先略过，继续核对）</aside>`});
+ body.innerHTML=(pair?.status==='partial'?'<aside class="review-gap">本页按PDF/TXT段落定位，异文请对照原图核查；未定位来源另列。</aside>':'')+(content.sort(pdfEventOrder).map((v,i,all)=>{const zone=v.parallel?'parallel':v.pdf?'main':'unlocated',previous=i?(all[i-1].parallel?'parallel':all[i-1].pdf?'main':'unlocated'):null;return (zone!==previous&&zone!=='main'?'<aside class="review-gap">'+(zone==='parallel'?'同段来源稿 · 对照留档（不插入正文）':'PDF位置待核 · 以下保留原来源次序')+'</aside>':'')+v.html;}).join('')||`<p>${pair?.status==='unmapped'?'本章TXT尚未精确定位到此PDF页，请从“未定位正文”或“整章TXT”核对；没有用整章文字代替本页TXT。':'此页暂缺合格TXT，已保留页位置，可先继续下一页。'}</p>`);body.scrollTop=scroll;renderAnchor();renderIssueSummary();
 }
 function updatePosition(){
  const pair=activePair(),refs=pairs.filter(r=>r.page!==null).map(r=>r.page),at=pairs.findIndex(r=>r.key===pairKey);
@@ -81,7 +82,7 @@ function choosePair(value,syncScan=true){
  renderText();$('reviewTextBody').scrollTop=0;updatePosition();if(syncScan)showScan(sourcePage);renderCatalog();
 }
 function downloadTxt(){
- if(composing)return;const pair=activePair(),text=pair?pairText(pair,corpus.byPage):current.fragments.map(f=>corpus.byPage.get(f.page).text.slice(f.start,f.end)).join('');
+ if(composing)return;const pair=activePair(),text=pair?pairText(pair,corpus.byPage):mode==='legacy'?current.fragments.map(f=>corpus.byPage.get(f.page).text.slice(f.start,f.end)).join(''):chapterReadingText(current,corpus.byPage);
  if(text)download(current.workTitle+'-'+current.title+'-'+(pair?(pair.page===null?'未定位正文':'PDF第'+pair.page+'页'):'整章')+(pair?.status==='partial'?'-已定位片段':'')+'.txt',text,'text/plain;charset=utf-8');
 }
 function renderIssueSummary(){
@@ -172,7 +173,7 @@ function mount(){
  $('reviewImport').onclick=()=>$('reviewImportFile').click();$('reviewImportFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file||!ready())return;try{if(file.size>10*1024*1024)throw Error('反馈文件超过10MB。');const incoming=JSON.parse(await file.text()),next=mergeStructureFeedback(state,incoming,corpus,revision),snapshot=raw,d=$('reviewImportDialog');d.innerHTML=`<h2>导入反馈预览</h2><p>文件含 ${incoming.items.length} 条反馈，合并后共 ${next.items.length} 条。原文与标注任务目录保持。</p><p id="reviewImportError" role="alert"></p><button id="reviewCancelImport" type="button">取消</button><button id="reviewApplyImport" type="button">合并这些反馈</button>`;$('reviewCancelImport').onclick=()=>d.close();$('reviewApplyImport').onclick=()=>{if(!ready())return;if(raw!==snapshot){$('reviewImportError').textContent='记录已变化，请重新选择文件。';return;}if(persist(next)){d.close();notify('反馈记录已合并。');openFeedback('records');}};d.showModal();}catch(error){notify(error.message);}};
 }
 async function init(){
- try{if(!reviewerName()){const directory=new URL('./annotation-compare.html',location.href);directory.search=location.search;directory.searchParams.set('view','pdf');directory.hash=location.hash;location.replace(directory);return;}corpus=await loadAnnotationCorpus(location.search);revision=await corpusDigest({mode,index:corpus.index,sources:corpus.pages.filter(p=>p.eligible).map(p=>[p.page,p.source.textSha256])});raw=localStorage.getItem(key);state=raw===null?emptyStructureFeedback(revision,mode):validateStructureFeedback(JSON.parse(raw),corpus,revision);chapters=corpus.index.chapters;
+ try{if(!reviewerName()){const directory=new URL('./annotation-compare.html',location.href);directory.search=location.search;directory.searchParams.set('view','pdf');directory.hash=location.hash;location.replace(directory);return;}corpus=await loadAnnotationCorpus(location.search);revision=await corpusDigest({mode,index:corpus.allocationIndex||corpus.index,sources:corpus.pages.filter(p=>p.eligible).map(p=>[p.page,p.source.textSha256])});raw=localStorage.getItem(key);state=raw===null?emptyStructureFeedback(revision,mode):validateStructureFeedback(JSON.parse(raw),corpus,revision);chapters=corpus.index.chapters;
  if(memberId){assignment=readCorpusAssignments(localStorage,corpus.index,mode);const scope=assignmentScope(assignment.value,corpus.index,memberId);chapters=scope.chapters;if(!chapters.length)throw Error('该成员尚无篇目分工，请返回成员任务页。');}
  chapters=chapterBatchScope(corpus,params,chapters);if(!chapters.length)throw Error('当前分工没有可对照的章节。');
  const requested=params.get('chapter'),id=corpus.index.chapterAliases[requested]||requested;if((memberId||params.has('batch'))&&id&&!chapters.some(c=>c.id===id))throw Error('此篇目不在本人分工范围内。');current=chapters.find(c=>c.id===id)||chapters.find(c=>c.fragments.length)||chapters[0];if(!current)throw Error('当前没有可对照的合格正文。');mount();renderChapter(initialHash.startsWith('#selection=')?'all':params.get('page')??undefined);if(params.has('page')&&pairKey!==params.get('page'))notify('该页不在当前章节中，已定位本章首个页对。');void loadCatalog();

@@ -6,14 +6,14 @@ test('笔论 reads author, biography, introduction, title, then ancient body in 
  const parts=['蔡 邕','蔡邕（一三三年','能总结前人','熹平四年','《 笔论》','笔论\n','书者，散也','夫书，先默坐','为书之体'];let cursor=-1;
  for(const part of parts){const at=text.indexOf(part,cursor+1);assert.ok(at>cursor,part+' must follow previous source passage');cursor=at;}
 });
-import {readingOrders} from '../src/annotation-reading-orders.js';
+import {pdfReadingOrder} from '../src/annotation-pdf-order-data.js';
 import {chapterFragmentView,chapterAnnotationFiles} from '../src/annotation-chapters.js';
 import {emptyChapterProgress,applyChapterSelection,effectiveChapterProgress,confirmChapter,chapterIsConfirmed,mergeChapterBackup,validateChapterProgress} from '../src/chapter-annotation-core.js';
 import {createHash} from 'node:crypto';import {execFileSync} from 'node:child_process';
 const hash=s=>createHash('sha256').update(s).digest('hex'),legacy=Object.fromEntries([1,2,3,4].map(part=>[part,{version:1,part,person:'',reviews:{}}]));
-test('every permutation covers unchanged UTF16 blocks exactly once, preserving Wolai sequence and all originals',()=>{
- assert.equal(Object.keys(readingOrders).length,51);
- for(const c of corpus.index.chapters)for(const f of c.fragments){const p=by.get(f.page),before=JSON.stringify(p),v=chapterFragmentView(f,by);assert.equal(hash(p.text),f.textSha256);assert.deepEqual(v.blocks.map(b=>[b.start,b.end]).sort((a,b)=>a[0]-b[0]),f.blocks.filter(b=>!b.decoration).map(b=>[b.start,b.end]));const ws=p.source.provenance.filter(m=>m.origin.startsWith('wolai')).map(m=>m.start);assert.deepEqual(v.blocks.filter(b=>ws.includes(b.start)).map(b=>b.start),ws);assert.equal(JSON.stringify(p),before);}
+test('PDF mapping preserves every original source UTF16 unit exactly once without preserving the erroneous Wolai order',()=>{
+ assert.equal(Object.keys(pdfReadingOrder.plans).length,256);
+ for(const c of corpus.index.chapters)for(const f of c.fragments){const p=by.get(f.page),before=JSON.stringify(p),v=chapterFragmentView(f,by);assert.equal(hash(p.text),f.textSha256);let at=f.start;for(const b of v.blocks.slice().sort((a,b)=>a.start-b.start)){assert.equal(b.start,at);at=b.end;}assert.equal(at,f.end);assert.equal(JSON.stringify(p),before);}
 });
 test('reordered title/body selection maps decreasing source coordinates without including intervening biography',async()=>{
  const runs=chapterRuns(chapter,by,{}),a=runs.find(r=>r.start===534),z=runs.find(r=>r.start===5),spans=mapChapterSelection(runs,a.id,0,z.id,6,by);assert.deepEqual(spans.map(s=>s.start),[534,5]);assert.deepEqual(spans.map(s=>s.quote),['笔论\n','书者，散也。']);
@@ -30,4 +30,4 @@ test('HTML/TXT/JSON reading exports use restored order and still carry raw sourc
  for(const file of files.filter(f=>f.name.endsWith('.txt')||f.name.endsWith('.html'))){assert.ok(file.content.indexOf('蔡邕（一三三年')<file.content.indexOf('书者，散也'));}
  const json=JSON.parse(files.find(f=>f.name==='章节整理.json').content).chapters[0].fragments[0];assert.equal(json.text,by.get(20003).text);assert.equal(json.textSha256,by.get(20003).source.textSha256);assert.equal(json.blocks.find(b=>b.text.startsWith('书者')).start,5);
 });
-test('display order can be rebuilt from frozen evidence without changing the approved corpus',()=>{assert.match(execFileSync('python3',['scripts/build-reading-order.py','--check'],{encoding:'utf8'}),/"reordered": 51/);});
+test('display order can be rebuilt from frozen evidence without changing the approved corpus',()=>{assert.match(execFileSync('python3',['scripts/build-pdf-reading-order.py','--check'],{encoding:'utf8'}),/"records": 3431/);});

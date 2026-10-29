@@ -10,6 +10,7 @@ export const structureRoles={theory:'书论正文',editorial:'编者题解／注
 export const structureKey=mode=>'shulun-structure-feedback-v1-'+mode;
 export const emptyStructureFeedback=(revision,mode)=>({format:'shulun-structure-feedback',version:1,revision,mode,items:[],checks:[],events:[]});
 const stamp=c=>JSON.stringify(c);
+const sourceStamp=value=>{const c=typeof value==='string'?JSON.parse(value):structuredClone(value);delete c.pdfSections;delete c.pdfBoundary;return JSON.stringify(c);};
 const person=value=>{if(typeof value!=='string'||!value.trim()||Array.from(value.trim()).length>40)throw new Error('请填写1–40字的真实姓名。');return value.trim();};
 const title=value=>{if(typeof value!=='string'||!value.trim()||Array.from(value.trim()).length>120)throw new Error('请填写1–120字的修订章名。');return value.trim();};
 const characterBoundary=(text,n)=>!(n>0&&n<text.length&&(/[\uD800-\uDBFF]/u.test(text[n-1])&&/[\uDC00-\uDFFF]/u.test(text[n])||text[n-1]==='\r'&&text[n]==='\n'));
@@ -73,7 +74,7 @@ function splitFragments(c,a,byPage){
 }
 function transform(index,item,corpus){
  const targets=affected(index,item);
- if(JSON.stringify(targets.map(c=>({id:c.id,stamp:stamp(c)})))!==JSON.stringify(item.before))throw new Error('相关结构已发生变化，请根据当前版本重新提出反馈；原意见保留。');
+ if(targets.length!==item.before.length||targets.some((c,n)=>c.id!==item.before[n].id||sourceStamp(c)!==sourceStamp(item.before[n].stamp)))throw new Error('相关结构已发生变化，请根据当前版本重新提出反馈；原意见保留。');
  const c=targets[0],a=validateAnchor(item.anchor,corpus),n=index.chapters.indexOf(c),changedBoundaries=new Set();
  if(!c.fragments.some(f=>pointIn(a,f)&&a.end<=f.end))throw new Error('定位不属于当前章节，请重新选择。');
  if(item.action==='note')return index;
@@ -111,7 +112,10 @@ function transform(index,item,corpus){
  return rebuild(index,corpus.byPage,changedBoundaries);
 }
 export function deriveStructure(state,corpus){
- const index=structuredClone(corpus.index),applied=state.items.filter(i=>i.status==='applied').sort((a,b)=>a.order-b.order);
+ const applied=state.items.filter(i=>i.status==='applied').sort((a,b)=>a.order-b.order);
+ // Existing local revisions replay against the source directory they were created from.
+ const legacyDraft=corpus.allocationIndex&&applied.some(i=>i.before.some(b=>{try{return !Object.hasOwn(JSON.parse(b.stamp),'pdfBoundary');}catch{return false;}}));
+ const index=structuredClone(legacyDraft?corpus.allocationIndex:corpus.index);
  for(const item of applied)transform(index,item,corpus);
  return index;
 }

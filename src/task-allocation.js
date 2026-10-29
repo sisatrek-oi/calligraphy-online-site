@@ -11,7 +11,7 @@ export function balancedRanges(weights,count,baseWeights=Array(count).fill(0)){
  const ends=dp[count][weights.length].cuts;return ends.map((end,n)=>({start:n?ends[n-1]:0,end,weight:sum[end]-sum[n?ends[n-1]:0]}));
 }
 export function annotationBatches(corpus){
- const chapters=corpus.index.chapters.filter(c=>c.fragments.length),weights=chapters.map(c=>c.fragments.reduce((n,f)=>n+f.end-f.start,0));
+ const chapters=(corpus.allocationIndex||corpus.index).chapters.filter(c=>c.fragments.length),weights=chapters.map(c=>corpus.index.allocationWeights?.[c.id]??c.fragments.reduce((n,f)=>n+f.end-f.start,0));
  return balancedRanges(weights,3).map((r,n)=>({id:'ABC'[n],kind:'annotation',weight:r.weight,chapterIds:chapters.slice(r.start,r.end).map(c=>c.id)}));
 }
 export function selectedBatch(groups,search,kind){

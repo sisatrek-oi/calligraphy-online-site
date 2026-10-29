@@ -1,16 +1,17 @@
+import {chapterReadingEvents,chapterReferencePages} from './annotation-pdf-order.js';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
 import {proposeStructure,deriveStructure} from './annotation-structure-core.js?v=loading-20261028';
 
 export const reviewIssueTypes={missing:'漏页／漏文',text:'文字有误',context:'上下文不衔接',source:'原图定位不对应',other:'其他疑点'};
 export function reviewPdfPages(chapter,byPage){
- return [...new Set(chapter.fragments.flatMap(f=>f.page<20001?[f.page]:(byPage.get(f.page)?.source.originalPages||[])))].sort((a,b)=>a-b);
+ const mapped=chapterReferencePages(chapter);return [...new Set(mapped.length?mapped:chapter.fragments.flatMap(f=>f.page<20001?[f.page]:byPage.get(f.page)?.source.originalPages||[]))].sort((a,b)=>a-b);
 }
 export function pageRanges(pages){
  const ranges=[];for(const n of [...new Set(pages)].sort((a,b)=>a-b)){const last=ranges.at(-1);if(last&&last[1]+1===n)last[1]=n;else ranges.push([n,n]);}
  return ranges.map(([a,b])=>a===b?String(a):`${a}—${b}`).join('、');
 }
 export function reviewRuns(chapter,byPage){
- return chapter.fragments.map((f,n)=>{const p=byPage.get(f.page),reading=annotationReading(p.text),visibleStart=reading.visibleOffset(f.start);return {id:'review-'+n,page:f.page,start:f.start,end:f.end,textSha256:p.source.textSha256,visibleStart,text:reading.text.slice(visibleStart,reading.visibleOffset(f.end))};});
+ const events=chapter.fragments.every(f=>f.page<20001)?chapter.fragments.map(f=>({f,pdf:{page:f.page,start:f.start,end:f.end,status:'exact'}})):chapterReadingEvents(chapter).filter(e=>e.f);return events.map(({f,pdf,parallel,flowJoined,hideGeneratedGap},n)=>{const p=byPage.get(f.page),reading=annotationReading(p.text),visibleStart=reading.visibleOffset(f.start);return {id:'review-'+n,pdf,parallel,flowJoined,hideGeneratedGap,page:f.page,start:f.start,end:f.end,textSha256:p.source.textSha256,visibleStart,text:reading.text.slice(visibleStart,reading.visibleOffset(f.end))};});
 }
 // These are hints already present in the source/feedback, not new text corrections.
 export function reviewIssues(chapter,byPage,feedback={items:[]}){

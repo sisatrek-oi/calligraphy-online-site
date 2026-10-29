@@ -9,7 +9,7 @@ test('all parallel transports reassemble the exact approved source bytes with bo
 });
 test('cold task list loads only its small verified catalogue and keeps the original complete chapter scopes',async()=>{
  const calls=[],corpus=await loadAnnotationTaskCorpus('',storage(null),{fetcher:async path=>{calls.push(path);return fetcher(path);}}),original=JSON.parse(await read('annotation-data/wolai-standard.json'));
- assert.equal(corpus.catalogueOnly,true);assert.deepEqual(corpus.index,original.index);assert.equal(corpus.pages.reduce((n,p)=>n+p.candidateCount,0),original.pages.reduce((n,p)=>n+p.candidates.length,0));assert.deepEqual(calls,['./annotation-data/chapter-catalogue.json.gz?v=loading-20261028b']);assert.ok((await read('annotation-data/chapter-catalogue.json.gz')).length<130000);
+ assert.equal(corpus.catalogueOnly,true);assert.deepEqual(corpus.allocationIndex,original.index);assert.equal(corpus.index.chapters.length,original.index.chapters.length);assert.equal(corpus.index.structureRevision,'pdf-txt-order-20261029');assert.equal(corpus.pages.reduce((n,p)=>n+p.candidateCount,0),original.pages.reduce((n,p)=>n+p.candidates.length,0));assert.deepEqual(calls,['./annotation-data/chapter-catalogue.json.gz?v=loading-20261028b']);assert.ok((await read('annotation-data/chapter-catalogue.json.gz')).length<130000);
  await assert.rejects(loadAnnotationTaskCorpus('',storage(null),{fetcher:async()=>new Response(JSON.stringify({version:1,revision:'wrong'}))}),/不匹配/);
 });
 test('existing annotations and confirmations load and validate the complete original corpus before showing progress',async()=>{

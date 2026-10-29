@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "checked": "2026-10-29",
+  "purpose": "Only chapter structure and variant-list identification; approved body characters unchanged",
+  "headingFacts": [
+    {
+      "page": 248,
+      "start": 192,
+      "end": 196,
+      "quote": "述书赋上",
+      "textSha256": "df48ef908060adca7dfff6308cd25d15cc7939038246f1154af4e2951e579bbf",
+      "scan": "screening-data/scans/page-0248.jpg",
+      "scanSha256": "f030b73bf17b41bd067e8cbd3bdd4d45cc878b21cade7f967bfb9b2a38c44268"
+    },
+    {
+      "page": 263,
+      "start": 393,
+      "end": 397,
+      "quote": "述书赋下",
+      "textSha256": "c07541a66fbc1ddfbd92fdedd73d11c048070735ea4874a6414c94430f5fb586",
+      "scan": "screening-data/scans/page-0263.jpg",
+      "scanSha256": "9b6287c2771b5ba0044d052e1d5ced8dbb7b1d1b17b97bdf8dbf9394f11e0dbd"
+    },
+    {
+      "page": 276,
+      "start": 350,
+      "end": 359,
+      "quote": "《述书赋》语例字格",
+      "textSha256": "ed1b192af4970f20b54fb24fe8c39eff0898b15652d6343bd55a0289d5992ce9",
+      "scan": "screening-data/scans/page-0276.jpg",
+      "scanSha256": "467b32da3358bff97ea48e8f68661af11bef63748481b047d8f8b777fcf6c158"
+    },
+    {
+      "page": 277,
+      "start": 369,
+      "end": 377,
+      "quote": "字格 凡百二十言",
+      "textSha256": "a0c0939b29e86e5bf286c7978e9cb99aa2ba09d7374a4cbb34b67e8ff427d159",
+      "scan": "screening-data/scans/page-0277.jpg",
+      "scanSha256": "789189de6261043c2aab09673ebd4d22effa81bdc32a52698da53b39b9196b9e"
+    }
+  ],
+  "bodyCut": {
+    "source": 20071,
+    "start": 11890,
+    "quotePrefix": "爰及陈氏",
+    "pdfBoundaryPage": 263
+  },
+  "localPartitionBoundaries": [
+    [
+      263,
+      387
+    ],
+    [
+      276,
+      344
+    ]
+  ],
+  "parallelVersion": {
+    "source": 20073,
+    "start": 5040,
+    "end": 5150,
+    "pdfPage": 277,
+    "pdfStart": 393,
+    "pdfEnd": 519,
+    "reason": "This old TXT list and Wolai entries refer to the same printed 字格 list; retain old version separately instead of inserting duplicate prose."
+  },
+  "entryAlias": {
+    "sourceLabel": "砻斫",
+    "referenceLabel": "斫磨",
+    "pdfPage": 277,
+    "reason": "Variant label of the same printed list entry; no source character replacement."
+  },
+  "scanParagraphFacts": [
+    {
+      "source": 20071,
+      "start": 12995,
+      "end": 13193,
+      "pdfPage": 265,
+      "order": 1,
+      "quotePrefix": "贺氏曰朗",
+      "scanSha256": "d300a1f71eb191dd09b4d624632958db243f3bfa1d1addc48847349c4d1d64de",
+      "sourceTextSha256": "8f058c27488c49d5740704b2822b5aa0eb30b150e1b967710259bcea45e0eade"
+    },
+    {
+      "source": 20071,
+      "start": 13193,
+      "end": 13288,
+      "pdfPage": 265,
+      "order": 2,
+      "quotePrefix": "萧条北齐",
+      "scanSha256": "d300a1f71eb191dd09b4d624632958db243f3bfa1d1addc48847349c4d1d64de",
+      "sourceTextSha256": "8f058c27488c49d5740704b2822b5aa0eb30b150e1b967710259bcea45e0eade"
+    },
+    {
+      "source": 20071,
+      "start": 13288,
+      "end": 13479,
+      "pdfPage": 265,
+      "order": 3,
+      "quotePrefix": "隋则玄平",
+      "scanSha256": "d300a1f71eb191dd09b4d624632958db243f3bfa1d1addc48847349c4d1d64de",
+      "sourceTextSha256": "8f058c27488c49d5740704b2822b5aa0eb30b150e1b967710259bcea45e0eade"
+    },
+    {
+      "source": 20072,
+      "start": 4,
+      "end": 233,
+      "pdfPage": 265,
+      "order": 4,
+      "quotePrefix": "我巨唐之膺休",
+      "scanSha256": "d300a1f71eb191dd09b4d624632958db243f3bfa1d1addc48847349c4d1d64de",
+      "sourceTextSha256": "07a7b48e87ba0caa4f40ed6d16d896eafa4c8e9449e2deb2781ed849c1571130"
+    }
+  ],
+  "txtParagraphFacts": [
+    {
+      "source": 20072,
+      "start": 233,
+      "end": 240,
+      "pdfPage": 266,
+      "pdfStart": 24,
+      "pdfEnd": 30,
+      "quotePrefix": "而不顾兼金",
+      "referenceSha256": "977cde7e364546b4989b72275c876e54fdf5b3d39836081f83119f0835c9082e",
+      "sourceTextSha256": "07a7b48e87ba0caa4f40ed6d16d896eafa4c8e9449e2deb2781ed849c1571130"
+    }
+  ]
+}

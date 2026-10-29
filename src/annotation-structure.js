@@ -250,7 +250,7 @@ function mount(){
 }
 async function init(){
  try{
-  corpus=await loadAnnotationCorpus(location.search);revision=await corpusDigest({mode,index:corpus.index,sources:corpus.pages.filter(p=>p.eligible).map(p=>[p.page,p.source.textSha256])});raw=localStorage.getItem(key);state=raw===null?emptyStructureFeedback(revision,mode):validateStructureFeedback(JSON.parse(raw),corpus,revision);index=deriveStructure(state,corpus);view=hasEdits()?'revision':'base';
+  corpus=await loadAnnotationCorpus(location.search);revision=await corpusDigest({mode,index:corpus.allocationIndex||corpus.index,sources:corpus.pages.filter(p=>p.eligible).map(p=>[p.page,p.source.textSha256])});raw=localStorage.getItem(key);state=raw===null?emptyStructureFeedback(revision,mode):validateStructureFeedback(JSON.parse(raw),corpus,revision);index=deriveStructure(state,corpus);view=hasEdits()?'revision':'base';
   if(memberId){assignmentSnapshot=readCorpusAssignments(localStorage,corpus.index,mode);const scope=assignmentScope(assignmentSnapshot.value,corpus.index,memberId);memberChapters=scope.chapters;scopedReviewerName=scope.member.name;if(!memberChapters.length)throw new Error('该成员尚无章节分工，请返回任务页重新进入。');}
   if(params.has('batch'))memberChapters=chapterBatchScope(corpus,params,memberChapters||corpus.index.chapters);
   const id=currentIndex().chapterAliases[params.get('chapter')]||params.get('chapter');if((memberId||params.has('batch'))&&id&&!visibleChapters().some(c=>c.id===id))throw new Error('该章节不在本人分工范围内，请返回成员入口。');current=visibleChapters().find(c=>c.id===id)||visibleChapters().find(c=>c.fragments.length);if(!current)throw new Error('当前没有可核查的合格正文。');mount();
