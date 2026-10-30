@@ -16,11 +16,19 @@ const title=value=>{if(typeof value!=='string'||!value.trim()||Array.from(value.
 const characterBoundary=(text,n)=>!(n>0&&n<text.length&&(/[\uD800-\uDBFF]/u.test(text[n-1])&&/[\uDC00-\uDFFF]/u.test(text[n])||text[n-1]==='\r'&&text[n]==='\n'));
 const source=entry=>entry?.humanReviewed||entry;
 const pointIn=(s,f)=>s.page===f.page&&s.start>=f.start&&s.start<f.end;
+const anchorIn=(s,f,action)=>pointIn(s,f)&&s.end<=f.end||action==='note'&&s.page===f.page&&s.start===s.end&&s.start===f.end;
 function validateAnchor(a,corpus){
  const p=source(corpus.byPage.get(a?.page));
  if(!p?.eligible||!Number.isInteger(a.start)||!Number.isInteger(a.end)||a.start<0||a.end<a.start||a.end>p.text.length||a.textSha256!==p.source.textSha256||a.quote!==p.text.slice(a.start,a.end))throw new Error('定位与当前审核正文／来源版本不同，请重新选文。');
  if(!characterBoundary(p.text,a.start)||!characterBoundary(p.text,a.end))throw new Error('定位切断了完整字符或换行，请重新选择。');
  return a;
+}
+function validateNoteSelection(item,corpus){
+ const context=item.proposal?.reviewContext;if(context?.kind!=='txt-note')return;
+ if(item.action!=='note'||context.chapterId!==item.chapterId||!Array.isArray(context.spans)||!context.spans.length||context.spans.length>4000)throw Error('备注选区格式无效。');
+ const chapter=JSON.parse(item.before.find(b=>b.id===item.chapterId)?.stamp||'null');
+ for(const s of context.spans){validateAnchor(s,corpus);if(s.end<=s.start||!chapter?.fragments.some(f=>pointIn(s,f)&&s.end<=f.end))throw Error('备注选区不属于当前章节。');}
+ if(['page','start','end','quote','textSha256'].some(k=>context.spans[0][k]!==item.anchor[k]))throw Error('备注起点与选区不匹配。');
 }
 export function structureParagraphs(chapter,byPage){
  const result=[];let prefix=[];
@@ -48,14 +56,15 @@ function rebuild(index,byPage,changedBoundaries=new Set()){
  index.pageToChapters={};
  for(const c of index.chapters){
   const fragments=[];
-  for(const f of c.fragments){
+  for(const f of [...c.fragments].sort((a,b)=>a.page-b.page||a.start-b.start)){
    const last=fragments.at(-1);if(last?.page===f.page&&last.end===f.start){last.end=f.end;last.blocks.push(...f.blocks);}else fragments.push(f);
   }
   c.fragments=fragments;
-  for(const f of fragments){const p=source(byPage.get(f.page));f.candidateCount=p.candidates.filter(a=>a.start<f.end&&a.end>f.start).length;(index.pageToChapters[f.page]??=[]).push(c.id);}
+  for(const f of fragments){const p=source(byPage.get(f.page));f.candidateCount=p.candidates.filter(a=>a.start<f.end&&a.end>f.start).length;(index.pageToChapters[f.page]??=[]).push({id:c.id,start:f.start});}
   c.candidateCount=fragments.reduce((n,f)=>n+f.candidateCount,0);
   if(fragments.length&&changedBoundaries.has(c.id)){c.start={page:fragments[0].page,offset:fragments[0].start};c.end={page:fragments.at(-1).page,offset:fragments.at(-1).end};}
  }
+ for(const page of Object.keys(index.pageToChapters))index.pageToChapters[page]=index.pageToChapters[page].sort((a,b)=>a.start-b.start).map(c=>c.id);
  for(const w of index.works)w.chapters=index.chapters.filter(c=>c.workId===w.id).map(c=>c.id);
  return validateChapterIndex(index,byPage);
 }
@@ -76,7 +85,7 @@ function transform(index,item,corpus){
  const targets=affected(index,item);
  if(targets.length!==item.before.length||targets.some((c,n)=>c.id!==item.before[n].id||sourceStamp(c)!==sourceStamp(item.before[n].stamp)))throw new Error('相关结构已发生变化，请根据当前版本重新提出反馈；原意见保留。');
  const c=targets[0],a=validateAnchor(item.anchor,corpus),n=index.chapters.indexOf(c),changedBoundaries=new Set();
- if(!c.fragments.some(f=>pointIn(a,f)&&a.end<=f.end))throw new Error('定位不属于当前章节，请重新选择。');
+ if(!c.fragments.some(f=>anchorIn(a,f,item.action)))throw new Error('定位不属于当前章节，请重新选择。');
  if(item.action==='note')return index;
  if(item.action==='rename-chapter'){c.title=title(item.proposal.title);return rebuild(index,corpus.byPage);}
  if(['split-paragraph','merge-paragraph','role'].includes(item.action)){
@@ -122,9 +131,10 @@ export function deriveStructure(state,corpus){
 export function proposeStructure(state,corpus,input,at=new Date().toISOString()){
  if(!Object.hasOwn(structureActions,input.action))throw new Error('请选择反馈或调整方式。');
  const index=deriveStructure(state,corpus),targets=affected(index,input),anchor=validateAnchor(input.anchor,corpus);
- if(!targets[0].fragments.some(f=>pointIn(anchor,f)&&anchor.end<=f.end))throw new Error('定位不属于当前章节。');
+ if(!targets[0].fragments.some(f=>anchorIn(anchor,f,input.action)))throw new Error('定位不属于当前章节。');
  const item={id:crypto.randomUUID(),action:input.action,chapterId:input.chapterId,chapterTitle:targets[0].title,anchor:structuredClone(anchor),proposal:structuredClone(input.proposal||{}),comment:String(input.comment||'').trim(),by:person(input.by),at,status:'pending',before:targets.map(c=>({id:c.id,stamp:stamp(c)}))};
  if(!item.comment||item.comment.length>4000)throw new Error('请填写问题说明或调整依据（不超过4000字）。');
+ validateNoteSelection(item,corpus);
  transform(structuredClone(index),item,corpus);
  const next=structuredClone(state);next.items.push(item);next.events.push({id:crypto.randomUUID(),action:'propose',itemId:item.id,by:item.by,at});return next;
 }
@@ -160,7 +170,7 @@ export function validateStructureFeedback(state,corpus,revision){
  const ids=new Set(),orders=new Set();
  for(const item of state.items){
   if(typeof item?.id!=='string'||!item.id||ids.has(item.id)||!Object.hasOwn(structureActions,item.action)||!['pending','applied','dismissed'].includes(item.status)||typeof item.chapterId!=='string'||typeof item.chapterTitle!=='string'||typeof item.comment!=='string'||!item.comment.trim()||item.comment.length>4000||!item.proposal||typeof item.proposal!=='object'||Array.isArray(item.proposal)||!Array.isArray(item.before)||!item.before.length||item.before.length>2||item.before.some(v=>typeof v.id!=='string'||typeof v.stamp!=='string')||!Number.isFinite(Date.parse(item.at)))throw new Error('反馈记录或定位无效。');
-  ids.add(item.id);person(item.by);validateAnchor(item.anchor,corpus);
+  ids.add(item.id);person(item.by);validateAnchor(item.anchor,corpus);validateNoteSelection(item,corpus);
   if(item.status!=='pending'){person(item.decidedBy);if(!Number.isFinite(Date.parse(item.decidedAt))||!Number.isInteger(item.order)||item.order<1)throw new Error('反馈处理历史无效。');}
   if(item.status==='applied'){if(orders.has(item.order))throw new Error('结构修订顺序冲突。');orders.add(item.order);}
  }

@@ -50,3 +50,8 @@ test('完整ZIP保留真正的PDF篇界页码和原始审核语料，而不是�
  const corpus=await validateStandardCorpus(data),state=bindCorpusProgress(emptyChapterProgress(),corpus),bundle=await buildStandardBundle({corpus,state,legacy:{},legacyChapterRaw:null,person:'隔离验收'}),html=bundle.files.find(f=>f.name==='章节整理.html').content;
  assert.ok(html.includes('原PDF第276页'));assert.ok(!html.includes('缺口来源276页'));assert.deepEqual(JSON.parse(bundle.files.find(f=>f.name==='wolai标准语料.json').content),data);assert.ok(bundle.files.find(f=>f.name==='PDF与TXT阅读映射.csv').content.includes('审核TXT UTF16'));assert.ok(bundle.bytes.length>1000);
 });
+
+test('PDF重排后的结构预览按源坐标重建pageToChapters，支持原有章名修订且不改原件',async()=>{
+ const corpus=await validateStandardCorpus(data),before=JSON.stringify(data),chapter=corpus.index.chapters.find(c=>c.id==='work-081'),f=chapter.fragments[0],p=corpus.byPage.get(f.page),anchor={page:f.page,start:f.start,end:f.start,quote:'',textSha256:p.source.textSha256};
+ const pending=proposeStructure(emptyStructureFeedback('mapped','wolai-standard'),corpus,{chapterId:chapter.id,action:'rename-chapter',anchor,proposal:{title:'隔离结构预览'},comment:'验证重排来源后仍可预览',by:'隔离核查人'}),applied=decideStructure(pending,pending.items[0].id,'applied','核查人',corpus),derived=deriveStructure(applied,corpus);validateChapterIndex(derived,corpus.byPage);assert.equal(derived.chapters.find(c=>c.id==='work-081').title,'隔离结构预览');assert.equal(JSON.stringify(data),before);
+});

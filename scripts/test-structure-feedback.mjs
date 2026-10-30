@@ -79,3 +79,13 @@ test('cross-source paragraph merge and boundary changes preserve source units an
  const move={action:'move-previous',chapterId:'b',anchor:{page:3,start:2,end:2,quote:'',textSha256:hash(extra)},proposal:{},comment:'改正两章分界',by:'测试人'};
  s=proposeStructure(empty(),c,move);s=decideStructure(s,s.items[0].id,'applied','核查人',c);const moved=deriveStructure(s,c);assert.equal(moved.chapters.flatMap(c=>c.fragments.map(f=>(f.page===1?text:extra).slice(f.start,f.end))).join(''),text+extra);
 });
+
+test('a text remark preserves the complete cross-paragraph/source selection and validates every range on restore',()=>{
+ const spans=[anchor(3,7),anchor(10,12)],s=proposeStructure(empty(),corpus,{action:'note',chapterId:'a',anchor:spans[0],proposal:{reviewContext:{kind:'txt-note',chapterId:'a',spans}},comment:'连续选文备注',by:'核查人'});
+ assert.deepEqual(s.items[0].proposal.reviewContext.spans,spans);assert.deepEqual(validateStructureFeedback(JSON.parse(JSON.stringify(s)),corpus,revision),s);
+ const bad=structuredClone(s);bad.items[0].proposal.reviewContext.spans[1].quote='被改过';assert.throws(()=>validateStructureFeedback(bad,corpus,revision),/正文|来源/);
+ const outside=structuredClone(s);outside.items[0].proposal.reviewContext.spans[1]=anchor(split,split+2);assert.throws(()=>validateStructureFeedback(outside,corpus,revision),/章节/);
+});
+test('an empty remark anchor may target the exact end of the chapter, while structural cuts may not',()=>{
+ const at=anchor(text.length),s=proposeStructure(empty(),corpus,{action:'note',chapterId:'b',anchor:at,proposal:{},comment:'章末位置备注',by:'核查人'});assert.equal(s.items[0].anchor.start,text.length);assert.doesNotThrow(()=>validateStructureFeedback(s,corpus,revision));assert.throws(()=>proposeStructure(empty(),corpus,{action:'split-paragraph',chapterId:'b',anchor:at,proposal:{},comment:'错误切分',by:'核查人'}),/章节/);
+});
