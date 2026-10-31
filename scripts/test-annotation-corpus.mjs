@@ -40,3 +40,28 @@ test('standard assignment inheritance is read-only; new chapters and imported pl
  const legacyPlan=readCorpusAssignments(store,oldIndex,'legacy');assert.equal(legacyPlan.raw,oldRaw);assert.equal(legacyPlan.value.members.length,1);assert.equal(legacyPlan.value.assignments['new-wolai-chapter'],undefined);
  const conflict=changeAssignments(loaded.value,['new-wolai-chapter'],'另一负责人',standardIndex);assert.throws(()=>mergeAssignments(loaded.value,conflict,standardIndex));assert.equal(store.getItem(assignmentKey),oldRaw);
 });
+
+test('chapter bundle includes round-trippable missing TXT feedback with full comments and PDF range',async()=>{
+ const {structureFeedbackRevision,readStructureFeedbackFiles}=await import('../src/structure-feedback-export.js');
+ const {emptyStructureFeedback,proposeStructure,structureKey,mergeStructureFeedback}=await import('../src/annotation-structure-core.js');
+ const corpus=await validateStandardCorpus(await fixture()),revision=await structureFeedbackRevision(corpus),store=storage();
+ const state=proposeStructure(emptyStructureFeedback(revision,corpus.mode),corpus,{action:'missing-text',chapterId:'existing-chapter',anchor:null,proposal:{position:'chapter-end',scanStart:12,scanEnd:14},comment:'末尾缺一段\n补录线索𠮷字',by:'测试反馈'});
+ store.setItem(structureKey(corpus.mode),JSON.stringify(state));
+ const feedback=await readStructureFeedbackFiles(store,corpus),bundle=await buildStandardBundle({corpus,state:bindCorpusProgress(emptyChapterProgress(),corpus),legacy:legacy(),legacyChapterRaw:null,person:'标注人',feedbackFiles:feedback.files});
+ const restored=JSON.parse(bundle.files.find(f=>f.name==='分段章节反馈.json').content);assert.deepEqual(mergeStructureFeedback(emptyStructureFeedback(revision,corpus.mode),restored,corpus,revision),state);
+ const csv=bundle.files.find(f=>f.name==='章节反馈与缺文清单.csv').content;for(const v of ['末尾缺一段','补录线索𠮷字','章末缺文','12','14','测试反馈'])assert.ok(csv.includes(v));
+ store.setItem(structureKey(corpus.mode),'{broken');await assert.rejects(readStructureFeedbackFiles(store,corpus),/无法读取/);
+ store.setItem(structureKey(corpus.mode),JSON.stringify({...state,revision:'stale'}));await assert.rejects(readStructureFeedbackFiles(store,corpus),/版本/);
+});
+
+test('PDF region survives chapter ZIP JSON and CSV with image coordinates and source version',async()=>{
+ const {structureFeedbackRevision,readStructureFeedbackFiles}=await import('../src/structure-feedback-export.js');
+ const {emptyStructureFeedback,proposeStructure,structureKey}=await import('../src/annotation-structure-core.js');
+ const corpus=await validateStandardCorpus(await fixture()),revision=await structureFeedbackRevision(corpus),store=storage();
+ const pdfRegion={page:281,rect:{x:.1,y:.2,width:.3,height:.4},imageWidth:1600,imageHeight:2400,imageSha256:'a'.repeat(64)};
+ const state=proposeStructure(emptyStructureFeedback(revision,corpus.mode),corpus,{action:'missing-text',chapterId:'existing-chapter',anchor:null,proposal:{position:'pdf-region',scanStart:281,scanEnd:281,pdfRegion},comment:'原图框选缺文',by:'测试反馈'});
+ store.setItem(structureKey(corpus.mode),JSON.stringify(state));const feedback=await readStructureFeedbackFiles(store,corpus);
+ const bundle=await buildStandardBundle({corpus,state:bindCorpusProgress(emptyChapterProgress(),corpus),legacy:legacy(),legacyChapterRaw:null,person:'标注人',feedbackFiles:feedback.files});
+ const restored=JSON.parse(bundle.files.find(f=>f.name==='分段章节反馈.json').content);assert.deepEqual(restored.items[0].proposal.pdfRegion,pdfRegion);
+ const csv=bundle.files.find(f=>f.name==='章节反馈与缺文清单.csv').content;for(const v of ['框选X比例','原图SHA256','0.1','0.4','1600','2400',pdfRegion.imageSha256])assert.ok(csv.includes(v));
+});

@@ -72,3 +72,16 @@
 #structureBody .structure-paragraph.is-target{background:#edf2e9;box-shadow:inset 2px 0 #87a58d}
 #structureBody .structure-paragraph-text{padding:0 4px;font-size:19px;line-height:2;cursor:text}
 @media(max-width:580px){#structureBody .structure-paragraph-text{font-size:17px}}
+
+#structureMissingFields{margin:0;padding:10px;border:1px solid var(--ws-line);border-radius:5px;display:grid;gap:7px;min-width:0}#structureMissingFields[hidden]{display:none}#structureMissingFields legend{font-size:12px;padding:0 4px}#structureMissingFields input{width:100%;min-width:0;box-sizing:border-box}
+
+.structure-scan-region-tools{display:flex;flex-wrap:wrap;gap:5px;padding:0 10px 6px;flex-shrink:0;font-size:11px}
+.structure-scan-region-tools button{padding:4px 6px!important}.structure-scan-region-tools [aria-pressed=true]{background:var(--ws-accent)!important;color:#fff!important}
+#structureScanRegionStatus{flex-basis:100%;line-height:1.5;color:var(--ws-muted)}
+#structureScanRegionStatus:empty{display:none}
+.structure-scan-stage{position:relative;line-height:0}
+#structureScanRegionLayer{position:absolute;inset:0;pointer-events:none}
+#structureScanRegionLayer.is-selecting{pointer-events:auto;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
+#structureScanRegionBox{position:absolute;box-sizing:border-box;border:2px solid #b65d28;background:#e2a44d33;pointer-events:none}
+#structureRegionTools p{margin:3px 0 6px;font-size:11px;line-height:1.6}
+@media(max-width:580px){.structure-scan-region-tools{padding:0 4px 4px;font-size:10px}.structure-scan-region-tools button{padding:3px!important}}

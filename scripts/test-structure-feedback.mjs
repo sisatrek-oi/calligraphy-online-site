@@ -89,3 +89,38 @@ test('a text remark preserves the complete cross-paragraph/source selection and 
 test('an empty remark anchor may target the exact end of the chapter, while structural cuts may not',()=>{
  const at=anchor(text.length),s=proposeStructure(empty(),corpus,{action:'note',chapterId:'b',anchor:at,proposal:{},comment:'章末位置备注',by:'核查人'});assert.equal(s.items[0].anchor.start,text.length);assert.doesNotThrow(()=>validateStructureFeedback(s,corpus,revision));assert.throws(()=>proposeStructure(empty(),corpus,{action:'split-paragraph',chapterId:'b',anchor:at,proposal:{},comment:'错误切分',by:'核查人'}),/章节/);
 });
+
+test('missing TXT can be reported at chapter start/end/whole without inventing a source anchor',()=>{
+ for(const position of ['chapter-start','chapter-end','chapter']){
+  const s=add(empty(),'missing-text',{position,scanStart:12,scanEnd:13},null);
+  assert.equal(s.items[0].anchor,null);assert.deepEqual(deriveStructure(s,corpus),index);
+  assert.doesNotThrow(()=>validateStructureFeedback(s,corpus,revision));
+  assert.throws(()=>apply(s),/不能直接|缺文/);
+  assert.deepEqual(mergeStructureFeedback(empty(),s,corpus,revision),s);
+ }
+});
+test('missing TXT adjacent location binds exact current chapter UTF16 and validates page range',()=>{
+ for(const position of ['before','after']){
+  const s=add(empty(),'missing-text',{position,scanStart:null,scanEnd:null},anchor(3,7));
+  assert.equal(s.items[0].anchor.quote,text.slice(3,7));
+  assert.doesNotThrow(()=>validateStructureFeedback(s,corpus,revision));
+ }
+ for(const proposal of [{position:'before'},{position:'unknown'},{position:'chapter',scanStart:20001},{position:'chapter',scanStart:12,scanEnd:11},{position:'chapter',scanEnd:12}])assert.throws(()=>add(empty(),'missing-text',proposal,null),/定位|页码|位置/);
+ assert.throws(()=>add(empty(),'missing-text',{position:'before'},anchor(split+1)),/章节/);
+ assert.throws(()=>add(empty(),'missing-text',{position:'before'},anchor(5)),/字符/);
+});
+test('an entirely empty chapter accepts missing TXT feedback and keeps source and confirmations intact',()=>{
+ const i=structuredClone(index);i.chapters[0].fragments=[];i.chapters[0].gaps=[{page:1,reasons:['尚无人工审核TXT']}];
+ const c={...corpus,index:i};const s=proposeStructure(empty(),c,{action:'missing-text',chapterId:'a',anchor:null,proposal:{position:'chapter',scanStart:1,scanEnd:1},by:'反馈人',comment:'整章正文缺失'});
+ assert.equal(s.items[0].chapterId,'a');assert.deepEqual(deriveStructure(s,c),i);assert.doesNotThrow(()=>validateStructureFeedback(s,c,revision));
+});
+
+test('a PDF region records a missing passage without any TXT anchor and rejects page/area tampering',()=>{
+ const pdfRegion={page:281,rect:{x:.1,y:.2,width:.3,height:.4},imageWidth:1600,imageHeight:2400,imageSha256:'a'.repeat(64)};
+ const s=add(empty(),'missing-text',{position:'pdf-region',scanStart:281,scanEnd:281,pdfRegion},null);
+ assert.equal(s.items[0].anchor,null);assert.deepEqual(deriveStructure(s,corpus),index);
+ assert.deepEqual(mergeStructureFeedback(empty(),s,corpus,revision),s);
+ for(const mutate of [i=>i.proposal.scanStart=282,i=>i.proposal.pdfRegion.rect.x=.9,i=>i.proposal.pdfRegion.imageSha256='bad',i=>i.proposal.position='chapter']){
+  const changed=structuredClone(s);mutate(changed.items[0]);assert.throws(()=>validateStructureFeedback(changed,corpus,revision),/原图|框选|页码/);
+ }
+});

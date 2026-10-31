@@ -79,9 +79,9 @@ export async function buildAnnotationBundle({progress,pages,member=null,exported
   return {name:`${member?`成员${member}-`:''}第${part}份-书论标注交付包-${at.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z')}.zip`,bytes:zipStore(files,at),manifest};
 }
 
-export async function buildUnifiedAnnotationBundle({progressByPart,pagesByPart,chapterIndex=null,chapterProgress=null,person,exportedAt=new Date().toISOString(),unsaved=false,saveConflict=false}) {
+export async function buildUnifiedAnnotationBundle({progressByPart,pagesByPart,chapterIndex=null,chapterProgress=null,person,exportedAt=new Date().toISOString(),unsaved=false,saveConflict=false,feedbackFiles=[]}) {
   if(!String(person||'').trim())throw new Error('请填写标注人姓名。');
-  const files=[],parts=[];
+  const files=[...feedbackFiles],parts=[];
   for(const part of [1,2,3,4]) {
     if(!progressByPart?.[part]||!pagesByPart?.[part])throw new Error('全部标注材料不完整，暂停导出。');
     const progress={...JSON.parse(JSON.stringify(validateProgress(progressByPart[part]))),person:person.trim()};

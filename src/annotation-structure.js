@@ -1,17 +1,19 @@
+import {structureFeedbackRevision,structureFeedbackFiles} from './structure-feedback-export.js';
+import {bindScanRegion,verifyScanRegion} from './scan-region.js';
 import {bindFeedbackWindow} from './feedback-window.js';
 import {structureSelection,structurePoint} from './structure-text-location.js';
 import {readJson} from './screening-loader.js?v=loading-20261028';
-import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusDigest,corpusSourceView} from './annotation-corpus.js?v=loading-20261028b';
+import {loadAnnotationCorpus,corpusMode,corpusQuery,corpusSourceView} from './annotation-corpus.js?v=loading-20261028b';
 import {esc} from './annotation-chapters.js?v=loading-20261028';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
 import {readCorpusAssignments,assignmentScope,assignmentsUnchanged} from './annotation-assignments.js?v=owners-20261028';
 import {zipStore} from './zip-store.js?v=release-20261022';
-import {structureActions,structureRoles,structureKey,emptyStructureFeedback,structureParagraphs,deriveStructure,proposeStructure,previewStructure,decideStructure,undoStructure,confirmStructure,structureChecks,structureAudit,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=loading-20261028';
+import {structureActions,structureRoles,missingTextPositions,feedbackOnly,structureKey,emptyStructureFeedback,structureParagraphs,deriveStructure,proposeStructure,previewStructure,decideStructure,undoStructure,confirmStructure,structureChecks,structureAudit,validateStructureFeedback,saveStructureFeedback,mergeStructureFeedback} from './annotation-structure-core.js?v=loading-20261028';
 
 const app=document.querySelector('#structureApp'),params=new URLSearchParams(location.search),mode=corpusMode(location.search),key=structureKey(mode);
 window.WorkspaceUI.mount('annotation');
 let audit=new Map(),feedbackWindow=null;
-let scanPages=[],scanPage=null,scanSource=null,scanCatalogError='';
+let scanPages=[],scanPage=null,scanSource=null,scanCatalogError='',scanRegionPicker=null,pdfRegion=null;
 let corpus,revision,state,raw=null,index,current,anchor=null,view='base',unsaved=null,stale=false,composing=false,draftPreview=null,preview=null;
 let noteSpans=[],contextSelection=null,lastPointer={type:'mouse',at:0};
 import {chapterBatchScope,batchSuffix} from './task-allocation.js?v=task-allocation-20261028';
@@ -43,18 +45,26 @@ function persist(next,message){
  state=next;unsaved=null;stale=false;if(hasEdits())view='revision';index=deriveStructure(state,corpus);app.querySelector('#structureRecovery').hidden=true;
  renderDocument();renderRecords();notice(message);return true;
 }
-function formValues(){return {action:app.querySelector('#structureAction').value,title:app.querySelector('#structureTitle').value,role:app.querySelector('#structureRole').value,comment:app.querySelector('#structureComment').value};}
-function invalidatePreview(){draftPreview=null;const note=app.querySelector('#structureAction').value==='note',button=app.querySelector('#structureSaveFeedback');button.disabled=!(note&&anchor&&app.querySelector('#structureComment').value.trim());button.textContent=note?'保存备注':'保存反馈';}
+function formValues(){return {action:app.querySelector('#structureAction').value,title:app.querySelector('#structureTitle').value,role:app.querySelector('#structureRole').value,comment:app.querySelector('#structureComment').value,position:app.querySelector('#structureMissingPosition').value,scanStart:app.querySelector('#structureMissingStart').value,scanEnd:app.querySelector('#structureMissingEnd').value,pdfRegion:structuredClone(pdfRegion)};}
+function invalidatePreview(){draftPreview=null;const action=app.querySelector('#structureAction').value,note=action==='note',missing=action==='missing-text',position=app.querySelector('#structureMissingPosition').value,button=app.querySelector('#structureSaveFeedback');button.disabled=!((note&&anchor||missing&&(position==='pdf-region'?pdfRegion:!['before','after'].includes(position)||anchor))&&app.querySelector('#structureComment').value.trim());button.textContent=missing?'保存缺文反馈':note?'保存备注':'保存反馈';}
 function rememberDraft(){if(current)drafts.set(current.id,{...formValues(),anchor:structuredClone(anchor),noteSpans:structuredClone(noteSpans)});}
 function restoreDraft(){
- const d=drafts.get(current.id)||{action:'note',title:'',role:'theory',comment:'',anchor:null};
- for(const [id,field] of [['structureAction','action'],['structureTitle','title'],['structureRole','role'],['structureComment','comment']])app.querySelector('#'+id).value=d[field];
- anchor=d.anchor;noteSpans=d.noteSpans||[];invalidatePreview();updateForm();updateAnchor();
+ const d=drafts.get(current.id)||{action:'note',title:'',role:'theory',comment:'',position:'chapter',scanStart:'',scanEnd:'',anchor:null};
+ for(const [id,field] of [['structureAction','action'],['structureTitle','title'],['structureRole','role'],['structureComment','comment'],['structureMissingPosition','position'],['structureMissingStart','scanStart'],['structureMissingEnd','scanEnd']])app.querySelector('#'+id).value=d[field]??'';
+ anchor=d.anchor;noteSpans=d.noteSpans||[];pdfRegion=d.pdfRegion||null;invalidatePreview();updateForm();updateAnchor();
 }
 function updateForm(){
  const action=app.querySelector('#structureAction').value;
  app.querySelector('#structureTitleField').hidden=!['rename-chapter','split-chapter','merge-chapter'].includes(action);
  app.querySelector('#structureRoleField').hidden=action!=='role';
+ app.querySelector('#structureMissingFields').hidden=action!=='missing-text';
+ app.querySelector('#structurePreview').hidden=action==='missing-text';
+ const regionMode=action==='missing-text'&&app.querySelector('#structureMissingPosition').value==='pdf-region';
+ app.querySelector('#structureRegionTools').hidden=!regionMode;
+ app.querySelector('#structureRegionSummary').textContent=pdfRegion?'已绑定PDF第'+pdfRegion.page+'页的框选区域。':'尚未框选，请在右侧原图中框选缺失部分。';
+ app.querySelector('#structureRegionView').disabled=!pdfRegion;
+ for(const id of ['structureMissingStart','structureMissingEnd'])app.querySelector('#'+id).readOnly=regionMode;
+ app.querySelector('#structureMissingUseScan').disabled=regionMode;
  app.querySelector('#structureActionHint').textContent={
   'split-paragraph':'选中新段落的开头，在所选文字之前拆分；原文不改字。',
   'merge-paragraph':'合并定位段落与紧邻的下一段；正文顺序保持。',
@@ -63,6 +73,7 @@ function updateForm(){
   'move-next':'从定位文字开始至本章结尾，调整为同篇下一章的开头。',
   'move-previous':'将本章开头至定位文字之前，调整为同篇上一章的结尾。',
   'rename-chapter':'只调整修订版目录名称；原文里的篇题仍保留。',
+  'missing-text':'无需选中缺失文字。选择缺文位置，可填写PDF物理页码及缺文线索；补录内容写在说明中，审核后再纳入正文。',
   role:'更正定位段落的角色，不改变AI书论标注范围。',note:'备注与当前选文或右键位置一起保存，原TXT不改动。',
  }[action];
 }
@@ -71,14 +82,16 @@ function defaultAnchor(c=current){
  return {page:s.page,start:s.start,end:Math.min(s.end,s.start),quote:'',textSha256:s.textSha256};
 }
 function updateAnchor(){
- const target=app.querySelector('#structureAnchor'),p=anchor&&structureParagraphs(current,corpus.byPage).find(p=>p.parts.some(s=>s.page===anchor.page&&s.start<=anchor.start&&s.end>anchor.start));
+ const target=app.querySelector('#structureAnchor');
+ if(app.querySelector('#structureAction').value==='missing-text'&&!['before','after'].includes(app.querySelector('#structureMissingPosition').value)){target.textContent='章节定位：'+label(current)+' · '+missingTextPositions[app.querySelector('#structureMissingPosition').value]+(pdfRegion&&app.querySelector('#structureMissingPosition').value==='pdf-region'?' · PDF第'+pdfRegion.page+'页':'');return;}
+ const p=anchor&&structureParagraphs(current,corpus.byPage).find(p=>p.parts.some(s=>s.page===anchor.page&&s.start<=anchor.start&&s.end>anchor.start));
  const quote=noteSpans.length?noteSpans.map(s=>s.quote).join(' … '):anchor?.quote;
  const reading=anchor&&annotationReading(corpus.byPage.get(anchor.page).text),at=reading?.visibleOffset(anchor.start);
  target.textContent=anchor?(quote?`选文定位：“${quote.replace(/\s+/g,' ').slice(0,220)}”`:`位置：${reading.text.slice(Math.max(0,at-12),at)}｜${reading.text.slice(at,at+28)}（在此处备注）`):'选中文字取得定位；也可右键文字或段间空白处添加备注。手机选好文字后点“备注”。';
  for(const el of app.querySelectorAll('[data-paragraph]'))el.classList.toggle('is-target',el.dataset.paragraph===p?.id);
 }
 function setLocation(next,spans=[]){
- if(!next||JSON.stringify({anchor,noteSpans})===JSON.stringify({anchor:next,noteSpans:spans}))return;
+ if(composing||!next||JSON.stringify({anchor,noteSpans})===JSON.stringify({anchor:next,noteSpans:spans}))return;
  anchor=next;noteSpans=spans;invalidatePreview();updateAnchor();
 }
 function capture(){
@@ -88,6 +101,27 @@ function capture(){
 function visibleSourceSpan(s){const reading=annotationReading(corpus.byPage.get(s.page).text),text=s.text.replace(/\s+$/u,''),end=reading.sourceEnd(reading.visibleOffset(s.start)+text.length);return `<span class="structure-source-run" data-page="${s.page}" data-start="${s.start}" data-end="${end}">${esc(text)}</span>`;}
 function paragraphHtml(p){return `<article class="structure-paragraph" data-paragraph="${esc(p.id)}" data-role="${esc(p.role)}"><div class="structure-paragraph-text">${p.parts.filter(s=>s.text.trim()).map(visibleSourceSpan).join('')}</div></article>`;}
 function openNote(focus=false){if(composing)return;app.querySelector('#structureAction').value='note';updateForm();invalidatePreview();recordsTab('form');setFeedbackOpen(true);if(focus){app.querySelector('#structureComment').focus({preventScroll:true});feedbackWindow.layout();}}
+function openMissingText(){
+ if(composing)return;capture();app.querySelector('#structureAction').value='missing-text';
+ if(!app.querySelector('#structureMissingStart').value&&scanPage)app.querySelector('#structureMissingStart').value=scanPage;
+ updateForm();updateAnchor();invalidatePreview();recordsTab('form');setFeedbackOpen(true);
+}
+function declareScanRegion(region){
+ if(!editing())return;
+ pdfRegion=structuredClone(region);app.querySelector('#structureAction').value='missing-text';app.querySelector('#structureMissingPosition').value='pdf-region';
+ app.querySelector('#structureMissingStart').value=region.page;app.querySelector('#structureMissingEnd').value=region.page;
+ const comment=app.querySelector('#structureComment');if(!comment.value.trim())comment.value='框选区域的正文在TXT中缺失。';
+ updateForm();updateAnchor();invalidatePreview();recordsTab('form');setFeedbackOpen(true);notice('已带入原图框选位置，请确认保存缺文反馈。');
+}
+async function viewScanRegion(region,item=null){
+ if(!ready()||!region)return;
+ try{
+  if(item){const id=currentIndex().chapterAliases[item.chapterId]||item.chapterId;if(current.id!==id){navigate(id);if(current.id!==id)throw Error('该反馈章节已变化，请先核对当前目录。');}}
+  const chapterId=current.id;showPhysicalScan(region.page);const img=app.querySelector('#structureScanImage');await img.decode();await verifyScanRegion(img,region);
+  if(current.id!==chapterId||scanPage!==region.page)throw Error('查看期间已切换章节或图页，请重试。');
+  setFeedbackOpen(false);scanRegionPicker.show(region);notice('已定位PDF第'+region.page+'页的原图框选区域。');
+ }catch(error){scanRegionPicker.reset();notice(error.message);}
+}
 function contextNote(event){
  if(composing||event.pointerType==='touch'||event.pointerType==='pen'||(lastPointer.type!=='mouse'&&performance.now()-lastPointer.at<1500))return;
  try{
@@ -98,7 +132,7 @@ function contextNote(event){
   if(!anchor)return;event.preventDefault();contextSelection=null;openNote(true);
  }catch(error){notice(error.message);}
 }
-function feedbackInScope(item){return !memberChapters||memberChapters.some(c=>c.fragments.some(f=>f.page===item.anchor.page&&f.start<=item.anchor.start&&(f.end>item.anchor.start||item.action==='note'&&item.anchor.start===item.anchor.end&&item.anchor.start===f.end)));}
+function feedbackInScope(item){if(item.action==='missing-text')return !memberChapters||memberChapters.some(c=>c.id===item.chapterId||c.id===item.chapterId.split('--revision-')[0]);return !memberChapters||memberChapters.some(c=>c.fragments.some(f=>f.page===item.anchor.page&&f.start<=item.anchor.start&&(f.end>item.anchor.start||item.action==='note'&&item.anchor.start===item.anchor.end&&item.anchor.start===f.end)));}
 function directoryStatus(c){if(!c.fragments.length)return '尚无合格正文';const status=view==='base'&&hasEdits()?'原结构对照':audit.has(c.id)?'分段'+(audit.get(c.id).paragraphs.confirmed?'已核':'待核')+' · 章节'+(audit.get(c.id).chapters.confirmed?'已核':'待核'):'';return status+(state.items.some(i=>i.chapterId===c.id&&i.status==='pending')?' · 有待处理反馈':'');}
 function renderDirectory(){
  const q=app.querySelector('#structureSearch').value.trim().toLocaleLowerCase(),idx=currentIndex();
@@ -115,7 +149,7 @@ function renderDocument(){
  const reviewLink=app.querySelector('#openPdfTxtReview');if(reviewLink)reviewLink.href='./annotation-review.html?chapter='+encodeURIComponent(original?.id||current.id)+corpusQuery(mode)+memberQuery();
  app.querySelector('#structureChapterTitle').textContent=current.author+' · '+(current.workTitle===current.title?label(current):current.workTitle+' · '+label(current));
  app.querySelector('#structureReadingMode').textContent=view==='base'?'原AI分段与章节 · 对照原图核查':'本机修订版 · 待核对后统一更新任务目录';
- app.querySelector('#structureBody').innerHTML=[...structureParagraphs(current,corpus.byPage).map(p=>({page:p.parts[0].page,html:paragraphHtml(p)})),...current.gaps.map(g=>({page:g.page,html:`<aside class="structure-gap">审核缺口 · 来源 ${g.page}：${esc((g.reasons||[]).join('；'))}。缺失正文未接入；结构核查只针对已开放内容。</aside>`}))].sort((a,b)=>a.page-b.page).map(e=>e.html).join('')||'<p>本章尚无合格正文，可在记录中查看本篇其他反馈。</p>';
+ app.querySelector('#structureBody').innerHTML=[...structureParagraphs(current,corpus.byPage).map(p=>({page:p.parts[0].page,html:paragraphHtml(p)})),...current.gaps.map(g=>({page:g.page,html:`<aside class="structure-gap">审核缺口 · 来源 ${g.page}：${esc((g.reasons||[]).join('；'))}。缺失正文未接入；结构核查只针对已开放内容。</aside>`}))].sort((a,b)=>a.page-b.page).map(e=>e.html).join('')||'<p>本章尚无合格正文，可直接点击“TXT缺文”说明缺失范围。</p>';
  const checks=index.chapters.some(c=>c.id===current.id)?structureChecks(state,corpus,current.id):{paragraphs:false,chapters:false};
  app.querySelector('#structureCheckStatus').innerHTML=view==='base'&&hasEdits()?'原结构仅用于对照；当前核查状态请查看修订版。':`<span>分段：${checks.paragraphs?'已核查正确':'待核查'}</span><span>章节：${checks.chapters?'已核查正确':'待核查'}</span>`;
  for(const b of app.querySelectorAll('[data-structure-view]'))b.setAttribute('aria-pressed',String(b.dataset.structureView===view));
@@ -137,22 +171,23 @@ function scanControls(){
 }
 function showPhysicalScan(page){
  const img=app.querySelector('#structureScanImage'),status=app.querySelector('#structureScanStatus'),link=app.querySelector('#structureScanLink');
+ if(scanPage!==page||!img.complete||!img.naturalWidth)scanRegionPicker?.reset();
  scanPage=page;scanControls();
  const sources=chapterScanPages(),inChapter=sources.includes(page),range=sources.length?(sources.length===1?String(sources[0]):sources[0]+'—'+sources.at(-1)):'未定位';
  const message=`扫描第 ${page} 页 · ${inChapter?'本章来源参考':'本章范围外参考'}。本章来源页：${range}。`+(mode==='legacy'?'':'标准正文与扫描页须按内容核对。');
  status.textContent=message+(scanCatalogError?' '+scanCatalogError:'');
  const path='./screening-data/scans/page-'+String(page).padStart(4,'0')+'.jpg';
- img.hidden=false;link.hidden=false;link.href=path;link.textContent='放大原图';img.alt=`扫描第 ${page} 页`;
+ img.hidden=false;link.hidden=false;link.href=path;link.textContent='另页查看';img.alt=`扫描第 ${page} 页`;
  if(img.dataset.scan===String(page)&&img.getAttribute('src')===path&&img.naturalWidth)return;
  img.dataset.scan=String(page);img.dataset.source=String(scanSource??'');
- img.onerror=()=>{if(scanPage===page){img.hidden=true;status.textContent=message+' 原图载入失败，可重新跳转此页重试或放大查看。';}};
+ img.onerror=()=>{if(scanPage===page){img.hidden=true;status.textContent=message+' 原图载入失败，可重新跳转此页重试或另页查看。';}};
  img.onload=()=>{if(scanPage===page){img.hidden=false;status.textContent=message+(scanCatalogError?' '+scanCatalogError:'');}};
  app.querySelector('.structure-scan-scroll').scrollTop=0;img.src=path;
 }
 function showScan(page){
  scanSource=page;const v=corpusSourceView(page,corpus.byPage);app.querySelector('#structureScanSelect').value=String(page);
  if(v.scan){showPhysicalScan(v.scan);return;}
- scanPage=null;scanControls();const img=app.querySelector('#structureScanImage'),link=app.querySelector('#structureScanLink');img.onload=null;img.onerror=null;img.removeAttribute('src');delete img.dataset.scan;img.hidden=true;
+ scanRegionPicker?.reset();scanPage=null;scanControls();const img=app.querySelector('#structureScanImage'),link=app.querySelector('#structureScanLink');img.onload=null;img.onerror=null;img.removeAttribute('src');delete img.dataset.scan;img.hidden=true;
  app.querySelector('#structureScanStatus').textContent='此来源无可靠原图位置，可打开正文来源，或输入扫描页码自行查验。'+scanCatalogError;
  link.hidden=!v.url;if(v.url)link.href=v.url;link.textContent='查看正文来源';
 }
@@ -170,7 +205,7 @@ async function loadScanCatalog(){
 }
 
 function navigate(id){
- if(!ready()||!id)return;rememberDraft();const next=visibleChapters().find(c=>c.id===id);if(!next)return;current=next;restoreDraft();renderDocument();app.classList.remove('structure-catalog-open');
+ if(!ready()||!id)return;rememberDraft();const next=visibleChapters().find(c=>c.id===id);if(!next)return;scanRegionPicker?.reset();current=next;restoreDraft();renderDocument();app.classList.remove('structure-catalog-open');
 }
 function switchView(next){if(!ready()||next===view)return;rememberDraft();view=next;renderDocument();restoreDraft();renderRecords();notice(view==='base'?'正在对照原AI结构。原任务目录保持原样。':'正在查看本机修订版，可继续反馈或核查。');}
 function setFeedbackOpen(open){
@@ -180,20 +215,20 @@ function recordsTab(tab){
  const records=tab==='records';app.querySelector('#structureFormPanel').hidden=records;app.querySelector('#structureRecords').hidden=!records;
  app.querySelector('#structureFormTab').setAttribute('aria-selected',String(!records));app.querySelector('#structureRecordsTab').setAttribute('aria-selected',String(records));
 }
-function noteQuote(item){return (item.proposal.reviewContext?.kind==='txt-note'?item.proposal.reviewContext.spans:[item.anchor]).map(s=>{const reading=annotationReading(corpus.byPage.get(s.page).text);return reading.text.slice(reading.visibleOffset(s.start),reading.visibleOffset(s.end));}).join('\n');}
+function noteQuote(item){if(item.action==='missing-text')return missingTextPositions[item.proposal.position]+(item.proposal.scanStart?' · PDF第'+item.proposal.scanStart+(item.proposal.scanEnd&&item.proposal.scanEnd!==item.proposal.scanStart?'—'+item.proposal.scanEnd:'')+'页':'')+(item.anchor?.quote?' · 邻近文字：“'+item.anchor.quote+'”':'');return (item.proposal.reviewContext?.kind==='txt-note'?item.proposal.reviewContext.spans:[item.anchor]).map(s=>{const reading=annotationReading(corpus.byPage.get(s.page).text);return reading.text.slice(reading.visibleOffset(s.start),reading.visibleOffset(s.end));}).join('\n');}
 function renderRecords(){
  const all=app.querySelector('#structureRecordScope')?.value==='all';
  const records=state.items.filter(feedbackInScope).filter(i=>all||i.chapterId===current.id||(index.chapterAliases[i.chapterId]||i.chapterId)===current.id).slice().reverse();
- app.querySelector('#structureRecordList').innerHTML=records.map(i=>`<article class="structure-record" data-feedback-id="${esc(i.id)}"><h3>${esc(i.action==='note'?'备注':structureActions[i.action])} · ${esc(i.chapterTitle)}</h3><small>${esc(i.by)} · ${esc(new Date(i.at).toLocaleString('zh-CN'))} · ${i.status==='applied'?'已采用到本机修订版':i.status==='dismissed'?'暂不采用':'待处理'}</small><blockquote>${esc(noteQuote(i)||'文字位置（未选取正文）')}</blockquote><p>${esc(i.comment)}</p>${i.resolution?`<p>处理说明：${esc(i.resolution)}</p>`:''}${i.decidedBy?`<small>处理人：${esc(i.decidedBy)}</small>`:''}${i.status==='pending'?`<div><button type="button" data-preview-feedback="${esc(i.id)}">${i.action==='note'?'查看定位':'预览调整'}</button>${i.action!=='note'?`<button type="button" data-adopt-feedback="${esc(i.id)}">采用到修订版</button>`:''}<label><span>处理说明</span><textarea maxlength="4000" aria-label="处理说明" placeholder="暂不采用时，请写明原因"></textarea></label><button type="button" data-dismiss-feedback="${esc(i.id)}">暂不采用／记录处理</button></div>`:''}</article>`).join('')||'<p>当前范围没有反馈。可切换“全部章节”，或回到“提出反馈”记录问题。</p>';
+ app.querySelector('#structureRecordList').innerHTML=records.map(i=>`<article class="structure-record" data-feedback-id="${esc(i.id)}"><h3>${esc(i.action==='note'?'备注':structureActions[i.action])} · ${esc(i.chapterTitle)}</h3><small>${esc(i.by)} · ${esc(new Date(i.at).toLocaleString('zh-CN'))} · ${i.status==='applied'?'已采用到本机修订版':i.status==='dismissed'?'暂不采用':'待处理'}</small><blockquote>${esc(noteQuote(i)||'文字位置（未选取正文）')}</blockquote><p>${esc(i.comment)}</p>${i.proposal.pdfRegion?`<button type="button" data-view-scan-region="${esc(i.id)}">查看原图框选</button>`:''}${i.resolution?`<p>处理说明：${esc(i.resolution)}</p>`:''}${i.decidedBy?`<small>处理人：${esc(i.decidedBy)}</small>`:''}${i.status==='pending'?`<div><button type="button" data-preview-feedback="${esc(i.id)}">${feedbackOnly(i.action)?'查看定位':'预览调整'}</button>${!feedbackOnly(i.action)?`<button type="button" data-adopt-feedback="${esc(i.id)}">采用到修订版</button>`:''}<label><span>处理说明</span><textarea maxlength="4000" aria-label="处理说明" placeholder="暂不采用时，请写明原因"></textarea></label><button type="button" data-dismiss-feedback="${esc(i.id)}">暂不采用／记录处理</button></div>`:''}</article>`).join('')||'<p>当前范围没有反馈。可切换“全部章节”，或回到“提出反馈”记录问题。</p>';
 }
 function previewHtml(idx,ids){
  const targets=idx.chapters.filter(c=>ids.has(c.id)||ids.has(c.id.split('--revision-')[0]));
  return targets.map(c=>`<h4>${esc(label(c))}</h4>${structureParagraphs(c,corpus.byPage).map(p=>`<div class="structure-preview-paragraph">${esc(p.text.trim())}</div>`).join('')}`).join('');
 }
 function openPreview(item,{draft=false}={}){
- const before=deriveStructure(state,corpus),after=item.action==='note'?before:previewStructure(state,corpus,item),ids=new Set(item.before.map(v=>v.id));
+ const before=deriveStructure(state,corpus),after=feedbackOnly(item.action)?before:previewStructure(state,corpus,item),ids=new Set(item.before.map(v=>v.id));
  const dialog=app.querySelector('#structurePreviewDialog');preview={item,draft};
- dialog.innerHTML=`<header><h2>${esc(structureActions[item.action])}</h2><button type="button" id="closeStructurePreview" aria-label="关闭预览">✕</button></header><p>${esc(item.comment)}</p><div class="structure-preview-columns"><section><h3>调整前 · 当前结构</h3>${previewHtml(before,ids)}</section><section><h3>${item.action==='note'?'待核问题 · 不直接调整结构':'调整后 · 仅本机修订版'}</h3>${previewHtml(after,ids)}</section></div><p>原文字符、原图及已有标注保持；采用后也不会自动调整当前标注任务目录。</p><p class="structure-error" id="structurePreviewError" role="alert"></p><footer><button type="button" id="cancelStructurePreview">返回核对</button>${draft?'<button type="button" class="structure-primary" id="savePreviewFeedback">保存这条反馈</button>':item.action==='note'?'':`<button type="button" class="structure-primary" id="applyPreviewFeedback">采用到本机修订版</button>`}</footer>`;
+ dialog.innerHTML=`<header><h2>${esc(structureActions[item.action])}</h2><button type="button" id="closeStructurePreview" aria-label="关闭预览">✕</button></header><p>${esc(noteQuote(item))}</p><p>${esc(item.comment)}</p><div class="structure-preview-columns"><section><h3>调整前 · 当前结构</h3>${previewHtml(before,ids)}</section><section><h3>${feedbackOnly(item.action)?'待核问题 · 不直接调整结构':'调整后 · 仅本机修订版'}</h3>${previewHtml(after,ids)}</section></div><p>原文字符、原图及已有标注保持；采用后也不会自动调整当前标注任务目录。</p><p class="structure-error" id="structurePreviewError" role="alert"></p><footer><button type="button" id="cancelStructurePreview">返回核对</button>${draft?'<button type="button" class="structure-primary" id="savePreviewFeedback">保存这条反馈</button>':feedbackOnly(item.action)?'':`<button type="button" class="structure-primary" id="applyPreviewFeedback">采用到本机修订版</button>`}</footer>`;
  dialog.querySelector('#closeStructurePreview').onclick=()=>dialog.close();dialog.querySelector('#cancelStructurePreview').onclick=()=>dialog.close();
  if(draft)dialog.querySelector('#savePreviewFeedback').onclick=saveDraft;
  else dialog.querySelector('#applyPreviewFeedback')?.addEventListener('click',()=>adopt(item.id));
@@ -206,22 +241,23 @@ function previewDraft(){
  }catch(e){notice(e.message);}
 }
 function proposeCurrent(values,by){
- const proposal={title:values.title,role:values.role};
+ const proposal=values.action==='missing-text'?{position:values.position,scanStart:values.scanStart===''?null:Number(values.scanStart),scanEnd:values.scanEnd===''?null:Number(values.scanEnd)}:{title:values.title,role:values.role};
+ if(values.action==='missing-text'&&values.position==='pdf-region')proposal.pdfRegion=structuredClone(pdfRegion);
  if(values.action==='note'&&noteSpans.length)proposal.reviewContext={kind:'txt-note',chapterId:current.id,spans:structuredClone(noteSpans),scanPage};
- const next=proposeStructure(state,corpus,{action:values.action,chapterId:current.id,anchor:anchor||defaultAnchor(),proposal,comment:values.comment,by});
+ const next=proposeStructure(state,corpus,{action:values.action,chapterId:current.id,anchor:values.action==='missing-text'?(['before','after'].includes(values.position)?anchor:null):anchor||defaultAnchor(),proposal,comment:values.comment,by});
  if(next.items.at(-1).before.some(t=>!inScope(index.chapters.find(c=>c.id===t.id))))throw Error('这项调整涉及本人分工之外的章节，请记录为备注，待统一核对。');
  return next;
 }
 function saveDraft(){
  if(!editing())return;
- if(formValues().action==='note'){
-  if(!anchor){notice('请先选中文字或右键正文空白处取得定位。');return;}
+ if(feedbackOnly(formValues().action)){
+  if(formValues().action==='note'&&!anchor){notice('请先选中文字或右键正文空白处取得定位。');return;}
   const by=author();if(!by)return;
-  try{if(persist(proposeCurrent(formValues(),by),'备注已保存，原TXT保持。')){app.querySelector('#structurePreviewDialog').close();app.querySelector('#structureComment').value='';drafts.delete(current.id);invalidatePreview();recordsTab('records');}}catch(error){notice(error.message);}return;
+  try{if(persist(proposeCurrent(formValues(),by),formValues().action==='missing-text'?'缺文反馈已保存；导出整章成果时会一并收录。':'备注已保存，原TXT保持。')){app.querySelector('#structurePreviewDialog').close();app.querySelector('#structureComment').value='';drafts.delete(current.id);pdfRegion=null;scanRegionPicker.reset();updateForm();invalidatePreview();recordsTab('records');}}catch(error){notice(error.message);}return;
  }
  if(!draftPreview)return;
  if(JSON.stringify(formValues())!==draftPreview.values||raw!==draftPreview.raw){notice('表单或反馈记录已变化，请重新预览。');return;}
- const next=draftPreview.next;if(persist(next,'反馈已保存到本机；尚未采用。可在记录中核对并采用到修订版。')){app.querySelector('#structurePreviewDialog').close();app.querySelector('#structureComment').value='';drafts.delete(current.id);invalidatePreview();recordsTab('records');}
+ const next=draftPreview.next;if(persist(next,'反馈已保存到本机；尚未采用。可在记录中核对并采用到修订版。')){app.querySelector('#structurePreviewDialog').close();app.querySelector('#structureComment').value='';drafts.delete(current.id);pdfRegion=null;scanRegionPicker.reset();updateForm();invalidatePreview();recordsTab('records');}
 }
 function adopt(id){
  if(!ready())return;const by=author();if(!by)return;
@@ -229,10 +265,10 @@ function adopt(id){
 }
 async function exportBundle(){
  if(!ready())return;
- const derived=deriveStructure(state,corpus),csvCell=value=>'"'+String(value??'').replace(/^[=+@\-\t\r]/u,"'$&").replaceAll('"','""')+'"',csv=[['反馈ID','章节','类型','反馈人','反馈时间','定位引文','问题与建议','状态','处理人','处理说明'],...state.items.map(i=>[i.id,i.chapterTitle,structureActions[i.action],i.by,i.at,i.anchor.quote,i.comment,i.status,i.decidedBy,i.resolution])].map(row=>row.map(csvCell).join(',')).join('\r\n');
+ const derived=deriveStructure(state,corpus),csvCell=value=>'"'+String(value??'').replace(/^[=+@\-\t\r]/u,"'$&").replaceAll('"','""')+'"',csv=[['反馈ID','章节','类型','反馈人','反馈时间','定位引文','问题与建议','状态','处理人','处理说明'],...state.items.map(i=>[i.id,i.chapterTitle,structureActions[i.action],i.by,i.at,noteQuote(i),i.comment,i.status,i.decidedBy,i.resolution])].map(row=>row.map(csvCell).join(',')).join('\r\n');
  const auditRows=[['章节ID','作者','篇目','章节','分段核查','分段核查人','分段核查时间','章节核查','章节核查人','章节核查时间','审核缺口'],...structureAudit(state,corpus,derived).map(c=>[c.chapterId,c.author,c.work,c.title,c.paragraphs.confirmed?'当前结构已核查正确':'待核查',c.paragraphs.by,c.paragraphs.at,c.chapters.confirmed?'当前结构已核查正确':'待核查',c.chapters.by,c.chapters.at,c.hasGaps?'仅开放正文':''])].map(row=>row.map(csvCell).join(',')).join('\r\n');
  const text='\ufeff'+derived.chapters.map(c=>`${c.author} · ${c.workTitle} · ${label(c)}\n\n`+structureParagraphs(c,corpus.byPage).map(p=>p.text.trim()).join('\n\n')).join('\n\n');
- const files=[{name:'结构核查结果.csv',content:'\ufeff'+auditRows},{name:'分段章节反馈.json',content:JSON.stringify(state,null,2)},{name:'反馈处理清单.csv',content:'\ufeff'+csv},{name:'原AI章节结构.json',content:JSON.stringify(corpus.index,null,2)},{name:'本机修订章节结构.json',content:JSON.stringify(derived,null,2)},{name:'本机修订正文阅读稿.txt',content:text},{name:'来源版本.json',content:JSON.stringify({mode,revision,sources:corpus.pages.filter(p=>p.eligible).map(p=>({page:p.page,...p.source}))},null,2)},{name:'使用说明.txt',content:'此包是分段与章节核查及本机修订版，尚未统一更新正式标注任务目录。\n导入反馈请使用分段章节反馈.json，核对预览后显式合并。\n正文阅读稿仅为派生排版；源TXT、原标注坐标、分工和标注确认未改。\n分段／章节正确是独立的结构核查，不等于书论标注已完成。\n'}];
+ const files=[...structureFeedbackFiles(state,corpus,revision).filter(f=>f.name!=='分段章节反馈.json'),{name:'结构核查结果.csv',content:'\ufeff'+auditRows},{name:'分段章节反馈.json',content:JSON.stringify(state,null,2)},{name:'反馈处理清单.csv',content:'\ufeff'+csv},{name:'原AI章节结构.json',content:JSON.stringify(corpus.index,null,2)},{name:'本机修订章节结构.json',content:JSON.stringify(derived,null,2)},{name:'本机修订正文阅读稿.txt',content:text},{name:'来源版本.json',content:JSON.stringify({mode,revision,sources:corpus.pages.filter(p=>p.eligible).map(p=>({page:p.page,...p.source}))},null,2)},{name:'使用说明.txt',content:'此包是分段与章节核查及本机修订版，尚未统一更新正式标注任务目录。\n导入反馈请使用分段章节反馈.json，核对预览后显式合并。\n正文阅读稿仅为派生排版；源TXT、原标注坐标、分工和标注确认未改。\n分段／章节正确是独立的结构核查，不等于书论标注已完成。\n'}];
  download('分段章节反馈与修订版.zip',zipStore(files),'application/zip');notice('反馈与修订包已生成；包含原结构、修订结构、阅读稿、来源版本和处理清单。');
 }
 async function importFeedback(event){
@@ -246,19 +282,20 @@ function fitViewport(){const vv=window.visualViewport,top=app.getBoundingClientR
 function mount(){
  const by=scopedReviewerName||state.events.at(-1)?.by||'';
  app.innerHTML=`<header class="structure-heading"><div><p>书论标注 / 结构核查 · ${esc(corpus.label)}</p><h1>分段与章节反馈</h1></div><span><a id="openPdfTxtReview" href="./annotation-review.html?chapter=${encodeURIComponent(current.id)}${corpusQuery(mode)}${memberQuery()}">以原图与TXT对照审核 →</a></span></header>
- <section class="structure-toolbar" aria-label="结构核查工具"><a id="backToAnnotation" href="./annotation.html?chapter=${encodeURIComponent(current.id)}${corpusQuery(mode)}">← 返回标注</a><button class="structure-compact-toggle" id="structureCatalogToggle" type="button">目录</button><label>核查人<input id="structurePerson" value="${esc(by)}" autocomplete="name" maxlength="40" placeholder="填写真实姓名"></label><div class="structure-mode" aria-label="结构版本"><button type="button" data-structure-view="base" aria-pressed="true">原AI结构</button><button type="button" data-structure-view="revision" aria-pressed="false">本机修订版</button></div><button type="button" id="structurePrevious">← 上一章</button><button type="button" id="structureNext">下一章 →</button><button class="structure-compact-toggle" type="button" id="structureFeedbackToggle" aria-expanded="false" aria-controls="structureFeedbackPanel">备注</button><button type="button" id="structureUndo">撤回最新修订</button><details class="structure-more"><summary>导入与导出</summary><div><button type="button" id="structureExport">导出反馈JSON</button><button type="button" id="structureImport">导入反馈</button><input type="file" id="structureImportFile" accept=".json,application/json" hidden><button type="button" id="structureExportBundle">导出修订包</button></div></details></section>
- <div class="structure-grid"><nav class="structure-directory" aria-label="核查章节目录"><label>查找章节<input type="search" id="structureSearch" placeholder="作者、篇名、章节"></label><div class="structure-directory-list" id="structureDirectoryList"></div></nav><section class="structure-document" aria-label="分段正文"><header class="structure-document-heading"><h2 id="structureChapterTitle"></h2><div id="structureReadingMode"></div><div class="structure-check-status" id="structureCheckStatus"></div></header><div id="structureBody" class="structure-body" tabindex="0" aria-label="按段落显示的本章正文，可选文字定位"></div></section><aside class="structure-aside"><section class="structure-scan" aria-label="对应原图"><div class="structure-scan-toolbar"><label>对应原图<select id="structureScanSelect" aria-label="对应原图来源"></select></label><a id="structureScanLink" target="_blank" rel="noopener">放大原图</a></div><div class="structure-scan-navigation" aria-label="查看范围外扫描页"><button id="structureScanToggle" type="button" aria-expanded="false">翻页／跳页</button><div><button id="structureScanPrevious" type="button" aria-label="上一扫描页" disabled>← 前页</button><button id="structureScanNext" type="button" aria-label="下一扫描页" disabled>后页 →</button><button id="structureScanReturn" type="button">回到本章</button></div><form id="structureScanJump"><label>扫描页<input id="structureScanPage" type="number" inputmode="numeric" step="1" aria-label="扫描页码" disabled></label><button id="structureScanGo" type="submit" disabled>跳转</button></form></div><div class="structure-scan-scroll"><p id="structureScanStatus" role="status"></p><img id="structureScanImage" alt="对应原图"></div></section><section class="structure-feedback-panel" id="structureFeedbackPanel" role="dialog" aria-modal="false" aria-label="备注小窗"><header class="structure-window-heading"><button id="structureFeedbackDrag" type="button" aria-label="拖动备注小窗，方向键可移动"><strong>备注小窗</strong><span>按住拖动</span></button><button id="structureCloseFeedback" type="button" aria-label="收起备注小窗">收起</button></header><nav class="structure-tabs" role="tablist"><button id="structureFormTab" type="button" role="tab" aria-selected="true" aria-controls="structureFormPanel">写备注／反馈</button><button id="structureRecordsTab" type="button" role="tab" aria-selected="false" aria-controls="structureRecords">反馈记录</button></nav><div id="structureFormPanel" class="structure-form-scroll" role="tabpanel" aria-labelledby="structureFormTab"><form id="structureForm"><div id="structureAnchor" class="structure-anchor" role="status"></div><label>问题与调整方式<select id="structureAction">${Object.entries(structureActions).map(([k,v])=>`<option value="${k}" ${k==='note'?'selected':''}>${esc(k==='note'?'备注':v)}</option>`).join('')}</select></label><p id="structureActionHint" class="structure-form-hint"></p><label id="structureTitleField" hidden>修订章名<input id="structureTitle" maxlength="120" placeholder="填写章名"></label><label id="structureRoleField" hidden>修订角色<select id="structureRole">${Object.entries(structureRoles).map(([k,v])=>`<option value="${k}">${esc(k==='note'?'备注':v)}</option>`).join('')}</select></label><label>备注内容／调整依据<textarea id="structureComment" maxlength="4000" placeholder="写下对当前位置或所选文字的备注…"></textarea></label><div class="structure-form-actions"><button id="structurePreview" type="button">预览这条反馈</button><button id="structureSaveFeedback" type="button" class="structure-primary" disabled>保存反馈</button></div></form><div class="structure-confirm-tools"><p>若已通读核对，可分别记录当前划分正确；结构改变后需重新核查。这不替代书论标注确认。</p><button id="structureConfirmParagraphs" type="button">分段核查正确</button><button id="structureConfirmChapters" type="button">章节核查正确</button></div></div><div id="structureRecords" class="structure-records" role="tabpanel" aria-labelledby="structureRecordsTab" hidden><label class="structure-record-tools">查看范围<select id="structureRecordScope"><option value="chapter">当前章节</option><option value="all">全部章节</option></select></label><div id="structureRecordList"></div></div></section></aside></div>
+ <section class="structure-toolbar" aria-label="结构核查工具"><a id="backToAnnotation" href="./annotation.html?chapter=${encodeURIComponent(current.id)}${corpusQuery(mode)}">← 返回标注</a><button class="structure-compact-toggle" id="structureCatalogToggle" type="button">目录</button><label>核查人<input id="structurePerson" value="${esc(by)}" autocomplete="name" maxlength="40" placeholder="填写真实姓名"></label><div class="structure-mode" aria-label="结构版本"><button type="button" data-structure-view="base" aria-pressed="true">原AI结构</button><button type="button" data-structure-view="revision" aria-pressed="false">本机修订版</button></div><button type="button" id="structurePrevious">← 上一章</button><button type="button" id="structureNext">下一章 →</button><button class="structure-compact-toggle" type="button" id="structureFeedbackToggle" aria-expanded="false" aria-controls="structureFeedbackPanel">备注</button><button type="button" id="structureMissingText">TXT缺文</button><button type="button" id="structureUndo">撤回最新修订</button><details class="structure-more"><summary>导入与导出</summary><div><button type="button" id="structureExport">导出反馈JSON</button><button type="button" id="structureImport">导入反馈</button><input type="file" id="structureImportFile" accept=".json,application/json" hidden><button type="button" id="structureExportBundle">导出修订包</button></div></details></section>
+ <div class="structure-grid"><nav class="structure-directory" aria-label="核查章节目录"><label>查找章节<input type="search" id="structureSearch" placeholder="作者、篇名、章节"></label><div class="structure-directory-list" id="structureDirectoryList"></div></nav><section class="structure-document" aria-label="分段正文"><header class="structure-document-heading"><h2 id="structureChapterTitle"></h2><div id="structureReadingMode"></div><div class="structure-check-status" id="structureCheckStatus"></div></header><div id="structureBody" class="structure-body" tabindex="0" aria-label="按段落显示的本章正文，可选文字定位"></div></section><aside class="structure-aside"><section class="structure-scan" aria-label="对应原图"><div class="structure-scan-toolbar"><label>对应原图<select id="structureScanSelect" aria-label="对应原图来源"></select></label><a id="structureScanLink" target="_blank" rel="noopener">另页查看</a></div><div class="structure-scan-navigation" aria-label="查看范围外扫描页"><button id="structureScanToggle" type="button" aria-expanded="false">翻页／跳页</button><div><button id="structureScanPrevious" type="button" aria-label="上一扫描页" disabled>← 前页</button><button id="structureScanNext" type="button" aria-label="下一扫描页" disabled>后页 →</button><button id="structureScanReturn" type="button">回到本章</button></div><form id="structureScanJump"><label>扫描页<input id="structureScanPage" type="number" inputmode="numeric" step="1" aria-label="扫描页码" disabled></label><button id="structureScanGo" type="submit" disabled>跳转</button></form></div><div class="structure-scan-region-tools"><button type="button" id="structureScanRegionToggle" aria-pressed="false">框选缺文</button><button type="button" id="structureScanRegionDeclare" disabled>声明此处缺文</button><button type="button" id="structureScanRegionClear" disabled>清除框选</button><span id="structureScanRegionStatus" role="status" aria-live="polite"></span></div><div class="structure-scan-scroll"><p id="structureScanStatus" role="status"></p><div class="structure-scan-stage scan-image-stage"><img id="structureScanImage" alt="对应原图" draggable="false" decoding="sync"><div id="structureScanRegionLayer" tabindex="0" aria-label="原图框选区域，启用框选后拖动，Escape退出"><div id="structureScanRegionBox" hidden></div></div></div></div></section><section class="structure-feedback-panel" id="structureFeedbackPanel" role="dialog" aria-modal="false" aria-label="备注小窗"><header class="structure-window-heading"><button id="structureFeedbackDrag" type="button" aria-label="拖动备注小窗，方向键可移动"><strong>备注小窗</strong><span>按住拖动</span></button><button id="structureCloseFeedback" type="button" aria-label="收起备注小窗">收起</button></header><nav class="structure-tabs" role="tablist"><button id="structureFormTab" type="button" role="tab" aria-selected="true" aria-controls="structureFormPanel">写备注／反馈</button><button id="structureRecordsTab" type="button" role="tab" aria-selected="false" aria-controls="structureRecords">反馈记录</button></nav><div id="structureFormPanel" class="structure-form-scroll" role="tabpanel" aria-labelledby="structureFormTab"><form id="structureForm"><div id="structureAnchor" class="structure-anchor" role="status"></div><label>问题与调整方式<select id="structureAction">${Object.entries(structureActions).map(([k,v])=>`<option value="${k}" ${k==='note'?'selected':''}>${esc(k==='note'?'备注':v)}</option>`).join('')}</select></label><p id="structureActionHint" class="structure-form-hint"></p><fieldset id="structureMissingFields" hidden><legend>缺文定位</legend><label>缺文位置<select id="structureMissingPosition">${Object.entries(missingTextPositions).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join('')}</select></label><label>PDF起始物理页（可选）<input id="structureMissingStart" type="number" min="1" max="1052" step="1" inputmode="numeric"></label><label>PDF结束物理页（可选）<input id="structureMissingEnd" type="number" min="1" max="1052" step="1" inputmode="numeric"></label><button type="button" id="structureMissingUseScan">使用当前PDF页</button><div id="structureRegionTools" hidden><p id="structureRegionSummary" role="status"></p><button type="button" id="structureRegionChoose">从原图重新框选</button><button type="button" id="structureRegionView">查看框选</button></div></fieldset><label id="structureTitleField" hidden>修订章名<input id="structureTitle" maxlength="120" placeholder="填写章名"></label><label id="structureRoleField" hidden>修订角色<select id="structureRole">${Object.entries(structureRoles).map(([k,v])=>`<option value="${k}">${esc(k==='note'?'备注':v)}</option>`).join('')}</select></label><label>备注内容／调整依据<textarea id="structureComment" maxlength="4000" placeholder="写下对当前位置或所选文字的备注…"></textarea></label><div class="structure-form-actions"><button id="structurePreview" type="button">预览这条反馈</button><button id="structureSaveFeedback" type="button" class="structure-primary" disabled>保存反馈</button></div></form><div class="structure-confirm-tools"><p>若已通读核对，可分别记录当前划分正确；结构改变后需重新核查。这不替代书论标注确认。</p><button id="structureConfirmParagraphs" type="button">分段核查正确</button><button id="structureConfirmChapters" type="button">章节核查正确</button></div></div><div id="structureRecords" class="structure-records" role="tabpanel" aria-labelledby="structureRecordsTab" hidden><label class="structure-record-tools">查看范围<select id="structureRecordScope"><option value="chapter">当前章节</option><option value="all">全部章节</option></select></label><div id="structureRecordList"></div></div></section></aside></div>
  <footer class="structure-footer"><span id="structureNotice" role="status">选择需要核查的章，对照原图检查分段与章节；原文只读；选文或右键空白处可添加备注。</span><span id="structureSummary"></span></footer><section id="structureRecovery" class="structure-recovery" hidden><p role="alert"></p><button type="button" id="structureRescue">下载本次反馈备份</button><button type="button" id="structureRetry">重试保存</button><button type="button" id="structureReload">下载备份并重新读取</button></section><dialog id="structurePreviewDialog" class="structure-dialog" aria-label="结构调整前后预览"></dialog><dialog id="structureImportDialog" class="structure-dialog" aria-label="反馈导入预览"></dialog>`;
  feedbackWindow=bindFeedbackWindow(app.querySelector('#structureFeedbackPanel'),app.querySelector('#structureFeedbackDrag'),()=>app.classList.contains('structure-feedback-open'));
+ scanRegionPicker=bindScanRegion({image:app.querySelector('#structureScanImage'),layer:app.querySelector('#structureScanRegionLayer'),box:app.querySelector('#structureScanRegionBox'),toggle:app.querySelector('#structureScanRegionToggle'),declare:app.querySelector('#structureScanRegionDeclare'),clear:app.querySelector('#structureScanRegionClear'),status:app.querySelector('#structureScanRegionStatus'),getContext:()=>({page:scanPage,chapterId:current.id}),canSelect:editing,beforeSelect:()=>setFeedbackOpen(false),onDeclare:declareScanRegion,onClear:()=>{pdfRegion=null;updateForm();invalidatePreview();updateAnchor();}});
  app.querySelector('#structureSearch').oninput=renderDirectory;
  app.querySelector('#structureDirectoryList').onclick=e=>{const a=e.target.closest('[data-structure-chapter]');if(a){e.preventDefault();navigate(a.dataset.structureChapter);}};
  const textBody=app.querySelector('#structureBody');
  textBody.onpointerdown=event=>{lastPointer={type:event.pointerType||'mouse',at:performance.now()};contextSelection=null;if(event.button===2)try{const spans=structureSelection(textBody,corpus.byPage),selection=getSelection();if(spans.length)contextSelection={spans,rects:[...selection.getRangeAt(0).getClientRects()]};}catch(error){notice(error.message);}};
- textBody.onpointerup=event=>{if(event.button!==0)return;capture();if(event.pointerType==='mouse'&&!getSelection()?.isCollapsed)openNote();};
- textBody.onkeyup=event=>{if(event.isComposing||composing)return;capture();if(!getSelection()?.isCollapsed)openNote();};
+ textBody.onpointerup=event=>{if(event.button!==0)return;capture();if(event.pointerType==='mouse'&&!getSelection()?.isCollapsed){if(formValues().action==='missing-text')setFeedbackOpen(true);else openNote();}};
+ textBody.onkeyup=event=>{if(event.isComposing||composing)return;capture();if(!getSelection()?.isCollapsed){if(formValues().action==='missing-text')setFeedbackOpen(true);else openNote();}};
  textBody.oncontextmenu=contextNote;
  for(const b of app.querySelectorAll('[data-structure-view]'))b.onclick=()=>switchView(b.dataset.structureView);
- app.querySelector('#structureCatalogToggle').onclick=()=>app.classList.toggle('structure-catalog-open');app.querySelector('#structureFeedbackToggle').onclick=()=>{capture();if(app.classList.contains('structure-feedback-open'))setFeedbackOpen(false);else openNote();};app.querySelector('#structureCloseFeedback').onclick=()=>{setFeedbackOpen(false);app.querySelector('#structureFeedbackToggle').focus();};
+ app.querySelector('#structureCatalogToggle').onclick=()=>app.classList.toggle('structure-catalog-open');app.querySelector('#structureFeedbackToggle').onclick=()=>{capture();if(app.classList.contains('structure-feedback-open'))setFeedbackOpen(false);else {recordsTab('form');setFeedbackOpen(true);}};app.querySelector('#structureCloseFeedback').onclick=()=>{setFeedbackOpen(false);app.querySelector('#structureFeedbackToggle').focus();};
  for(const [id,delta] of [['structurePrevious',-1],['structureNext',1]])app.querySelector('#'+id).onclick=()=>{const chapters=visibleChapters();navigate(chapters[chapters.indexOf(current)+delta]?.id);};
  app.querySelector('#structureScanToggle').onclick=e=>{const open=e.target.parentElement.classList.toggle('is-open');e.target.setAttribute('aria-expanded',String(open));};
  app.querySelector('#structureScanJump').onsubmit=e=>{e.preventDefault();jumpScan();};
@@ -267,13 +304,18 @@ function mount(){
  app.querySelector('#structureScanReturn').onclick=()=>{if(!composing)showScan(anchor?.page||current.fragments[0]?.page);};
  app.querySelector('#structureScanSelect').onchange=e=>showScan(Number(e.target.value));app.querySelector('#structureFormTab').onclick=()=>recordsTab('form');app.querySelector('#structureRecordsTab').onclick=()=>recordsTab('records');app.querySelector('#structureRecordScope').onchange=renderRecords;
  app.querySelector('#structureForm').addEventListener('pointerdown',capture);
- app.querySelector('#structureForm').onsubmit=e=>{e.preventDefault();if(!composing&&!e.isComposing)previewDraft();};
- app.querySelector('#structureAction').onchange=()=>{invalidatePreview();updateForm();};
- for(const id of ['structureTitle','structureRole','structureComment','structurePerson'])app.querySelector('#'+id).addEventListener('input',invalidatePreview);
+ app.querySelector('#structureForm').onsubmit=e=>{e.preventDefault();if(!composing&&!e.isComposing&&e.keyCode!==229){if(feedbackOnly(formValues().action))saveDraft();else previewDraft();}};
+ app.querySelector('#structureAction').onchange=()=>{invalidatePreview();updateForm();updateAnchor();};
+ app.querySelector('#structureMissingText').onclick=openMissingText;
+ app.querySelector('#structureMissingPosition').onchange=()=>{if(formValues().position==='pdf-region'&&pdfRegion){app.querySelector('#structureMissingStart').value=pdfRegion.page;app.querySelector('#structureMissingEnd').value=pdfRegion.page;}invalidatePreview();updateForm();updateAnchor();};
+ app.querySelector('#structureRegionChoose').onclick=()=>{if(!editing())return;setFeedbackOpen(false);if(app.querySelector('#structureScanRegionToggle').getAttribute('aria-pressed')!=='true')app.querySelector('#structureScanRegionToggle').click();};
+ app.querySelector('#structureRegionView').onclick=()=>viewScanRegion(pdfRegion);
+ app.querySelector('#structureMissingUseScan').onclick=()=>{if(composing||!scanPage)return;app.querySelector('#structureMissingStart').value=scanPage;app.querySelector('#structureMissingEnd').value=scanPage;invalidatePreview();};
+ for(const id of ['structureTitle','structureRole','structureComment','structurePerson','structureMissingStart','structureMissingEnd'])app.querySelector('#'+id).addEventListener('input',invalidatePreview);
  app.querySelector('#structurePreview').onpointerdown=e=>{capture();if(e.pointerType==='mouse')e.preventDefault();};app.querySelector('#structurePreview').onclick=previewDraft;app.querySelector('#structureSaveFeedback').onclick=saveDraft;
  app.addEventListener('compositionstart',()=>{composing=true;});app.addEventListener('compositionend',()=>{composing=false;});
  for(const [id,kind] of [['structureConfirmParagraphs','paragraphs'],['structureConfirmChapters','chapters']])app.querySelector('#'+id).onclick=()=>{if(!editing())return;const by=author();if(!by)return;try{persist(confirmStructure(state,corpus,current.id,kind,by),kind==='paragraphs'?'已记录当前分段核查正确；未确认书论标注。':'已记录当前章节核查正确；原任务目录保持。');}catch(e){notice(e.message);}};
- app.querySelector('#structureRecordList').onclick=e=>{const id=e.target.dataset.previewFeedback||e.target.dataset.adoptFeedback||e.target.dataset.dismissFeedback;if(!id||!ready())return;const item=state.items.find(i=>i.id===id);try{
+ app.querySelector('#structureRecordList').onclick=e=>{const regionId=e.target.dataset.viewScanRegion;if(regionId){const item=state.items.find(i=>i.id===regionId);if(item)viewScanRegion(item.proposal.pdfRegion,item);return;}const id=e.target.dataset.previewFeedback||e.target.dataset.adoptFeedback||e.target.dataset.dismissFeedback;if(!id||!ready())return;const item=state.items.find(i=>i.id===id);try{
   if(e.target.dataset.dismissFeedback){const by=author(),resolution=e.target.closest('.structure-record').querySelector('textarea').value.trim();if(!by)return;if(!resolution)throw new Error('请填写处理说明，再记录暂不采用。');persist(decideStructure(state,id,'dismissed',by,corpus,resolution),'已记录处理意见，原反馈和结构保留。');}
   else openPreview(item);
  }catch(error){notice(error.message);}};
@@ -284,12 +326,14 @@ function mount(){
 }
 async function init(){
  try{
-  corpus=await loadAnnotationCorpus(location.search);revision=await corpusDigest({mode,index:corpus.allocationIndex||corpus.index,sources:corpus.pages.filter(p=>p.eligible).map(p=>[p.page,p.source.textSha256])});raw=localStorage.getItem(key);state=raw===null?emptyStructureFeedback(revision,mode):validateStructureFeedback(JSON.parse(raw),corpus,revision);index=deriveStructure(state,corpus);view=hasEdits()?'revision':'base';
+  corpus=await loadAnnotationCorpus(location.search);revision=await structureFeedbackRevision(corpus);raw=localStorage.getItem(key);state=raw===null?emptyStructureFeedback(revision,mode):validateStructureFeedback(JSON.parse(raw),corpus,revision);index=deriveStructure(state,corpus);view=hasEdits()?'revision':'base';
   if(memberId){assignmentSnapshot=readCorpusAssignments(localStorage,corpus.index,mode);const scope=assignmentScope(assignmentSnapshot.value,corpus.index,memberId);memberChapters=scope.chapters;scopedReviewerName=scope.member.name;if(!memberChapters.length)throw new Error('该成员尚无章节分工，请返回任务页重新进入。');}
   if(params.has('batch'))memberChapters=chapterBatchScope(corpus,params,memberChapters||corpus.index.chapters);
   const id=currentIndex().chapterAliases[params.get('chapter')]||params.get('chapter');if((memberId||params.has('batch'))&&id&&!visibleChapters().some(c=>c.id===id))throw new Error('该章节不在本人分工范围内，请返回成员入口。');current=visibleChapters().find(c=>c.id===id)||visibleChapters().find(c=>c.fragments.length);if(!current)throw new Error('当前没有可核查的合格正文。');mount();
   void loadScanCatalog();
   if(location.hash.startsWith('#selection=')){try{const value=JSON.parse(decodeURIComponent(location.hash.slice(11))),first=value[0],p=corpus.byPage.get(first?.page);if(!p||!Number.isInteger(first.start)||!Number.isInteger(first.end)||first.end<first.start||first.end>p.text.length||p.source.textSha256!==first.textSha256||!current.fragments.some(f=>f.page===first.page&&first.start>=f.start&&first.start<f.end))throw Error('从标注页传入的位置已不属于当前结构，请重新选文。');anchor={page:first.page,start:first.start,end:first.end,quote:p.text.slice(first.start,first.end),textSha256:p.source.textSha256};updateAnchor();setFeedbackOpen(true);}catch(e){notice(e.message);}}
+  if(params.get('feedback')==='pdf-region'){try{const n=Number(params.get('scan'));if(Number.isInteger(n)&&n>=1&&n<=1052)showPhysicalScan(n);await app.querySelector('#structureScanImage').decode();setFeedbackOpen(false);app.querySelector('#structureScanRegionToggle').click();}catch{notice('原图尚未载入，请选好图页后点击框选缺文。');}}
+  if(params.get('feedback')==='missing-text'){const initialScan=Number(params.get('scan'));if(Number.isInteger(initialScan)&&initialScan>=1&&initialScan<=1052)app.querySelector('#structureMissingStart').value=initialScan;openMissingText();}
  }catch(e){app.innerHTML=`<section class="structure-loading"><h1>分段与章节反馈暂未载入</h1><p role="alert">${esc(e.message)}</p><p>原文、分工和标注记录保留。</p><button id="downloadRawStructure" type="button">下载现有反馈原记录</button><button type="button" id="reloadStructure">重新读取</button></section>`;app.querySelector('#downloadRawStructure').onclick=()=>download('反馈原记录.json',localStorage.getItem(key)||'null');app.querySelector('#reloadStructure').onclick=()=>location.reload();}
 }
 document.addEventListener('selectionchange',capture);

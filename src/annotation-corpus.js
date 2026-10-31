@@ -42,13 +42,13 @@ export function corpusSourceView(page,byPage,chapter=null){
  const mapped=chapter&&page>=20001?mappedSourcePages(chapter,page):null,originalPages=mapped?[...new Set([...mapped,...(page===chapter.fragments[0]?.page?chapterReferencePages(chapter):[])])].sort((a,b)=>a-b):source?.originalPages||[];const scan=page<20001?page:(mapped?.[0]??originalPages[0]);
  return {label:chapter?(chapter.workTitle===chapter.title?chapter.title:chapter.workTitle+' · '+chapter.title):(source?.displayLabel||`原图来源 ${page}`),scan:scan||null,url:source?.sourceUrl||'',originalPages};
 }
-export async function buildStandardBundle({corpus,state,legacy,legacyChapterRaw,person,unsaved=false,assignmentRecords={}}){
+export async function buildStandardBundle({corpus,state,legacy,legacyChapterRaw,person,unsaved=false,assignmentRecords={},feedbackFiles=[]}){
  if(corpus.mode==='legacy')throw new Error('此导出入口只用于wolai标准任务。');
  if(corpus.partial)throw new Error('请先读取完整审核语料再导出，未生成不完整成果。');
  bindCorpusProgress(state,corpus);if(!person.trim())throw new Error('请先填写真实姓名，再导出。');
  const effective=effectiveChapterProgress(legacy,state,corpus.byPage),statuses={};
  for(const c of corpus.index.chapters)statuses[c.id]={confirmed:await chapterIsConfirmed(c,corpus.byPage,legacy,state),...(state.confirmations[c.id]||{})};
- const files=chapterAnnotationFiles(corpus.index,corpus.byPage,effective,statuses);
+ const files=[...chapterAnnotationFiles(corpus.index,corpus.byPage,effective,statuses),...feedbackFiles];
  const backup=corpusBackup(state,legacy,corpus,legacyChapterRaw);
  const completeText='\ufeff'+corpus.index.chapters.map(c=>`${c.author} · 《${c.workTitle}》 · ${c.volumeTitle&&c.volumeTitle!==c.title?c.volumeTitle+' · ':''}${c.title}\n\n`+chapterReadingText(c,corpus.byPage,effective)).join('\n\n');
  files.push({name:'wolai标准正文全集.txt',content:completeText},{name:'旧成员分工原始备份.json',content:assignmentRecords.legacy||'null'},{name:'标准成员分工原始备份.json',content:assignmentRecords.standard||'null'},{name:'wolai标准语料.json',content:JSON.stringify(corpus.data,null,2)},{name:'wolai标准标注进度.json',content:JSON.stringify(backup,null,2)},{name:'原四份记录完整备份.json',content:JSON.stringify(backup.legacyArchive,null,2)},{name:'旧整章记录完整备份.json',content:JSON.stringify(backup.legacyChapterArchives.map(raw=>JSON.parse(raw)),null,2)},{name:'标准来源映射.json',content:JSON.stringify(corpus.pages.map(p=>({sourceId:p.page,...p.source})),null,2)},{name:'使用说明.txt',content:`wolai标准任务；正文版本 ${corpus.data.revision}。\n${unsaved?'包含未保存进度，请妥善保留。\n':''}本任务仅确认已开放正文，不表示全书或来源缺文已补齐。AI初标不等于人工标注完成。标准语料／标注进度独立保存；原四份记录和旧整章记录是完整备份，未迁移或覆盖。\n按篇正文与标准正文全集按PDF/TXT映射阅读顺序导出，见 PDF与TXT阅读映射.csv。wolai标准语料.json保留原始组装和坐标，只作原件/恢复来源；同段旧TXT及无法定位段落另列，不混入已确定顺序正文。\n恢复本任务请使用 wolai标准标注进度.json；原四份与旧整章备份分别在旧入口恢复。正文来源ID不是原PDF页码，实际原图定位见标准来源映射。`});

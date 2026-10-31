@@ -1,11 +1,14 @@
 import {validateChapterIndex} from './annotation-chapters.js?v=loading-20261028';
 import {annotationReading} from './annotation-reading.js?v=release-20261022';
+import {validateScanRegion} from './scan-region.js';
 
 export const structureActions={
  'split-paragraph':'拆分这一段','merge-paragraph':'与下一段合并',role:'更正段落角色',
  'rename-chapter':'更正章名','split-chapter':'从这里另分一章','merge-chapter':'与同篇下一章合并',
- 'move-next':'从这里起归入下一章','move-previous':'这里之前归入上一章',note:'其他问题／暂不确定',
+ 'move-next':'从这里起归入下一章','move-previous':'这里之前归入上一章',note:'其他问题／暂不确定','missing-text':'TXT缺文',
 };
+export const missingTextPositions={'chapter':'整章／章内位置不确定','chapter-start':'章首缺文','chapter-end':'章末缺文',before:'所选文字之前缺文',after:'所选文字之后缺文','pdf-region':'PDF框选区域缺文'};
+export const feedbackOnly=action=>['note','missing-text'].includes(action);
 export const structureRoles={theory:'书论正文',editorial:'编者题解／注释',biography:'生平背景',structure:'篇题／结构',blank:'空白标记',pending:'待核背景'};
 export const structureKey=mode=>'shulun-structure-feedback-v1-'+mode;
 export const emptyStructureFeedback=(revision,mode)=>({format:'shulun-structure-feedback',version:1,revision,mode,items:[],checks:[],events:[]});
@@ -22,6 +25,20 @@ function validateAnchor(a,corpus){
  if(!p?.eligible||!Number.isInteger(a.start)||!Number.isInteger(a.end)||a.start<0||a.end<a.start||a.end>p.text.length||a.textSha256!==p.source.textSha256||a.quote!==p.text.slice(a.start,a.end))throw new Error('定位与当前审核正文／来源版本不同，请重新选文。');
  if(!characterBoundary(p.text,a.start)||!characterBoundary(p.text,a.end))throw new Error('定位切断了完整字符或换行，请重新选择。');
  return a;
+}
+function validateMissingText(item,chapter,corpus){
+ const p=item.proposal;
+ if(!Object.hasOwn(missingTextPositions,p?.position))throw Error('请选择缺文位置。');
+ for(const n of [p.scanStart,p.scanEnd])if(n!=null&&(!Number.isInteger(n)||n<1||n>1052))throw Error('PDF物理页码须为1—1052。');
+ if(p.scanEnd!=null&&(p.scanStart==null||p.scanEnd<p.scanStart))throw Error('PDF结束页码须不小于起始页码。');
+ if(p.position==='pdf-region'){
+  validateScanRegion(p.pdfRegion);
+  if(p.scanStart!==p.pdfRegion.page||p.scanEnd!==p.pdfRegion.page)throw Error('PDF页码与框选原图不一致。');
+ }else if(p.pdfRegion!==undefined)throw Error('原图框选与缺文位置不一致。');
+ if(['before','after'].includes(p.position)){
+  validateAnchor(item.anchor,corpus);
+  if(!chapter.fragments.some(f=>anchorIn(item.anchor,f,'note')))throw Error('缺文定位不属于当前章节。');
+ }else if(item.anchor!==null)throw Error('章首、章末或整章缺文使用章节定位，请勿附加文字定位。');
 }
 function validateNoteSelection(item,corpus){
  const context=item.proposal?.reviewContext;if(context?.kind!=='txt-note')return;
@@ -84,7 +101,9 @@ function splitFragments(c,a,byPage){
 function transform(index,item,corpus){
  const targets=affected(index,item);
  if(targets.length!==item.before.length||targets.some((c,n)=>c.id!==item.before[n].id||sourceStamp(c)!==sourceStamp(item.before[n].stamp)))throw new Error('相关结构已发生变化，请根据当前版本重新提出反馈；原意见保留。');
- const c=targets[0],a=validateAnchor(item.anchor,corpus),n=index.chapters.indexOf(c),changedBoundaries=new Set();
+ const c=targets[0];
+ if(item.action==='missing-text'){validateMissingText(item,c,corpus);return index;}
+ const a=validateAnchor(item.anchor,corpus),n=index.chapters.indexOf(c),changedBoundaries=new Set();
  if(!c.fragments.some(f=>anchorIn(a,f,item.action)))throw new Error('定位不属于当前章节，请重新选择。');
  if(item.action==='note')return index;
  if(item.action==='rename-chapter'){c.title=title(item.proposal.title);return rebuild(index,corpus.byPage);}
@@ -130,8 +149,8 @@ export function deriveStructure(state,corpus){
 }
 export function proposeStructure(state,corpus,input,at=new Date().toISOString()){
  if(!Object.hasOwn(structureActions,input.action))throw new Error('请选择反馈或调整方式。');
- const index=deriveStructure(state,corpus),targets=affected(index,input),anchor=validateAnchor(input.anchor,corpus);
- if(!targets[0].fragments.some(f=>anchorIn(anchor,f,input.action)))throw new Error('定位不属于当前章节。');
+ const index=deriveStructure(state,corpus),targets=affected(index,input),anchor=input.action==='missing-text'?input.anchor??null:validateAnchor(input.anchor,corpus);
+ if(input.action!=='missing-text'&&!targets[0].fragments.some(f=>anchorIn(anchor,f,input.action)))throw new Error('定位不属于当前章节。');
  const item={id:crypto.randomUUID(),action:input.action,chapterId:input.chapterId,chapterTitle:targets[0].title,anchor:structuredClone(anchor),proposal:structuredClone(input.proposal||{}),comment:String(input.comment||'').trim(),by:person(input.by),at,status:'pending',before:targets.map(c=>({id:c.id,stamp:stamp(c)}))};
  if(!item.comment||item.comment.length>4000)throw new Error('请填写问题说明或调整依据（不超过4000字）。');
  validateNoteSelection(item,corpus);
@@ -142,7 +161,7 @@ export function previewStructure(state,corpus,item){return transform(deriveStruc
 export function decideStructure(state,id,status,by,corpus,resolution='',at=new Date().toISOString()){
  if(!['applied','dismissed'].includes(status))throw new Error('请选择采用或暂不采用。');
  const next=structuredClone(state),item=next.items.find(i=>i.id===id);if(!item||item.status!=='pending')throw new Error('该反馈已处理，请重新读取。');
- if(status==='applied'){if(item.action==='note')throw new Error('其他问题只能记录处理说明，不能直接生成结构修订。');previewStructure(state,corpus,item);}
+ if(status==='applied'){if(feedbackOnly(item.action))throw new Error('备注和缺文只能记录处理说明，不能直接生成结构修订。');previewStructure(state,corpus,item);}
  Object.assign(item,{status,decidedBy:person(by),decidedAt:at,resolution:String(resolution).trim(),order:next.events.length+1});next.events.push({id:crypto.randomUUID(),action:status,itemId:id,by:item.decidedBy,at});deriveStructure(next,corpus);return next;
 }
 export function undoStructure(state,by,corpus,at=new Date().toISOString()){
@@ -170,7 +189,14 @@ export function validateStructureFeedback(state,corpus,revision){
  const ids=new Set(),orders=new Set();
  for(const item of state.items){
   if(typeof item?.id!=='string'||!item.id||ids.has(item.id)||!Object.hasOwn(structureActions,item.action)||!['pending','applied','dismissed'].includes(item.status)||typeof item.chapterId!=='string'||typeof item.chapterTitle!=='string'||typeof item.comment!=='string'||!item.comment.trim()||item.comment.length>4000||!item.proposal||typeof item.proposal!=='object'||Array.isArray(item.proposal)||!Array.isArray(item.before)||!item.before.length||item.before.length>2||item.before.some(v=>typeof v.id!=='string'||typeof v.stamp!=='string')||!Number.isFinite(Date.parse(item.at)))throw new Error('反馈记录或定位无效。');
-  ids.add(item.id);person(item.by);validateAnchor(item.anchor,corpus);validateNoteSelection(item,corpus);
+  ids.add(item.id);person(item.by);
+  if(item.action==='missing-text'){
+   let chapter;try{chapter=JSON.parse(item.before[0].stamp);}catch{throw Error('缺文章节快照无效。');}
+   const baseIds=new Set([...corpus.index.chapters,...(corpus.allocationIndex?.chapters||[])].map(c=>c.id));
+   if(chapter?.id!==item.chapterId||item.before[0].id!==item.chapterId||item.before.length!==1||!Array.isArray(chapter.fragments)||!baseIds.has(item.chapterId.split('--revision-')[0])||item.status==='applied')throw Error('缺文章节定位或处理状态无效。');
+   validateMissingText(item,chapter,corpus);
+  }else validateAnchor(item.anchor,corpus);
+  validateNoteSelection(item,corpus);
   if(item.status!=='pending'){person(item.decidedBy);if(!Number.isFinite(Date.parse(item.decidedAt))||!Number.isInteger(item.order)||item.order<1)throw new Error('反馈处理历史无效。');}
   if(item.status==='applied'){if(orders.has(item.order))throw new Error('结构修订顺序冲突。');orders.add(item.order);}
  }
