@@ -2,3 +2,5 @@
 @media(max-width:760px){#compareApp .gap-texts{gap:5px;grid-template-rows:minmax(0,1fr)}.gap-evidence{padding:7px;font-size:10px}.gap-editor{padding:6px;gap:4px}.gap-editor>label{font-size:10px}.gap-editor textarea{font-size:16px!important}.gap-editor small{font-size:9px}.gap-decision .compare-decision-main{grid-template-columns:1fr 1.2fr}.gap-decision .gap-proof{font-size:9px}.gap-decision{max-height:28dvh}}
 @media(max-height:560px){#compareApp .gap-texts{grid-template-rows:minmax(0,1fr)}.gap-evidence{font-size:10px;padding:5px}.gap-editor{padding:5px}.gap-editor small{display:none}.gap-editor textarea{font-size:15px!important}.gap-decision .gap-proof{margin-top:4px}.gap-editor>label{font-size:10px}}
 @media(max-height:560px){#compareApp .gap-texts{grid-template-rows:minmax(0,1fr);gap:4px}.gap-evidence{padding:3px 5px}.gap-editor{padding:3px;gap:3px}.gap-editor>label button{padding:3px!important}.gap-editor textarea{min-height:40px}}
+
+.gap-current-task{margin:0;font-size:12px;line-height:1.6;max-height:3.2em;overflow:auto;color:var(--ws-muted)}

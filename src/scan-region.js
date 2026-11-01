@@ -40,7 +40,8 @@ export async function verifyScanRegion(image,region){
  if(after.imageWidth!==region.imageWidth||after.imageHeight!==region.imageHeight)throw Error('原图尺寸已变化，请核对原记录。');
 }
 
-export function bindScanRegion({image,layer,box,toggle,declare,clear,status,getContext,canSelect,beforeSelect=()=>{},onDeclare,onClear}){
+export function bindScanRegion({image,layer,box,toggle,declare,clear,status,getContext,canSelect,beforeSelect=()=>{},onDeclare,onClear,words={}}){
+ const noun=words.noun||'缺文',toggleLabel=words.toggle||'框选缺文',declareLabel=words.declare||'声明此处缺文';
  let active=false,drag=null,candidate=null,busy=false;
  const context=()=>JSON.stringify(getContext());
  function paint(rect){
@@ -51,14 +52,14 @@ export function bindScanRegion({image,layer,box,toggle,declare,clear,status,getC
   const id=drag?.id;drag=null;if(id!=null&&layer.hasPointerCapture(id))layer.releasePointerCapture(id);
  }
  function setActive(next){
-  active=next;layer.classList.toggle('is-selecting',active);layer.tabIndex=active?0:-1;toggle.setAttribute('aria-pressed',String(active));toggle.textContent=active?'退出框选':'框选缺文';
+  active=next;layer.classList.toggle('is-selecting',active);layer.tabIndex=active?0:-1;toggle.setAttribute('aria-pressed',String(active));toggle.textContent=active?'退出框选':toggleLabel;
  }
  function reset(){endDrag();candidate=null;setActive(false);paint(null);declare.disabled=true;clear.disabled=true;status.textContent='';}
  function cancel(){endDrag();candidate=null;paint(null);declare.disabled=true;clear.disabled=true;status.textContent='框选已取消，可重新拖动。';}
  toggle.onclick=()=>{
   if(!canSelect())return;
   if(active){reset();return;}
-  try{imageIdentity(image,getContext().page);beforeSelect();setActive(true);layer.focus({preventScroll:true});status.textContent='在原图上拖动框选缺失区域；普通滚动请先退出框选。';}catch(e){status.textContent=e.message;}
+  try{imageIdentity(image,getContext().page);beforeSelect();setActive(true);layer.focus({preventScroll:true});status.textContent=words.hint||'在原图上拖动框选缺失区域；普通滚动请先退出框选。';}catch(e){status.textContent=e.message;}
  };
  clear.onclick=()=>{if(!canSelect())return;reset();onClear();};
  layer.addEventListener('pointerdown',event=>{
@@ -81,8 +82,8 @@ export function bindScanRegion({image,layer,box,toggle,declare,clear,status,getC
   if(!drag||event.pointerId!==drag.id)return;
   if(!unchanged()){cancel();return;}
   event.preventDefault();const rect=normalizedScanRect(drag.box,drag.from,{x:event.clientX,y:event.clientY}),saved=drag;
-  endDrag();if(rect.width*saved.box.width<4||rect.height*saved.box.height<4){cancel();status.textContent='请拖出一个区域，单击不会创建缺文反馈。';return;}
-  candidate={page:saved.page,src:saved.src,imageWidth:saved.imageWidth,imageHeight:saved.imageHeight,rect,context:saved.context};paint(rect);declare.disabled=false;clear.disabled=false;setActive(false);status.textContent='已框选PDF第'+saved.page+'页，点击“声明此处缺文”。';
+  endDrag();if(rect.width*saved.box.width<4||rect.height*saved.box.height<4){cancel();status.textContent='请拖出一个区域，单击不会创建'+noun+'记录。';return;}
+  candidate={page:saved.page,src:saved.src,imageWidth:saved.imageWidth,imageHeight:saved.imageHeight,rect,context:saved.context};paint(rect);declare.disabled=false;clear.disabled=false;setActive(false);status.textContent='已框选PDF第'+saved.page+'页，点击“'+declareLabel+'”。';
  });
  for(const type of ['pointercancel','lostpointercapture'])layer.addEventListener(type,()=>{if(drag)cancel();});
  layer.addEventListener('keydown',event=>{if(event.key==='Escape'&&!event.isComposing&&event.keyCode!==229){event.preventDefault();reset();}});
@@ -92,7 +93,7 @@ export function bindScanRegion({image,layer,box,toggle,declare,clear,status,getC
   try{
    const region=await captureScanRegion(image,snapshot);
    if(candidate!==snapshot||snapshot.context!==context()||!canSelect())throw Error('图页或选区已变化，请重新框选。');
-   onDeclare(region);status.textContent='框选位置已带入缺文反馈，请确认保存。';
+   onDeclare(region);status.textContent='框选位置已带入'+noun+'，请确认保存。';
   }catch(e){status.textContent=e.message;}finally{busy=false;declare.disabled=!candidate;}
  };
  return {reset,geometryChanged(){if(drag)cancel();},show(region){reset();paint(region.rect);clear.disabled=false;status.textContent='正在查看已记录的PDF第'+region.page+'页框选区域。';const scroll=image.closest('.structure-scan-scroll'),b=image.getBoundingClientRect(),v=scroll.getBoundingClientRect();scroll.scrollLeft+=b.left+(region.rect.x+region.rect.width/2)*b.width-v.left-scroll.clientWidth/2;scroll.scrollTop+=b.top+region.rect.y*b.height-v.top-20;}};

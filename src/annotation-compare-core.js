@@ -1,3 +1,4 @@
+import {validateGlyphNotes,openGlyphNotes} from './comparison-glyph-notes.js';
 // Recheck decisions are independent of source texts and previous approval/annotation records.
 export const compareKey=revision=>'shulun-wolai-human-recheck-v1:'+revision;
 export const digestText=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),n=>n.toString(16).padStart(2,'0')).join('');
@@ -25,6 +26,7 @@ export const emptyRecheck=(revision,corpus)=>({format:corpus?.pageModel?'pdf-pag
 const binding=i=>({id:i.id,page:i.page,manualSha256:i.manualSha256,referenceSha256:i.referenceSha256,sourceStart:i.sourceStart,sourceEnd:i.sourceEnd,referenceId:i.referenceId,referenceStart:i.referenceStart,referenceEnd:i.referenceEnd});
 function checkRecord(record,corpus){
  const i=corpus.items.get(record?.id);if(!i||!object(record)||!choices.has(record.choice)||!record.by?.trim()||record.by.length>40||!Number.isFinite(Date.parse(record.at))||!object(record.binding)||Object.entries(binding(i)).some(([k,v])=>record.binding[k]!==v))fail('复核记录与本次两侧正文版本或位置不一致。');
+ if(record.glyphNotes!==undefined){if(!corpus.pageModel)fail('疑难字备注不属于旧片段备份。');validateGlyphNotes(record.glyphNotes,i);if(record.choice!=='defer'&&openGlyphNotes(record).length)fail('疑难字尚未解决，本页只能保存为存疑。');}
  if(typeof record.deleteText!=='boolean')fail('删除选项无效。');clean(record.note,3000,'核定依据');clean(record.replacement,10000,'校订文字');if(record.scanPage!==null&&(!Number.isInteger(record.scanPage)||record.scanPage<1||record.scanPage>1052))fail('复核扫描页无效。');
  if(record.choice==='manual'&&i.page===null||record.choice==='reference'&&i.referenceId===null)fail('该差异没有可采用的对应文本。');
  if(record.deleteText&&(record.choice!=='custom'||record.replacement!==''))fail('删除与校订内容不一致。');
@@ -48,9 +50,10 @@ export function validateRecheck(value,revision,corpus){
  for(const [id,r] of Object.entries(value.records)){if(id!==r?.id)fail('复核记录编号无效。');checkRecord(r,corpus);}
  for(const e of value.events)checkRecord(e,corpus);return value;
 }
-export function recordDecision(state,corpus,{id,choice,by,note='',replacement='',deleteText=false,draftText,scanPage=null,at=new Date().toISOString()}){
+export function recordDecision(state,corpus,{id,choice,by,note=state.records[id]?.note||'',replacement='',deleteText=false,draftText,glyphNotes=state.records[id]?.glyphNotes,scanPage=null,at=new Date().toISOString()}){
  const item=corpus.items.get(id);if(!item||!choices.has(choice))fail('请选择有效差异和复核结论。');by=clean(by,40,'核查人').trim();if(!by)fail('请填写真实核查人姓名。');
  const record={id,choice,by,note:clean(note,3000,'核定依据'),replacement:choice==='manual'?item.original:choice==='reference'?item.reference:choice==='custom'?(deleteText?'':clean(replacement,10000,'校订文字')):'',deleteText:choice==='custom'&&Boolean(deleteText),scanPage,at,binding:binding(item)};
+ if(glyphNotes!==undefined)record.glyphNotes=structuredClone(glyphNotes);
  if(draftText!==undefined)record.draftText=clean(draftText,10000,'未确认校订稿');
  checkRecord(record,corpus);return {...state,records:{...state.records,[id]:record},events:[...state.events,record]};
 }

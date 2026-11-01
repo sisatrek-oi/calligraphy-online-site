@@ -1,0 +1,26 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {createGlyphNote,validateGlyphNotes,resolveGlyphNote,glyphTextLocation,glyphNotesCsv,glyphContext} from '../src/comparison-glyph-notes.js';
+import {validateComparison,emptyRecheck,recordDecision,validateRecheck,mergeRecheck,saveRecheck} from '../src/annotation-compare-core.js';
+import {pageComparison} from '../src/annotation-compare-pages.js';
+const source=await validateComparison(JSON.parse(await fs.readFile(new URL('../comparison-data/wolai-human.json',import.meta.url),'utf8'))),corpus=pageComparison(source,emptyRecheck('test')),item=corpus.items.get('P000005');
+const region={page:5,imageWidth:1600,imageHeight:2400,imageSha256:'a'.repeat(64),rect:{x:.1,y:.2,width:.05,height:.06}};
+const input={id:'glyph-test',textSnapshot:'同词\n𠮷错同词',start:3,end:5,region,kind:'uninputtable',comment:'原字无法输入',candidate:'',by:'测试',at:'2026-11-01T01:00:00.000Z'};
+test('glyph notes bind UTF16 range to captured display text, with exact image identity',()=>{const n=createGlyphNote(item,input);assert.equal(n.quote,'𠮷');validateGlyphNotes([n],item);assert.deepEqual(glyphTextLocation(n,input.textSnapshot),{start:3,end:5});assert.equal(glyphTextLocation(n,'前缀'+input.textSnapshot),null);assert.equal(glyphTextLocation(n,'同词同词'),null);});
+test('broken selection, split surrogate, stale image page and ambiguous note records reject',()=>{for(const patch of [{start:4},{end:3},{region:{...region,page:6}},{kind:'unknown'},{comment:''},{by:''},{textSnapshot:'bad'}])assert.throws(()=>createGlyphNote(item,{...input,...patch}));const n=createGlyphNote(item,input);assert.throws(()=>validateGlyphNotes([n,n],item));assert.throws(()=>validateGlyphNotes([{...n,quote:'错'}],item));assert.throws(()=>validateGlyphNotes([n],{...item,page:null}));});
+test('note plus editor draft is one deferred save, and open notes block confirmation',()=>{const n=createGlyphNote(item,input),s=recordDecision(emptyRecheck('test',corpus),corpus,{id:item.id,choice:'defer',draftText:input.textSnapshot,by:'测试',glyphNotes:[n]});assert.equal(s.records[item.id].glyphNotes[0].quote,'𠮷');assert.equal(s.records[item.id].draftText,input.textSnapshot);assert.throws(()=>recordDecision(s,corpus,{id:item.id,choice:'manual',by:'测试'}),/疑难字/);assert.throws(()=>validateRecheck({...s,records:{[item.id]:{...s.records[item.id],choice:'manual',replacement:item.original}}},'test',corpus));});
+test('resolved note allows confirmation, retains history and survives JSON merge',()=>{const n=resolveGlyphNote(createGlyphNote(item,input),{by:'测试',resolution:'已按图处理',at:'2026-11-01T02:00:00.000Z'});const s=recordDecision(emptyRecheck('test',corpus),corpus,{id:item.id,choice:'manual',by:'测试',glyphNotes:[n]});validateRecheck(s,'test',corpus);const copy=mergeRecheck(emptyRecheck('test',corpus),JSON.parse(JSON.stringify(s)),'test',corpus);assert.equal(copy.value.records[item.id].glyphNotes[0].resolution,'已按图处理');assert.equal(source.pages.get(5).text,item.original);});
+test('notes keep prior note text and old backups need no migration; CSV escapes spreadsheet formulas',()=>{const old=recordDecision(emptyRecheck('test',corpus),corpus,{id:item.id,choice:'defer',note:'原备注',by:'测试'});validateRecheck(old,'test',corpus);const n=createGlyphNote(item,{...input,comment:'=SUM(1,2)'}),s=recordDecision(old,corpus,{id:item.id,choice:'defer',by:'测试',glyphNotes:[n]});assert.equal(s.records[item.id].note,'原备注');assert.ok(glyphNotesCsv(s.records,corpus).includes("'=SUM(1,2)"));let wrote=false;assert.throws(()=>saveRecheck({getItem:()=>'{other}',setItem:()=>{wrote=true;}},'k',s,null,'test',corpus));assert.equal(wrote,false);});
+
+test('display snapshots preserve newline boundaries and context does not split supplementary Han',()=>{const textSnapshot='𠮷'.repeat(35)+'错字'+'𠀀'.repeat(35),n=createGlyphNote(item,{...input,textSnapshot,start:70,end:72});const c=glyphContext(n);assert.equal(c.before,'𠮷'.repeat(30));assert.equal(c.after,'𠀀'.repeat(30));assert.throws(()=>validateGlyphNotes([{...n,id:'bad"id'}],item));const lf=createGlyphNote(item,{...input,textSnapshot:'甲\n𠮷错',start:2,end:4});assert.equal(lf.quote,'𠮷');assert.equal(glyphTextLocation(lf,'甲\r\n𠮷错'),null);});
+
+
+test('PDF-only notes need no TXT selection, preserve image identity and survive JSON restore',()=>{
+ const n=createGlyphNote(item,{anchor:'scan',region,comment:'无法输入的原字',by:'测试'});
+ assert.equal(n.anchor,'scan');assert.equal(n.quote,'');assert.equal(glyphTextLocation(n,''),null);
+ for(const patch of [{textSnapshot:'猜测'}, {start:1}, {quote:'字'}, {anchor:'other'}, {region:{...region,page:6}}])assert.throws(()=>validateGlyphNotes([{...n,...patch}],item));
+ const s=recordDecision(emptyRecheck('test',corpus),corpus,{id:item.id,choice:'defer',draftText:'正文保持',glyphNotes:[n],by:'测试'});
+ const restored=mergeRecheck(emptyRecheck('test',corpus),JSON.parse(JSON.stringify(s)),'test',corpus).value;
+ assert.deepEqual(restored.records[item.id].glyphNotes,[n]);assert.throws(()=>recordDecision(restored,corpus,{id:item.id,choice:'manual',by:'测试'}),/疑难字/);
+ const deleted=recordDecision(restored,corpus,{id:item.id,choice:'defer',glyphNotes:[],by:'测试'});assert.equal(deleted.records[item.id].choice,'defer');assert.equal(deleted.records[item.id].glyphNotes.length,0);
+});
