@@ -1,0 +1,59 @@
+// Published delivery snapshot; never writes browser progress or source TXT.
+export const returnedProgress={
+  "publishedAt": "2026-11-04",
+  "collectedAt": "2026-11-01",
+  "reviewRevision": "d01ce1610ec269e74447cf2d8c82b86d8afe00d02514a88b7f3bed92e697a085",
+  "gapRevision": "ee67ab259987a13426877716fa3678167d86937c34f8bab07e9d5019499d82a6",
+  "groups": {
+    "D": {
+      "records": 71,
+      "pages": 70,
+      "unlocated": 0,
+      "deferred": 1,
+      "gaps": 0,
+      "openGlyphNotes": 0
+    },
+    "F": {
+      "records": 94,
+      "pages": 27,
+      "unlocated": 53,
+      "deferred": 14,
+      "gaps": 0,
+      "openGlyphNotes": 6
+    },
+    "G": {
+      "records": 238,
+      "pages": 57,
+      "unlocated": 52,
+      "deferred": 129,
+      "gaps": 86,
+      "openGlyphNotes": 24
+    },
+    "B": {
+      "chapters": 124,
+      "total": 124
+    }
+  },
+  "files": [
+    {
+      "file": "returned-data/2026-11-01/D-review.json",
+      "sha256": "ebbc47b1fe3efc9c474da59e7209d1263f070326d031199cd9172d1733a81929"
+    },
+    {
+      "file": "returned-data/2026-11-01/F-review.json",
+      "sha256": "50c4e341c26bf067bf8d85b006c4e4e4419d70bc962ccf9f5b632d8d9f9e66fb"
+    },
+    {
+      "file": "returned-data/2026-11-01/G-review.json",
+      "sha256": "7e6caee3a4ff8cda03a045d70750870849a4d5e15d7849d8550c2337594e9dd6"
+    },
+    {
+      "file": "returned-data/2026-11-01/G-gaps.json",
+      "sha256": "e9c13dd1a8f26264566fb6a273c4dee80102ddf50a4a60bcf7202551c0817135"
+    },
+    {
+      "file": "returned-data/2026-11-01/B-chapters.json",
+      "sha256": "c4abc78abca68c1103c93c3848abb598401d616d715c6d9aa313884c9803b51a"
+    }
+  ]
+};
