@@ -1,0 +1,25 @@
+{
+  "schema": "shulun-delivery-v1",
+  "id": "d1160be3-0714-453a-b768-30fb2577dbe6",
+  "taskId": "5701716f-24d6-4818-9209-cd2a669eb16d",
+  "memberId": "903bebd8-3123-412f-b57b-52eaa4b49e45",
+  "memberName": "验收成员A",
+  "scope": "测试样本A",
+  "submittedAt": "2026-11-05T07:49:01.478Z",
+  "late": true,
+  "note": "",
+  "manifestHash": "0ec291d42e3f737913a066b3637d9be90033fccd82c71482ec7fe38e72ec736e",
+  "files": [
+    {
+      "id": "2b468431-30d3-47a4-a4cc-ba8167558e12",
+      "name": "验收文本.txt",
+      "size": 27,
+      "sha256": "e8e18bfc30ce82763d45768397f8a217d13d6bc3f610d805907acb8b99f53c90",
+      "relativePath": "files/验收文本.txt"
+    }
+  ],
+  "publicReviewNote": "验收测试的审核说明，无真实成果",
+  "reviewer": "项目负责人",
+  "reviewedAt": "2026-11-05T07:51:49.008Z",
+  "qualification": "仅为所选交付文件的审核发布，不自动替代正式语料或授予标注来源资格"
+}
