@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-09",
+  "baseline": "804a4fd70b0142adab6060f993e1454552cb322d",
+  "websiteTests": {
+    "node": 540,
+    "python": 89,
+    "passed": true
+  },
+  "buildCheckPassed": true,
+  "ocrUnitTests": 64,
+  "browserChecks": [
+    {
+      "file": "8905-browser-results.json",
+      "sha256": "9bf4db9bd2865f1538daa3040efd614994e22cf7db5556d77ba118a877139bce",
+      "checks": 26,
+      "passed": true
+    },
+    {
+      "file": "8905-checks.json",
+      "sha256": "efbe3794d2ab3fea702aad03295a0a67ba79fccfdc816966d06960e8cbcc9955",
+      "checks": 14,
+      "passed": true
+    },
+    {
+      "file": "longest-results.json",
+      "sha256": "1e6985863be20f5aa344caf2ac3b8f9e92713ded4c6634973b235de6a0254b99",
+      "checks": 2,
+      "passed": true
+    }
+  ],
+  "chapterRoundtrip": {
+    "chapters": 269,
+    "chunks": 311,
+    "decodedBytes": 889890725,
+    "compressedBytes": 50941363,
+    "allOriginalShaMatched": true
+  },
+  "displayRenditions": {
+    "samePixelDimensions": 1052,
+    "maximumMeanAbsoluteGrayDifference": 0.8151133291255964,
+    "originalSourceShaPreserved": true
+  },
+  "physicalDeviceTested": false,
+  "excludedOtherTaskChanges": true
+}

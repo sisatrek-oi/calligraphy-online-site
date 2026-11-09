@@ -1,0 +1,94 @@
+[
+  {
+    "file": "tasks/2026-10-13-ocr-first100/ocr_character_map.py",
+    "sha256": "77c4b1156293dcbbb4e1d2ea8dd94bbec20f3c3e860b7c847de07037532ed126"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/test_ocr_review.py",
+    "sha256": "b9b387dc5bd0aa98ece78320fcf1f1c0d6ea275d5c06beeca24cb0ebc1f1884e"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/ocr_vlm_review.py",
+    "sha256": "7c5bee60778aa634c16b5bde68a393183fd53536a01407cf121178dbe9a3b9fc"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/retry_context.py",
+    "sha256": "5f470bbdda5190c3d3053a62b62c63f13cfbb457cfdf054c7b5f253e90d4cf40"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/run_ocr.py",
+    "sha256": "a9ef8d9dc042a16282618846fa8e3fa0591edf73f5ac7d0f6eb2774559d2f36c"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/review_ocr.py",
+    "sha256": "408e3279f66534720790551134b9b53fd009c92df53d15db296e660042d88c85"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/ocr_review_pipeline.py",
+    "sha256": "b942daa6dad35a049a9054e03b74492004bca28c39feb51244a3be729a17e9ae"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/ocr_vlm_store.py",
+    "sha256": "04736116e3a8f5075b417fd3e74adf34a458875878abb662226b81bee7b47a27"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/ocr_review_store.py",
+    "sha256": "ef88a38ead3910ba3f70822b0760aee1605f78b5d75c74bfec394429f4118812"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/test_ocr_character_map.py",
+    "sha256": "38405067a4b4b40d7d433858c15532e25d2a8412ca2064f18899a6ff837b18b4"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/test_ocr_blank_margins.py",
+    "sha256": "cb317124925eb2a69a88cf244b24241e1684a38a7253c3e4f8320667e321e006"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/test_ocr_vlm.py",
+    "sha256": "358f39a36785e198daa91a21eaec50f8919823106f32b8a1c5390be95a9688a3"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/compare_versions.py",
+    "sha256": "2702f5933a7fe959500a74373c19b89f5038bed57c27265bacb6092526b91667"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/build_character_preview.py",
+    "sha256": "f384a166608599b7c5b9646e80f750c4f507f5cf4f426a0ae6e7833f9f4acf49"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/map_ocr_characters.py",
+    "sha256": "4be6c9455566f9ed15dc2ae3bd69b42d411fbd1af84310655c91e29cda8c182c"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/summarize_comparison.py",
+    "sha256": "03d4f199278b6085c300fff2bf7e82431122bf29a15cbe6291c28044e4d356b6"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/retry_empty.py",
+    "sha256": "9dd31a6b0e19b69210aa2efe5aaac511756e6b242e45175ef80d8c155f93a456"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/package_results.py",
+    "sha256": "1b338f3f9ff9967f3027dcc1a2e421d4945465e141f5ea810de996173b1154f2"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/reviewed-pipeline-guide.md",
+    "sha256": "1e4fb08b234196dfe4eb02a7da7fe96c3c36834c7e43c9a496cdcf2a5679bf79"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/character-viewer/index.html",
+    "sha256": "8db8255b50024acff83f296f6b3dde910cede47775caef326f9633e43a31f214"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/character-viewer/alignment.mjs",
+    "sha256": "88c07c1d6c6694d49557dee5b2d556b23becbfe6a88b3d7b447ff7454a01164b"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/character-viewer/style.css",
+    "sha256": "663db7449178e05871924890ddac07a3b8c7f84b268fd5a1436ce0a1ca3efdbf"
+  },
+  {
+    "file": "tasks/2026-10-13-ocr-first100/character-viewer/app.mjs",
+    "sha256": "cff0110ef0b2e7af98476ca4bf22e147400493dcaf713d1840dca0663e500fc1"
+  }
+]

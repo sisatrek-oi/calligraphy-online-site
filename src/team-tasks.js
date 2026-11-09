@@ -116,8 +116,8 @@ import {loadReviewedIndex} from './reviewed-annotation.js?v=loading-20261028';
       if(!publicIndexes){slot.textContent=indexProblem?'标记暂无法读取；原记录保留':'读取人工标记…';continue;}
       let progress;
       try {progress=assignmentContext(localStorage,a,publicIndexes);}catch{progress=null;}
-      slot.textContent=progress?`已标过 ${progress.marked} / ${progress.total} 页 · 未标过 ${progress.total-progress.marked} 页`:'本机记录无法读取；原记录保留';
-      if(progress){link.href=progress.href;link.dataset.part=progress.part;link.textContent=progress.resume?`继续第 ${progress.page} 页 →`:'进入校勘 →';}
+      slot.textContent=progress?`历史校对已标过 ${progress.marked} / ${progress.total} 页 · 未标过 ${progress.total-progress.marked} 页`:'本机记录无法读取；原记录保留';
+      if(progress){link.href=progress.href;link.dataset.part=progress.part;link.textContent='进入逐字校对 →';}
     }
   }
 
@@ -134,15 +134,15 @@ import {loadReviewedIndex} from './reviewed-annotation.js?v=loading-20261028';
     const taskId = annotationTask ? 'source-annotation:lidaishufalunwenxuan' : 'source-proofread:lidaishufalunwenxuan';
     const title = annotationTask ? '书论标注' : '原文校对';
     shell(`<section class="entry-task-board source-task-board" aria-labelledby="sourceTaskHeading">
-      <header class="entry-task-heading"><p class="workspace-kicker">团队任务 / ${title}</p><h1 id="sourceTaskHeading">${title}</h1><p>${annotationTask ? '人工审核原TXT已初标，请按原页段逐条复核。' : '选择自己的成员入口，继续原有页段的校对。'}</p>${annotationTask ? '<p data-annotation-summary role="status">正在读取来源…</p><button type="button" id="retryAnnotationTask" hidden>重试读取材料</button><div class="annotation-part-links" data-annotation-parts></div>' : '<a class="quiet-button" href="./review-metrics.html">量化检测 · 查看人工修改 →</a>'}</header>
+      <header class="entry-task-heading"><p class="workspace-kicker">团队任务 / ${title}</p><h1 id="sourceTaskHeading">${title}</h1><p>${annotationTask ? '人工审核原TXT已初标，请按原页段逐条复核。' : '选择成员进入整章逐字校对；原字图在上、TXT在下，可手动调整字图。'}</p>${annotationTask ? '<p data-annotation-summary role="status">正在读取来源…</p><button type="button" id="retryAnnotationTask" hidden>重试读取材料</button><div class="annotation-part-links" data-annotation-parts></div>' : '<a class="quiet-button" href="./review-metrics.html">量化检测 · 查看人工修改 →</a>'}</header>
       <div class="entry-task-list"><article class="entry-task-card" data-entry-task="${taskId}" aria-labelledby="sourceBookTitle">
-        <div class="entry-task-card-head"><span class="entry-task-icon" aria-hidden="true">${window.WorkspaceUI.icon(annotationTask ? 'annotation' : 'proof')}</span><div class="entry-task-title"><h2 id="sourceBookTitle">《历代书法论文选》${title}</h2><p>${annotationTask ? '本地初标已准备 · 待人工复核' : `${taskPageCount(1,1052)} 个有效页 · 沿用现有校对分工`}</p></div><span class="source-task-state">${annotationTask ? '待复核' : '进行中'}</span></div>
+        <div class="entry-task-card-head"><span class="entry-task-icon" aria-hidden="true">${window.WorkspaceUI.icon(annotationTask ? 'annotation' : 'proof')}</span><div class="entry-task-title"><h2 id="sourceBookTitle">《历代书法论文选》${title}</h2><p>${annotationTask ? '本地初标已准备 · 待人工复核' : `整章逐字审核 · 沿用现有校对分工`}</p></div><span class="source-task-state">${annotationTask ? '待复核' : '进行中'}</span></div>
         ${annotationTask ? '<p class="source-task-description">正文仅取审核记录对应的原TXT，淡绿为AI初标、黄色为人工标注。采纳或不采用后，通读确认本页；原文只读，旧标注保留。</p>' : ''}
         <div class="entry-task-roster" data-roster-host></div>
       </article></div>
-      <p class="entry-task-footnote">${annotationTask ? '按原校对页段开放已审核部分；原分工不变。AI初标不是人工完成量，未回收的新稿不计入本批。' : '按原PDF物理页定位。点击“导出我的任务”，本人跨段也合成一个ZIP；本机标记不代表已交回负责人。'} 成员名单保存在本机，添加姓名不会创建账号或改派页段。</p>
+      <p class="entry-task-footnote">${annotationTask ? '按原校对页段开放已审核部分；原分工不变。AI初标不是人工完成量，未回收的新稿不计入本批。' : '按原分工定位相关章节，整章跨原页连续校对。文字与字图保存为独立草稿；卡片页数为历史记录。'} 成员名单保存在本机，添加姓名不会创建账号或改派页段。</p>
       ${annotationTask?'<details class="source-task-history workspace-panel"><summary>来源待核页 · 暂不开放标注</summary><ul class="annotation-source-issues" data-annotation-issues></ul></details>':''}
-      <details class="source-task-history workspace-panel"><summary>材料与历史记录</summary><p>原稿、草稿、修改率底稿与全部历史记录保留。原四份完整视图可查看已移交页的旧稿，材料下载仍在任务内“材料与恢复”。</p><div class="source-history-links">${screeningRanges.map((_,i)=>`<a href="./screening.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div><p><a href="./review.html">旧条目独立文件审核 →</a></p></details>
+      <details class="source-task-history workspace-panel"><summary>材料与历史记录</summary><p>原稿、草稿、修改率底稿与历史进度保留。原四份完整视图可继续查看旧稿及导出历史成果；新的逐字校对草稿独立保存。</p><div class="source-history-links">${screeningRanges.map((_,i)=>`<a href="./screening-history.html?part=${i+1}">原第${i+1}份完整视图</a><a href="${taskOcrHref(i+1)}" download>原第${i+1}份OCR</a>`).join('')}</div><p><a href="./review.html">旧条目独立文件审核 →</a></p></details>
     </section>`);
     window.EntryTaskBoard.attach({storage: localStorage, taskOptions: () => ({
       defaultMembers: assignments.map(a => ({id: `team-${a.id}`, name: a.name})),
@@ -153,7 +153,7 @@ import {loadReviewedIndex} from './reviewed-annotation.js?v=loading-20261028';
       renderMember: member => {
         const a = assignments.find(a => member.id === `team-${a.id}`);
         if (!a) return `<li class="entry-pending-member"><span class="entry-member-avatar" aria-hidden="true">${esc([...member.name][0])}</span><span>${esc(member.name)}</span><span class="source-member-pending">待分工</span></li>`;
-        return `<li class="entry-assigned-member"><article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span class="local-progress" data-local-progress="${a.id}">读取人工标记…</span></div><div class="unit-actions"><a class="unit-primary" data-member="${a.id}" data-part="${a.segments[0].part}" href="${assignmentHref(a.id,a.segments[0].part)}">进入校勘 →</a></div></article></li>`;
+        return `<li class="entry-assigned-member"><article class="overview-unit" data-assignment="${a.id}"><div class="unit-number">0${a.id}</div><div class="unit-copy"><strong>成员 ${a.id} · ${esc(a.name)}</strong><span>负责 ${a.segments.map(s=>`${s.start === 1 ? '5、6、13' : s.start}–${s.end}`).join('、')} 页 · 共 ${assignmentCount(a)} 页</span><span class="local-progress" data-local-progress="${a.id}">读取人工标记…</span></div><div class="unit-actions"><a class="unit-primary" data-member="${a.id}" data-part="${a.segments[0].part}" href="${assignmentHref(a.id,a.segments[0].part)}">进入逐字校对 →</a></div></article></li>`;
       }
     })});
     updateOfflineProgress();

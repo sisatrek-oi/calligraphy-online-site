@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content"><meta name="color-scheme" content="light"><title>逐字对照 · 书论工作区</title><link rel="icon" href="data:,"><link rel="stylesheet" href="style.css"><script type="module" src="app.mjs"></script></head>
+<body>
+ <aside class="rail"><div class="seal">书</div><span class="rail-name">书论工作区</span><span class="rail-mark">逐字对照</span><span class="rail-foot">原图 · 原字 · 原文</span></aside>
+ <main>
+  <header><div class="heading"><span class="eyebrow">书论工作区 / OCR 校对</span><h1>逐字对照</h1></div><div class="tools"><button id="previous" aria-label="上一页">←</button><label class="sr-only" for="pages">扫描页</label><select id="pages"></select><button id="next" aria-label="下一页">→</button><label class="size">字形 <select id="size" aria-label="字形大小"><option value="42">小</option><option value="52" selected>中</option><option value="64">大</option></select></label><details id="download-menu"><summary>下载草稿 ↓</summary><div><button id="download-txt">TXT 正文</button><button id="download-json">JSON 草稿与定位</button></div></details></div></header>
+  <section class="subhead"><div><h2 id="page-title">正在载入…</h2><label for="versions" class="sr-only">文本版本</label><select id="versions"></select></div><p id="mapping-state">上方原图字形 · 下方对应文字</p></section>
+  <section id="reading" aria-label="原图与TXT逐字对照" tabindex="-1"><p class="empty">正在读取字图…</p></section>
+  <aside id="context" hidden><div class="context-title"><strong id="context-title">原图邻文</strong><a id="original" href="#" target="_blank" rel="noopener">查看原页 ↗</a><button id="close-context" aria-label="收起原图邻文">×</button></div><div class="context-body"><canvas id="context-image" aria-label="原图邻文及当前字框"></canvas><p id="context-note"></p></div></aside>
+  <footer>
+   <form id="edit-form"><div class="edit-source"><span>选中字</span><strong id="selected-char">—</strong></div><label class="sr-only" for="edit-text">校改文字</label><input id="edit-text" type="text" autocomplete="off" placeholder="点击上方字格后校改" disabled><button id="apply" class="primary" disabled>应用到草稿</button><button id="delete" type="button" disabled>删除此字</button><button id="cancel" type="button" disabled>取消</button><button id="undo" type="button" disabled>撤回</button></form>
+   <div class="footnote"><span id="notice" role="status" aria-live="polite">四页本地样例 · 机器定位待核 · 校改仅存本机草稿</span><span id="draft-state">未修改</span></div>
+  </footer>
+ </main>
+</body></html>
