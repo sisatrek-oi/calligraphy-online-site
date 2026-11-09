@@ -1,18 +1,16 @@
 {
-  "baseline": "54ff1b73194f4c13931cfeea4f31a56380e0bc83",
-  "all269ChaptersExactBytesPreserved": true,
-  "chunkSize": 131072,
-  "chunks": 560,
-  "oldFilesRetained": true,
-  "cacheBudget": 20971520,
-  "cacheStorage": "independent IndexedDB",
-  "tests": {
-    "node": 540,
-    "python": 89,
-    "build": true,
-    "browserRegression": 26,
-    "browserCache": 10,
-    "longestChapter": 2
-  },
+  "chapters": 269,
+  "originalMetadataAndBindingsPreserved": true,
+  "allOriginalShaMatched": true,
+  "gzipBytes": 50941363,
+  "fastBytes": 26722025,
+  "fastChunks": 392,
+  "decoder": "fzstd 0.1.1, sized frames; no caller output buffer",
+  "browserRegression": 26,
+  "browserCache": 12,
+  "longestChapter": 2,
+  "nodeTests": 541,
+  "pythonTests": 89,
+  "buildPassed": true,
   "physicalDeviceTested": false
 }

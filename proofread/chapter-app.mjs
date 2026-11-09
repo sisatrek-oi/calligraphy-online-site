@@ -1,4 +1,4 @@
-import {loadChapter} from './transport.mjs?v=chapter-loading-20261109';
+import {loadChapter} from './transport.mjs?v=chapter-loading-zstd-20261109';
 import {digest,mapText,replaceText} from './alignment.mjs';
 import {reviewRows} from './human-review.mjs';
 import {cropKey,validateCrops,shiftCrops,withCrops} from './crop-state.mjs';
