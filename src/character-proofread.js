@@ -1,5 +1,5 @@
 import{loadChapter}from'../proofread/transport.mjs?v=chapter-loading-zstd-20261109';
-import{taskScope}from'../proofread/site-context.mjs';
+import{taskScope}from'../proofread/site-context.mjs?v=chapter-loading-zstd-20261109';
 import{validateCrops}from'../proofread/crop-state.mjs';
 const $=id=>document.getElementById(id),frame=$('character-task-frame'),params=new URLSearchParams(location.search),prefix='shulun-chapter-character-draft-v1:';let scope,index,imagePages,imageCatalogue;
 window.WorkspaceUI.mount('proof');

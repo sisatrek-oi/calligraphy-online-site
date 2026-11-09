@@ -3,7 +3,7 @@ import {digest,mapText,replaceText} from './alignment.mjs';
 import {reviewRows} from './human-review.mjs';
 import {cropKey,validateCrops,shiftCrops,withCrops} from './crop-state.mjs';
 import {createCropEditor} from './crop-editor.mjs';
-import {loadTaskScope} from './site-context.mjs';
+import {loadTaskScope} from './site-context.mjs?v=chapter-loading-zstd-20261109';
 const taskParams=new URLSearchParams(location.search);let siteScope;
 const $=id=>document.getElementById(id),input=$('edit-text');
 let reliableData,referenceMode=false,crops={};
